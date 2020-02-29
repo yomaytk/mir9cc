@@ -1,5 +1,5 @@
 [package]
-name = "Mir9cc"
+name = "mir9cc"
 version = "0.1.0"
 authors = ["masashi <ym.atonement.oy999@gmail.com>"]
 edition = "2018"

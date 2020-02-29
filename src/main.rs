@@ -1,6 +1,7 @@
 use std::env;
 use std::process;
 
+#[allow(dead_code)]
 fn print_typename<T>(_: T) {
     println!("{}", std::any::type_name::<T>());
 }
