@@ -1,10 +1,11 @@
-Mir9cc:
+mir9cc:
 	cargo build
 
 run:
 	cargo run ${ARG}
 
-test: Mir9cc
+test: mir9cc
+	make mir9cc
 	./test.sh
 
 clean:
