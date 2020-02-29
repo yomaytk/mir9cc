@@ -37,7 +37,7 @@ fn tokenize(p: &Vec<char>, tokens: &mut Vec<Token>, mut pos: usize) {
 	
 	while pos < p.len() {
 
-		if p[pos] == ' ' {
+		if p[pos].is_whitespace() {
 			pos += 1;
 			continue;
 		}
