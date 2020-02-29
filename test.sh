@@ -37,6 +37,8 @@ echo -e "\n\e[32m*** try test start ***\e[m\n"
 
 try 0 0
 try 42 42
+try 27 23+4
+try 20 12-5+5+10-2
 
 echo -e "\n\e[32m*** SUCCESS! ***\e[m\n"
 
