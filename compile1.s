@@ -16,5 +16,23 @@ main:
 	add rdi, rsi
 	mov rsi, 8
 	add rdi, rsi
+	mov rsi, 9
+	add rdi, rsi
+	mov rsi, 10
+	add rdi, rsi
+	mov rsi, 11
+	add rdi, rsi
+	mov rsi, 12
+	add rdi, rsi
+	mov rsi, 13
+	add rdi, rsi
+	mov rsi, 14
+	add rdi, rsi
+	mov rsi, 15
+	add rdi, rsi
+	mov rsi, 16
+	add rdi, rsi
+	mov rsi, 17
+	add rdi, rsi
 	mov rax, rdi
 	ret

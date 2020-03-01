@@ -3,11 +3,12 @@ use std::process;
 
 mod lib;
 
+use lib::*;
 use lib::TokenType;
 use lib::TokenType::*;
 use lib::Token;
 use lib::Node;
-use lib::NodeType::*;
+use lib::Ir;
 
 #[allow(dead_code)]
 fn print_typename<T>(_: T) {
@@ -80,7 +81,8 @@ fn number(p: &Vec<char>, tokens: &Vec<Token>, pos: usize) -> Node {
 fn expr(p: &Vec<char>, tokens: &Vec<Token>, mut pos: usize) -> Node {
 	let mut lhs = number(p, tokens, pos);
 	pos += 1;
-	while(true) {
+
+	loop {
 		if tokens[pos].ty != TokenPlus && tokens[pos].ty != TokenMinus {
 			break;
 		}
@@ -111,11 +113,19 @@ fn main() {
 
 	// parsing analysis
 	let node = expr(&p, &tokens, 0);
-	
+
+	let mut ins: Vec<Ir> = vec![];
+	let mut reg_map: [i32; 10000] = [-1; 10000];
+	let mut used: [bool; 8] = [false; 8];
+
+	// alloc register
+	gen_ir(&node, &mut ins);
+	alloc_regs(&mut reg_map, &mut used, &mut ins);
+
     println!(".intel_syntax noprefix");
     println!(".global main");
     println!("main:");
 	
-	println!("\tmov rax, {}", node.gen(0));
-    println!("\tret");
+	// code generator
+	gen_x86(&ins);
 }
