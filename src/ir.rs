@@ -1,4 +1,4 @@
-use super::token::*;
+use super::token::{*, TokenType::*};
 use IrType::*;
 use super::parse::*;
 use super::parse::NodeType::*;
@@ -33,7 +33,7 @@ impl Ir {
 	fn tokentype2irtype(ty: &TokenType) -> IrType {
 		match ty {
 			TokenPlus => { IrPlus },
-			TokenMinus => { panic!("rererere"); IrMinus },
+			TokenMinus => {  IrMinus },
 			_ => { panic!("tokentype2irtype error."); }
 		}
 	}
