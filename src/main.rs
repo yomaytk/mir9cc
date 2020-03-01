@@ -6,11 +6,14 @@ mod lib;
 use lib::TokenType;
 use lib::TokenType::*;
 use lib::Token;
+use lib::Node;
+use lib::NodeType::*;
 
 #[allow(dead_code)]
 fn print_typename<T>(_: T) {
     println!("{}", std::any::type_name::<T>());
 }
+
 
 // return next_number and position
 fn next_number(p: &Vec<char>, mut pos: usize) -> (i32, usize) {
@@ -66,9 +69,29 @@ fn tokenize(p: &Vec<char>, tokens: &mut Vec<Token>, mut pos: usize) {
 
 }
 
-fn fail(p: &Vec<char>, tokens: &Vec<Token>, i: usize) {
-	eprintln!("unexpected token :{}", p[tokens[i].input]);
+fn number(p: &Vec<char>, tokens: &Vec<Token>, pos: usize) -> Node {
+	if tokens[pos].ty == TokenNum {
+		return Node::new_node_num(tokens[pos].val);
+	}
+	eprintln!("number expected, but got {}", p[tokens[pos].input]);
 	process::exit(1);
+}
+
+fn expr(p: &Vec<char>, tokens: &Vec<Token>, mut pos: usize) -> Node {
+	let mut lhs = number(p, tokens, pos);
+	pos += 1;
+	while(true) {
+		if tokens[pos].ty != TokenPlus && tokens[pos].ty != TokenMinus {
+			break;
+		}
+		lhs = Node::bit_init(tokens[pos].ty.clone(), lhs, number(p, tokens, pos+1));
+		pos += 2;
+	}
+	
+	if tokens[pos].ty != TokenEof {
+		eprintln!("stray token: {}", p[tokens[pos].input]);
+	}
+	lhs
 }
 
 fn main() {
@@ -78,43 +101,21 @@ fn main() {
         process::exit(1);
     }
     
-    println!(".intel_syntax noprefix");
-    println!(".global main");
-    println!("main:");
-
+	
 	let p:Vec<char> = (&args[1][..]).chars().collect();
 	
 	let mut tokens: Vec<Token> = vec![];
-
+	
 	// lexical analysis
 	tokenize(&p, &mut tokens, 0);
 
-	if tokens[0].ty != TokenNum { fail(&p, &tokens, 0); }
-	println!("\tmov rax, {}", tokens[0].val);
+	// parsing analysis
+	let node = expr(&p, &tokens, 0);
 	
-	let mut tk_id = 1;
-
-	while tokens[tk_id].ty != TokenEof {
-
-		if tokens[tk_id].ty == TokenPlus {
-			tk_id += 1;
-			if tokens[tk_id].ty != TokenNum { fail(&p, &tokens, tk_id); }
-			println!("\tadd rax, {}", tokens[tk_id].val);
-			tk_id += 1;
-			continue;
-		}
-
-		if tokens[tk_id].ty == TokenMinus {
-			tk_id += 1;
-			if tokens[tk_id].ty != TokenNum { fail(&p, &tokens, tk_id); }
-			println!("\tsub rax, {}", tokens[tk_id].val);
-			tk_id += 1;
-			continue;
-		}
-
-		fail(&p, &tokens, tk_id);
-
-	}
-
+    println!(".intel_syntax noprefix");
+    println!(".global main");
+    println!("main:");
+	
+	println!("\tmov rax, {}", node.gen(0));
     println!("\tret");
 }
