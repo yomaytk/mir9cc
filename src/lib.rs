@@ -111,6 +111,7 @@ impl Ir {
 	}
 }
 
+// allocate of index for register to NodeNum
 fn gen_ir_sub(node: &Node, ins: &mut Vec<Ir>, regno: usize) -> (usize, usize) {
 
 	match &node.ty {
@@ -129,11 +130,13 @@ fn gen_ir_sub(node: &Node, ins: &mut Vec<Ir>, regno: usize) -> (usize, usize) {
 	}
 }
 
+// generate IR Vector
 pub fn gen_ir(node: &Node, ins: &mut Vec<Ir>) {
 	let (r, _) = gen_ir_sub(node, ins, 0);
 	ins.push(Ir::new(IrReturn, r, 0));
 }
 
+// allocate the register can be used
 fn alloc(reg_map: &mut [i32], used: &mut [bool], ir_reg: usize) -> usize {
 	
 	if reg_map[ir_reg] != -1 {
@@ -160,6 +163,7 @@ fn kill(used: &mut [bool], i: i32){
 	used[id] = false;
 }
 
+// do allocating register to reg_map 
 pub fn alloc_regs(reg_map: &mut [i32], used: &mut [bool], ins: &mut Vec<Ir>) {
 	for ir in ins {
 		match ir.ty {
