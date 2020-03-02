@@ -10,6 +10,8 @@ pub enum IrType {
 	IrMov,
 	IrPlus,
 	IrMinus,
+	IrMul,
+	IrDiv,
 	IrReturn,
 	IrKill,
 	IrNop,
@@ -30,10 +32,13 @@ impl Ir {
 			rhs: rhs,
 		}
 	}
-	fn tokentype2irtype(ty: &TokenType) -> IrType {
+	fn tokentype2irtype(ty: TokenType) -> IrType {
 		match ty {
 			TokenPlus => { IrPlus },
 			TokenMinus => {  IrMinus },
+			TokenMul => { IrMul },
+			TokenDiv => { IrDiv },
+			TokenEof => { panic!("tokeneof!!!"); }
 			_ => { panic!("tokentype2irtype error."); }
 		}
 	}
@@ -51,11 +56,12 @@ fn gen_ir_sub(node: &Node, ins: &mut Vec<Ir>, regno: usize) -> (usize, usize) {
 		BinaryTree(ty, lhs, rhs) => {
 			let (lhi, lreg) = gen_ir_sub(lhs.as_ref().unwrap(), ins, regno);
 			let (rhi, rreg) = gen_ir_sub(rhs.as_ref().unwrap(), ins, lreg);
-			ins.push(Ir::new(Ir::tokentype2irtype(ty), lhi, rhi));
+			ins.push(Ir::new(Ir::tokentype2irtype(ty.clone()), lhi, rhi));
 			ins.push(Ir::new(IrKill, rhi, 0));
 			return (lhi, rreg);
 		}
 	}
+
 }
 
 // generate IR Vector

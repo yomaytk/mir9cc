@@ -6,6 +6,8 @@ pub enum TokenType {
 	TokenNum,
 	TokenPlus,
 	TokenMinus,
+	TokenMul,
+	TokenDiv,
 	TokenEof,
 }
 
@@ -44,6 +46,8 @@ fn next_number(p: &Vec<char>, mut pos: usize) -> (i32, usize) {
 fn signal2token (p: char) -> TokenType {
 	if p == '+' { TokenPlus }
 	else if p == '-' { TokenMinus }
+	else if p == '*' { TokenMul }
+	else if p == '/' { TokenDiv }
 	else { panic!("signal2token error!"); }
 }
 
@@ -56,7 +60,7 @@ pub fn tokenize(p: &Vec<char>, tokens: &mut Vec<Token>, mut pos: usize) {
 			continue;
 		}
 		
-		if p[pos] == '+' || p[pos] == '-' {
+		if p[pos] == '+' || p[pos] == '-' || p[pos] == '*' || p[pos] == '/' {
 			let token = Token::new(signal2token(p[pos]), 0, pos);
 			tokens.push(token);
 			pos += 1;

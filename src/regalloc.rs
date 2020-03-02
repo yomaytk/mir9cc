@@ -1,7 +1,6 @@
 use super::ir::IrType::*;
 use super::ir::*;
 
-static REG: [&str; 8] = ["rdi", "rsi", "r10", "r11", "r12", "r13", "r14", "r15"];
 static REG_SIZE: usize = 8;
 
 // allocate the register can be used
@@ -38,7 +37,7 @@ pub fn alloc_regs(reg_map: &mut [i32], used: &mut [bool], ins: &mut Vec<Ir>) {
 			IrImm => {
 				ir.lhs = alloc(reg_map, used, ir.lhs);
 			},
-			IrMov | IrPlus | IrMinus => {
+			IrMov | IrPlus | IrMinus | IrMul | IrDiv => {
 				ir.lhs = alloc(reg_map, used, ir.lhs);
 				ir.rhs = alloc(reg_map, used, ir.rhs);
 			},
@@ -50,31 +49,6 @@ pub fn alloc_regs(reg_map: &mut [i32], used: &mut [bool], ins: &mut Vec<Ir>) {
 				ir.ty = IrNop;
 			},
 			_ => { panic!("unknown operator."); }
-		}
-	}
-}
-
-pub fn gen_x86(ins: &Vec<Ir>) {
-	for ir in ins {
-		match ir.ty {
-			IrImm => {
-				println!("\tmov {}, {}", REG[ir.lhs], ir.rhs);
-			},
-			IrMov => {
-				println!("\tmov {}, {}", REG[ir.lhs], REG[ir.rhs]);
-			}, 
-			IrPlus => {
-				println!("\tadd {}, {}", REG[ir.lhs], REG[ir.rhs]);
-			},
-			IrMinus => {
-				println!("\tsub {}, {}", REG[ir.lhs], REG[ir.rhs]);
-			},
-			IrReturn => {
-				println!("\tmov rax, {}", REG[ir.lhs]);
-				println!("\tret");
-			},
-			IrNop => {},
-			_ => { panic!("unexpected IrType in gen_x86"); }
 		}
 	}
 }

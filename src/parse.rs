@@ -50,28 +50,48 @@ impl Node {
 	}
 }
 
-fn number(p: &Vec<char>, tokens: &Vec<Token>, pos: usize) -> Node {
+fn number(p: &Vec<char>, tokens: &Vec<Token>, pos: usize) -> (Node, usize) {
 	if tokens[pos].ty == TokenNum {
-		return Node::new_node_num(tokens[pos].val);
+		return (Node::new_node_num(tokens[pos].val), pos+1);
 	}
 	eprintln!("number expected, but got {}", p[tokens[pos].input]);
 	process::exit(1);
 }
 
-pub fn expr(p: &Vec<char>, tokens: &Vec<Token>, mut pos: usize) -> Node {
-	let mut lhs = number(p, tokens, pos);
-	pos += 1;
+fn mul(p: &Vec<char>, tokens: &Vec<Token>, pos: usize) -> (Node, usize) {
+	let (mut lhs, mut pos) = number(p, tokens, pos);
+	
+	loop {
+		if tokens[pos].ty != TokenMul && tokens[pos].ty != TokenDiv {
+			return (lhs, pos);
+		}
+		let (rhs, new_pos) = number(p, tokens, pos+1);
+		lhs = Node::bit_init(tokens[pos].ty.clone(), lhs, rhs);
+		pos = new_pos;
+	}
+
+}
+
+pub fn expr(p: &Vec<char>, tokens: &Vec<Token>, pos: usize) -> (Node, usize) {
+	let (mut lhs, mut pos) = mul(p, tokens, pos);
 
 	loop {
 		if tokens[pos].ty != TokenPlus && tokens[pos].ty != TokenMinus {
-			break;
+			return (lhs, pos);
 		}
-		lhs = Node::bit_init(tokens[pos].ty.clone(), lhs, number(p, tokens, pos+1));
-		pos += 2;
+		let (rhs, new_pos) = mul(p, tokens, pos+1);
+		lhs = Node::bit_init(tokens[pos].ty.clone(), lhs, rhs);
+		pos = new_pos;
 	}
 	
+}
+
+pub fn parse(p: &Vec<char>, tokens: &Vec<Token>, pos: usize) -> Node {
+	
+	let (node, pos) = expr(p, tokens, pos);
+
 	if tokens[pos].ty != TokenEof {
 		eprintln!("stray token: {}", p[tokens[pos].input]);
 	}
-	lhs
+	node
 }

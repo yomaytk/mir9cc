@@ -5,11 +5,13 @@ pub mod token;
 pub mod parse;
 pub mod ir;
 pub mod regalloc;
+pub mod codegen;
 
 use token::*;
 use parse::*;
 use ir::*;
 use regalloc::*;
+use codegen::*;
 
 #[allow(dead_code)]
 fn print_typename<T>(_: T) {
@@ -22,7 +24,6 @@ fn main() {
         eprintln!("wrong arguments.");
         process::exit(1);
     }
-    
 	
 	let p:Vec<char> = (&args[1][..]).chars().collect();
 	
@@ -30,14 +31,17 @@ fn main() {
 	
 	// lexical analysis
 	tokenize(&p, &mut tokens, 0);
+	// for token in &tokens {
+	// 	println!("{:?}", token);
+	// }
 
 	// parsing analysis
-	let node = expr(&p, &tokens, 0);
+	let node = parse(&p, &tokens, 0);
+	// println!("{:#?}", &node);
 
 	let mut ins: Vec<Ir> = vec![];
 	let mut reg_map: [i32; 10000] = [-1; 10000];
 	let mut used: [bool; 8] = [false; 8];
-
 	// alloc register
 	gen_ir(&node, &mut ins);
 	alloc_regs(&mut reg_map, &mut used, &mut ins);
