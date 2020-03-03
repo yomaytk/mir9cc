@@ -25,31 +25,32 @@ fn main() {
         process::exit(1);
     }
 	
-	let p:Vec<char> = (&args[1][..]).chars().collect();
-	
-	let mut tokens: Vec<Token> = vec![];
+	let p:String = (&args[1][..]).chars().collect();
 	
 	// lexical analysis
-	tokenize(&p, &mut tokens, 0);
+	let tokens = tokenize(&p);
 	// for token in &tokens {
 	// 	println!("{:?}", token);
 	// }
 
 	// parsing analysis
-	let node = parse(&p, &tokens, 0);
+	let node = parse(&tokens, 0);
 	// println!("{:#?}", &node);
 
-	let mut ins: Vec<Ir> = vec![];
 	let mut reg_map: [i32; 10000] = [-1; 10000];
 	let mut used: [bool; 8] = [false; 8];
+	
 	// alloc register
-	gen_ir(&node, &mut ins);
-	alloc_regs(&mut reg_map, &mut used, &mut ins);
+	let mut code = gen_ir(&node);
+	// for ins in &code {
+	// 	println!("{:?}", ins);
+	// }
+	alloc_regs(&mut reg_map, &mut used, &mut code);
 
     println!(".intel_syntax noprefix");
     println!(".global main");
     println!("main:");
 	
 	// code generator
-	gen_x86(&ins);
+	gen_x86(&code);
 }

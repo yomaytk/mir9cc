@@ -8,18 +8,30 @@ pub enum TokenType {
 	TokenMinus,
 	TokenMul,
 	TokenDiv,
+	TokenRet,
+	TokenSemi,
+	TokenNoSignal,
 	TokenEof,
 }
 
-#[derive(Debug)]
-pub struct Token {
-	pub ty: TokenType,
-	pub val: i32,
-	pub input: usize,
+impl From<String> for TokenType {
+	fn from(s: String) -> Self {
+		match &s[..] {
+			"return" => { TokenRet }
+			_ => { panic!("{} is not defined.", &s[..]); }
+		}
+	}
 }
 
-impl Token {
-	pub fn new(ty: TokenType, val: i32, input: usize) -> Token {
+#[derive(Debug)]
+pub struct Token<'a> {
+	pub ty: TokenType,
+	pub val: i32,
+	pub input: &'a str,
+}
+
+impl<'a> Token<'a> {
+	pub fn new(ty: TokenType, val: i32, input: &'a str) -> Token<'a> {
 		Token {
 			ty: ty,
 			val: val,
@@ -28,18 +40,23 @@ impl Token {
 	}
 }
 
-// return next_number and position
-fn next_number(p: &Vec<char>, mut pos: usize) -> (i32, usize) {
-	let mut num = String::from("");
-	for i in pos..p.len() {
-		if p[i].is_digit(10) {
-			num.push(p[i]);
-			pos += 1;
-		} else {
-			break;
+// return next number
+fn strtol(p: &mut core::str::Chars, pos: &mut usize, c: char) -> i32 {
+
+	let mut pp = p.clone();
+	let mut num_str = String::from("");
+	num_str.push(c);
+
+	while let Some(c) = pp.next() {
+		if c.is_ascii_digit() {
+			num_str.push(c);
+			p.next();
+			*pos += 1;
+			continue;
 		}
+		break;
 	}
-	(num.parse::<i32>().unwrap(), pos)
+	num_str.parse::<i32>().unwrap()
 }
 
 // return TokenType of given character
@@ -48,30 +65,58 @@ fn signal2token (p: char) -> TokenType {
 	else if p == '-' { TokenMinus }
 	else if p == '*' { TokenMul }
 	else if p == '/' { TokenDiv }
-	else { panic!("signal2token error!"); }
+	else if p == ';' { TokenSemi }
+	else { TokenNoSignal }
 }
 
-pub fn tokenize(p: &Vec<char>, tokens: &mut Vec<Token>, mut pos: usize) {
+pub fn tokenize(input: &String) -> Vec<Token> {
 	
-	while pos < p.len() {
+	let mut tokens: Vec<Token> = vec![];
+	let mut pos = 0;
+	let mut p = input.chars();
 
-		if p[pos].is_whitespace() {
+	while let Some(c) = p.next() {
+
+		// space
+		if c.is_whitespace() {
 			pos += 1;
 			continue;
 		}
 		
-		if p[pos] == '+' || p[pos] == '-' || p[pos] == '*' || p[pos] == '/' {
-			let token = Token::new(signal2token(p[pos]), 0, pos);
+		// operator or signal
+		if signal2token(c) != TokenNoSignal {
+			let token = Token::new(signal2token(c), -1, &input[pos..]);
+			tokens.push(token);
+			pos += 1;
+			continue;
+		}
+
+		// keyword
+		if c.is_alphabetic() || c == '_' {
+			let mut ident = String::new();
+			ident.push(c);
+			loop {
+				if let Some(cc) = p.next() {
+					if !cc.is_alphabetic(){
+						break;
+					}
+					ident.push(cc);
+					continue;
+				}
+			}
+			let token = Token::new(TokenType::from(ident), -1, &input[pos..]);
 			tokens.push(token);
 			pos += 1;
 			continue;
 		}
 		
-		if p[pos].is_digit(10) {
-			let next = next_number(p, pos);
-			let token = Token::new(TokenNum, next.0, pos);
-			pos = next.1;
+		// number
+		if c.is_digit(10) {
+			let possub = pos;
+			let num = strtol(&mut p, &mut pos, c);
+			let token = Token::new(TokenNum, num, &input[possub..]);
 			tokens.push(token);
+			pos += 1;
 			continue;
 		}
 
@@ -79,7 +124,9 @@ pub fn tokenize(p: &Vec<char>, tokens: &mut Vec<Token>, mut pos: usize) {
 		process::exit(1);
 	}
 
-	let token = Token::new(TokenEof, 0, 0);
+	// guard
+	let token = Token::new(TokenEof, 0, &input[pos..]);
 	tokens.push(token);
-
+	
+	tokens
 }

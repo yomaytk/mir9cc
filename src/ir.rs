@@ -1,7 +1,6 @@
 use super::token::{*, TokenType::*};
 use IrType::*;
 use super::parse::*;
-use super::parse::NodeType::*;
 
 #[allow(dead_code)]
 #[derive(Debug)]
@@ -12,7 +11,8 @@ pub enum IrType {
 	IrMinus,
 	IrMul,
 	IrDiv,
-	IrReturn,
+	IrRet,
+	IrExpr,
 	IrKill,
 	IrNop,
 }
@@ -45,27 +45,49 @@ impl Ir {
 }
 
 // allocate of index for register to NodeNum
-fn gen_ir_sub(node: &Node, ins: &mut Vec<Ir>, regno: usize) -> (usize, usize) {
+fn gen_expr(node: &Node, code: &mut Vec<Ir>) -> usize {
 
 	match &node.ty {
-		NodeNum => {
-			let ir = Ir::new(IrImm, regno, node.val as usize);
-			ins.push(ir);
-			return (regno, regno+1);
+		NodeType::Num => {
+			let r = code.len();
+			let ir = Ir::new(IrImm, r, node.val as usize);
+			code.push(ir);
+			return r;
 		},
-		BinaryTree(ty, lhs, rhs) => {
-			let (lhi, lreg) = gen_ir_sub(lhs.as_ref().unwrap(), ins, regno);
-			let (rhi, rreg) = gen_ir_sub(rhs.as_ref().unwrap(), ins, lreg);
-			ins.push(Ir::new(Ir::tokentype2irtype(ty.clone()), lhi, rhi));
-			ins.push(Ir::new(IrKill, rhi, 0));
-			return (lhi, rreg);
-		}
+		NodeType::BinaryTree(ty, lhs, rhs) => {
+			let lhi = gen_expr(lhs.as_ref().unwrap(), code);
+			let rhi = gen_expr(rhs.as_ref().unwrap(), code);
+			code.push(Ir::new(Ir::tokentype2irtype(ty.clone()), lhi, rhi));
+			code.push(Ir::new(IrKill, rhi, 0));
+			return lhi;
+		},
+		_ => { panic!("gen_expr error."); }
 	}
 
 }
 
+fn gen_stmt(node: &Node, code: &mut Vec<Ir>) {
+	match &node.ty {
+		NodeType::Ret(lhs) => {
+			let lhi= gen_expr(lhs.as_ref(), code);
+			code.push(Ir::new(IrRet, lhi, 0));
+		},
+		NodeType::Expr(lhs) => {
+			let lhi = gen_expr(lhs.as_ref(), code);
+			code.push(Ir::new(IrExpr, lhi, 0));
+		},
+		NodeType::CompStmt(lhs) => {
+			for expr in lhs {
+				gen_stmt(expr, code);
+			}
+		},
+		enode => { panic!("unexpeceted node {:?}", enode); }
+	}
+}
+
 // generate IR Vector
-pub fn gen_ir(node: &Node, ins: &mut Vec<Ir>) {
-	let (r, _) = gen_ir_sub(node, ins, 0);
-	ins.push(Ir::new(IrReturn, r, 0));
+pub fn gen_ir(node: &Node) -> Vec<Ir>{
+	let mut code = vec![];
+	gen_stmt(node, &mut code);
+	code
 }

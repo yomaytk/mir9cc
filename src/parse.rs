@@ -5,8 +5,11 @@ use super::token::TokenType::*;
 #[allow(dead_code)]
 #[derive(Debug)]
 pub enum NodeType {
-	NodeNum,
+	Num,
 	BinaryTree(TokenType, Option<Box<Node>>, Option<Box<Node>>),
+	Ret(Box<Node>),
+	Expr(Box<Node>),
+	CompStmt(Vec<Node>),
 }
 
 #[allow(dead_code)]
@@ -17,6 +20,18 @@ impl NodeType {
 
 	fn bit_init(tk_ty: TokenType, lhs: Node, rhs: Node) -> Self {
 		NodeType::BinaryTree(tk_ty, Some(Box::new(lhs)), Some(Box::new(rhs)))
+	}
+
+	fn ret_init(lhs: Node) -> Self {
+		NodeType::Ret(Box::new(lhs))
+	}
+
+	fn expr_init(lhs: Node) -> Self {
+		NodeType::Expr(Box::new(lhs))
+	}
+
+	fn stmt_init(compstmts: Vec<Node>) -> Self {
+		NodeType::CompStmt(compstmts)
 	}
 }
 
@@ -30,14 +45,14 @@ pub struct Node {
 impl Node {
 	pub fn new(tk_ty: TokenType) -> Self {
 		Self {
-			val: 0,
+			val: -1,
 			ty: NodeType::bit_new(tk_ty),
 		}
 	}
 
 	pub fn bit_init(tk_ty: TokenType, lhs: Node, rhs: Node) -> Self {
 		Self {
-			val: 0,
+			val: -1,
 			ty: NodeType::bit_init(tk_ty, lhs, rhs),
 		}
 	}
@@ -45,53 +60,100 @@ impl Node {
 	pub fn new_node_num(val: i32) -> Self {
 		Self {
 			val: val,
-			ty: NodeType::NodeNum,
+			ty: NodeType::Num,
+		}
+	}
+
+	pub fn new_ret(lhs: Node) -> Self {
+		Self {
+			val: -1,
+			ty: NodeType::ret_init(lhs)
+		}
+	}
+
+	pub fn new_expr(lhs: Node) -> Self {
+		Self {
+			val: -1,
+			ty: NodeType::expr_init(lhs)
+		}
+	}
+
+	pub fn new_stmt(compstmts: Vec<Node>) -> Self {
+		Self {
+			val: -1,
+			ty: NodeType::stmt_init(compstmts)
 		}
 	}
 }
 
-fn number(p: &Vec<char>, tokens: &Vec<Token>, pos: usize) -> (Node, usize) {
+fn number(tokens: &Vec<Token>, pos: usize) -> (Node, usize) {
 	if tokens[pos].ty == TokenNum {
 		return (Node::new_node_num(tokens[pos].val), pos+1);
 	}
-	eprintln!("number expected, but got {}", p[tokens[pos].input]);
+	eprintln!("parse.rs: number expected, but got {}", tokens[pos].input);
 	process::exit(1);
 }
 
-fn mul(p: &Vec<char>, tokens: &Vec<Token>, pos: usize) -> (Node, usize) {
-	let (mut lhs, mut pos) = number(p, tokens, pos);
+fn mul(tokens: &Vec<Token>, pos: usize) -> (Node, usize) {
+	let (mut lhs, mut pos) = number(tokens, pos);
 	
 	loop {
 		if tokens[pos].ty != TokenMul && tokens[pos].ty != TokenDiv {
 			return (lhs, pos);
 		}
-		let (rhs, new_pos) = number(p, tokens, pos+1);
+		let (rhs, new_pos) = number(tokens, pos+1);
 		lhs = Node::bit_init(tokens[pos].ty.clone(), lhs, rhs);
 		pos = new_pos;
 	}
 
 }
 
-pub fn expr(p: &Vec<char>, tokens: &Vec<Token>, pos: usize) -> (Node, usize) {
-	let (mut lhs, mut pos) = mul(p, tokens, pos);
+pub fn expr(tokens: &Vec<Token>, pos: usize) -> (Node, usize) {
+	let (mut lhs, mut pos) = mul(tokens, pos);
 
 	loop {
 		if tokens[pos].ty != TokenPlus && tokens[pos].ty != TokenMinus {
 			return (lhs, pos);
 		}
-		let (rhs, new_pos) = mul(p, tokens, pos+1);
+		let (rhs, new_pos) = mul(tokens, pos+1);
 		lhs = Node::bit_init(tokens[pos].ty.clone(), lhs, rhs);
 		pos = new_pos;
 	}
 	
 }
 
-pub fn parse(p: &Vec<char>, tokens: &Vec<Token>, pos: usize) -> Node {
+pub fn stmt(tokens: &Vec<Token>, pos: usize) -> Node {
 	
-	let (node, pos) = expr(p, tokens, pos);
+	let mut pos = pos;
+	let mut compstmts = vec![];
 
-	if tokens[pos].ty != TokenEof {
-		eprintln!("stray token: {}", p[tokens[pos].input]);
+	loop {
+		if tokens[pos].ty == TokenEof {
+			break;
+		}
+		match tokens[pos].ty.clone() {
+			TokenRet => {
+				let (lhs, new_pos) = expr(tokens, pos+1);
+				compstmts.push(Node::new_ret(lhs));
+				pos = new_pos;
+			},
+			_ => {
+				let (lhs, new_pos) = expr(tokens, pos);
+				compstmts.push(Node::new_expr(lhs));
+				pos = new_pos;
+			}
+		}
+		assert_eq!(TokenSemi, tokens[pos].ty.clone());
+		pos += 1;
 	}
-	node
+
+	let compstmt = Node::new_stmt(compstmts);
+	compstmt
+}
+
+pub fn parse(tokens: &Vec<Token>, pos: usize) -> Node {
+	
+	let compstmt = stmt(tokens, pos);
+
+	compstmt
 }
