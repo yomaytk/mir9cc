@@ -34,16 +34,10 @@ fn kill(used: &mut [bool], i: i32){
 pub fn alloc_regs(reg_map: &mut [i32], used: &mut [bool], code: &mut Vec<Ir>) {
 	for ir in code {
 		match ir.ty {
-			IrImm | IrRet | IrAlloc => {
+			IrImm | IrRet | IrAlloc | IrAddImm => {
 				ir.lhs = alloc(reg_map, used, ir.lhs);
 			},
-			IrAdd(imm) => {
-				ir.lhs = alloc(reg_map, used, ir.lhs);
-				if let None = imm {
-					ir.rhs = alloc(reg_map, used, ir.rhs);
-				}
-			},
-			IrMov | IrSub | IrMul | IrDiv | IrStore | IrLoad => {
+			IrMov | IrAdd | IrSub | IrMul | IrDiv | IrStore | IrLoad => {
 				ir.lhs = alloc(reg_map, used, ir.lhs);
 				ir.rhs = alloc(reg_map, used, ir.rhs);
 			},

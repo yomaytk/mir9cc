@@ -17,7 +17,8 @@ lazy_static! {
 pub enum IrType {
 	IrImm,
 	IrMov,
-	IrAdd(Option<usize>),
+	IrAdd,
+	IrAddImm,
 	IrSub,
 	IrMul,
 	IrDiv,
@@ -47,7 +48,7 @@ impl Ir {
 	}
 	fn tokentype2irtype(ty: TokenType) -> IrType {
 		match ty {
-			TokenAdd => { IrAdd(None) },
+			TokenAdd => { IrAdd },
 			TokenSub => {  IrSub },
 			TokenMul => { IrMul },
 			TokenDiv => { IrDiv },
@@ -73,7 +74,7 @@ fn gen_lval(node: &Node, code: &mut Vec<Ir>) -> usize {
 			code.push(Ir::new(IrMov, r1, *BASEREG.lock().unwrap()));	// mov rbp to the register 
 			
 			let off = *VARS.lock().unwrap().get(s).unwrap();
-			code.push(Ir::new(IrAdd(Some(off)), r1, 0));
+			code.push(Ir::new(IrAddImm, r1, off));
 			return r1;
 		},
 		_ => { panic!("not an lvalue")}
