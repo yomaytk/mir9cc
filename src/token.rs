@@ -4,12 +4,14 @@ use TokenType::*;
 #[derive(Debug, PartialEq, Clone)]
 pub enum TokenType {
 	TokenNum,
-	TokenPlus,
-	TokenMinus,
+	TokenAdd,
+	TokenSub,
 	TokenMul,
 	TokenDiv,
 	TokenRet,
 	TokenSemi,
+	TokenIdent,
+	TokenEq,
 	TokenNoSignal,
 	TokenEof,
 }
@@ -18,7 +20,7 @@ impl From<String> for TokenType {
 	fn from(s: String) -> Self {
 		match &s[..] {
 			"return" => { TokenRet }
-			_ => { panic!("{} is not defined.", &s[..]); }
+			_ => { TokenIdent }
 		}
 	}
 }
@@ -37,6 +39,13 @@ impl<'a> Token<'a> {
 			val: val,
 			input: input,
 		}
+	}
+	pub fn consume(&self, c: &str, pos: &mut usize) -> bool {
+		if self.input[..self.val as usize] == *c {
+			*pos += 1;
+			return true;
+		}
+		return false;
 	}
 }
 
@@ -61,11 +70,12 @@ fn strtol(p: &mut core::str::Chars, pos: &mut usize, c: char) -> i32 {
 
 // return TokenType of given character
 fn signal2token (p: char) -> TokenType {
-	if p == '+' { TokenPlus }
-	else if p == '-' { TokenMinus }
+	if p == '+' { TokenAdd }
+	else if p == '-' { TokenSub }
 	else if p == '*' { TokenMul }
 	else if p == '/' { TokenDiv }
 	else if p == ';' { TokenSemi }
+	else if p == '=' { TokenEq }
 	else { TokenNoSignal }
 }
 
@@ -85,26 +95,31 @@ pub fn tokenize(input: &String) -> Vec<Token> {
 		
 		// operator or signal
 		if signal2token(c) != TokenNoSignal {
-			let token = Token::new(signal2token(c), -1, &input[pos..]);
+			let token = Token::new(signal2token(c), 1, &input[pos..]);
 			tokens.push(token);
 			pos += 1;
 			continue;
 		}
 
-		// keyword
+		// ident
 		if c.is_alphabetic() || c == '_' {
 			let mut ident = String::new();
 			ident.push(c);
+			let mut len = 1;
+			let mut pp = p.clone();
+			let possub = pos;
 			loop {
-				if let Some(cc) = p.next() {
-					if !cc.is_alphabetic(){
+				if let Some(cc) = pp.next() {
+					if !cc.is_alphabetic() && !cc.is_ascii_digit() && cc != '_'{
 						break;
 					}
+					p.next();
 					ident.push(cc);
-					continue;
+					len += 1;
+					pos += 1;
 				}
 			}
-			let token = Token::new(TokenType::from(ident), -1, &input[pos..]);
+			let token = Token::new(TokenType::from(ident), len, &input[possub..]);
 			tokens.push(token);
 			pos += 1;
 			continue;

@@ -6,12 +6,16 @@ pub mod parse;
 pub mod ir;
 pub mod regalloc;
 pub mod codegen;
+pub mod lib;
 
 use token::*;
 use parse::*;
 use ir::*;
 use regalloc::*;
 use codegen::*;
+
+#[macro_use]
+extern crate lazy_static;
 
 #[allow(dead_code)]
 fn print_typename<T>(_: T) {

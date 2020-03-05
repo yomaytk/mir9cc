@@ -1,38 +1,37 @@
 .intel_syntax noprefix
 .global main
 main:
-	mov rdi, 1
-	mov rsi, 2
-	add rdi, rsi
-	mov rsi, 3
-	add rdi, rsi
-	mov rsi, 4
-	add rdi, rsi
-	mov rsi, 5
-	add rdi, rsi
-	mov rsi, 6
-	add rdi, rsi
-	mov rsi, 7
-	add rdi, rsi
-	mov rsi, 8
-	add rdi, rsi
-	mov rsi, 9
-	add rdi, rsi
-	mov rsi, 10
-	add rdi, rsi
-	mov rsi, 11
-	add rdi, rsi
-	mov rsi, 12
-	add rdi, rsi
-	mov rsi, 13
-	add rdi, rsi
-	mov rsi, 14
-	add rdi, rsi
-	mov rsi, 15
-	add rdi, rsi
-	mov rsi, 16
-	add rdi, rsi
-	mov rsi, 17
-	add rdi, rsi
-	mov rax, rdi
+	push rbp
+	mov rbp, rsp
+	sub rsp, 16
+	mov rdi, rsp
+	mov rsi, rdi
+	mov r10, 0
+	add rsi, r10
+	mov r10, 2
+	mov [rsi], r10
+	mov r10, rdi
+	mov r11, 8
+	add r10, r11
+	mov r11, 3
+	mov r12, 2
+	add r11, r12
+	mov [r10], r11
+	mov r11, rdi
+	mov r12, 0
+	add r11, r12
+	mov r11, [r11]
+	mov r12, rdi
+	mov r13, 8
+	add r12, r13
+	mov r12, [r12]
+	mov rax, r12
+	mul r11
+	mov r11, rax
+	mov rax, r11
+	jmp .L1
+.L1:
+	mov rsp, rbp
+	mov rsp, rbp
+	pop rbp
 	ret

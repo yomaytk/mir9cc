@@ -33,20 +33,15 @@ fn kill(used: &mut [bool], i: i32){
 // do allocating register to reg_map 
 pub fn alloc_regs(reg_map: &mut [i32], used: &mut [bool], code: &mut Vec<Ir>) {
 	for ir in code {
-		// println!("ererere");
 		match ir.ty {
-			IrImm => {
+			IrImm | IrRet | IrAlloc => {
 				ir.lhs = alloc(reg_map, used, ir.lhs);
 			},
-			IrMov | IrPlus | IrMinus | IrMul | IrDiv => {
+			IrMov | IrAdd | IrSub | IrMul | IrDiv | IrStore | IrLoad => {
 				ir.lhs = alloc(reg_map, used, ir.lhs);
 				ir.rhs = alloc(reg_map, used, ir.rhs);
 			},
-			IrRet => {
-				ir.lhs = alloc(reg_map, used, ir.lhs);
-				kill(used, reg_map[ir.lhs]);
-			},
-			IrKill | IrExpr => {
+			IrKill => {
 				kill(used, reg_map[ir.lhs]);
 				ir.ty = IrNop;
 			},

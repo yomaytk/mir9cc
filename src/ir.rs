@@ -2,17 +2,30 @@ use super::token::{*, TokenType::*};
 use IrType::*;
 use super::parse::*;
 
+use std::sync::Mutex;
+use std::collections::HashMap;
+
+lazy_static! {
+	pub static ref REGNO: Mutex<usize> = Mutex::new(0);
+	pub static ref VARS: Mutex<HashMap<String, usize>> = Mutex::new(HashMap::new());
+	pub static ref BASEREG: Mutex<usize> = Mutex::new(0);
+	pub static ref BPOFF: Mutex<usize> = Mutex::new(0);
+}
+
 #[allow(dead_code)]
 #[derive(Debug)]
 pub enum IrType {
 	IrImm,
 	IrMov,
-	IrPlus,
-	IrMinus,
+	IrAdd,
+	IrSub,
 	IrMul,
 	IrDiv,
 	IrRet,
 	IrExpr,
+	IrAlloc,
+	IrStore,
+	IrLoad,
 	IrKill,
 	IrNop,
 }
@@ -34,8 +47,8 @@ impl Ir {
 	}
 	fn tokentype2irtype(ty: TokenType) -> IrType {
 		match ty {
-			TokenPlus => { IrPlus },
-			TokenMinus => {  IrMinus },
+			TokenAdd => { IrAdd },
+			TokenSub => {  IrSub },
 			TokenMul => { IrMul },
 			TokenDiv => { IrDiv },
 			TokenEof => { panic!("tokeneof!!!"); }
@@ -44,12 +57,41 @@ impl Ir {
 	}
 }
 
+fn gen_lval(node: &Node, code: &mut Vec<Ir>) -> usize {
+	
+	match &node.ty {
+		NodeType::Ident(s) => {
+			if VARS.lock().unwrap().get(s).is_none() {
+				VARS.lock().unwrap().insert(
+					s.clone(),
+					*BPOFF.lock().unwrap(),
+				);
+				*BPOFF.lock().unwrap() += 8;
+			}
+			*REGNO.lock().unwrap() += 1;
+			let r1 = *REGNO.lock().unwrap();
+			code.push(Ir::new(IrMov, r1, *BASEREG.lock().unwrap()));	// mov rbp to the register 
+			
+			*REGNO.lock().unwrap() += 1;
+			let r2 = *REGNO.lock().unwrap();
+			let off = *VARS.lock().unwrap().get(s).unwrap();
+			code.push(Ir::new(IrImm, r2, off));			// mov offset of target variable to the register
+
+			code.push(Ir::new(IrAdd, r1, r2));
+			code.push(Ir::new(IrKill, r2, 0));
+			return r1;
+		},
+		_ => { panic!("not an lvalue")}
+	}
+}
+
 // allocate of index for register to NodeNum
 fn gen_expr(node: &Node, code: &mut Vec<Ir>) -> usize {
 
 	match &node.ty {
 		NodeType::Num => {
-			let r = code.len();
+			*REGNO.lock().unwrap() += 1;
+			let r = *REGNO.lock().unwrap();
 			let ir = Ir::new(IrImm, r, node.val as usize);
 			code.push(ir);
 			return r;
@@ -61,20 +103,33 @@ fn gen_expr(node: &Node, code: &mut Vec<Ir>) -> usize {
 			code.push(Ir::new(IrKill, rhi, 0));
 			return lhi;
 		},
+		NodeType::Ident(_) => {
+			let lhi = gen_lval(node, code);
+			code.push(Ir::new(IrLoad, lhi, lhi));
+			return lhi;
+		},
+		NodeType::EqTree(_, lhs, rhs) => {
+			let lhi = gen_lval(lhs, code);
+			let rhi = gen_expr(rhs, code);
+			code.push(Ir::new(IrStore, lhi, rhi));
+			code.push(Ir::new(IrKill, rhi, 0));
+			return lhi;
+		}
 		_ => { panic!("gen_expr error."); }
 	}
 
 }
+
 
 fn gen_stmt(node: &Node, code: &mut Vec<Ir>) {
 	match &node.ty {
 		NodeType::Ret(lhs) => {
 			let lhi= gen_expr(lhs.as_ref(), code);
 			code.push(Ir::new(IrRet, lhi, 0));
+			code.push(Ir::new(IrKill, lhi, 0));
 		},
 		NodeType::Expr(lhs) => {
-			let lhi = gen_expr(lhs.as_ref(), code);
-			code.push(Ir::new(IrExpr, lhi, 0));
+			let _ = gen_expr(lhs.as_ref(), code);
 		},
 		NodeType::CompStmt(lhs) => {
 			for expr in lhs {
@@ -88,6 +143,8 @@ fn gen_stmt(node: &Node, code: &mut Vec<Ir>) {
 // generate IR Vector
 pub fn gen_ir(node: &Node) -> Vec<Ir>{
 	let mut code = vec![];
+	code.push(Ir::new(IrAlloc, *BASEREG.lock().unwrap(), 0));
 	gen_stmt(node, &mut code);
-	code
+	code[0].rhs = *BPOFF.lock().unwrap();
+	return code;
 }
