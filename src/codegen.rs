@@ -21,8 +21,15 @@ pub fn gen_x86(code: &Vec<Ir>) {
 			IrMov => {
 				println!("\tmov {}, {}", REG[ir.lhs], REG[ir.rhs]);
 			}, 
-			IrAdd => {
-				println!("\tadd {}, {}", REG[ir.lhs], REG[ir.rhs]);
+			IrAdd(imm) => {
+				match imm {
+					Some(im) => {
+						println!("\tadd {}, {}", REG[ir.lhs], im);
+					},
+					None => {
+						println!("\tadd {}, {}", REG[ir.lhs], REG[ir.rhs]);
+					}
+				}
 			},
 			IrSub => {
 				println!("\tsub {}, {}", REG[ir.lhs], REG[ir.rhs]);

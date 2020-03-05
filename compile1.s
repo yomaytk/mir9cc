@@ -6,24 +6,20 @@ main:
 	sub rsp, 16
 	mov rdi, rsp
 	mov rsi, rdi
-	mov r10, 0
-	add rsi, r10
+	add rsi, 0
 	mov r10, 2
 	mov [rsi], r10
 	mov r10, rdi
-	mov r11, 8
-	add r10, r11
+	add r10, 8
 	mov r11, 3
 	mov r12, 2
 	add r11, r12
 	mov [r10], r11
 	mov r11, rdi
-	mov r12, 0
-	add r11, r12
+	add r11, 0
 	mov r11, [r11]
 	mov r12, rdi
-	mov r13, 8
-	add r12, r13
+	add r12, 8
 	mov r12, [r12]
 	mov rax, r12
 	mul r11

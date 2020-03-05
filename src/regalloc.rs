@@ -37,7 +37,13 @@ pub fn alloc_regs(reg_map: &mut [i32], used: &mut [bool], code: &mut Vec<Ir>) {
 			IrImm | IrRet | IrAlloc => {
 				ir.lhs = alloc(reg_map, used, ir.lhs);
 			},
-			IrMov | IrAdd | IrSub | IrMul | IrDiv | IrStore | IrLoad => {
+			IrAdd(imm) => {
+				ir.lhs = alloc(reg_map, used, ir.lhs);
+				if let None = imm {
+					ir.rhs = alloc(reg_map, used, ir.rhs);
+				}
+			},
+			IrMov | IrSub | IrMul | IrDiv | IrStore | IrLoad => {
 				ir.lhs = alloc(reg_map, used, ir.lhs);
 				ir.rhs = alloc(reg_map, used, ir.rhs);
 			},
