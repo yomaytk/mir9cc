@@ -12,6 +12,8 @@ pub enum TokenType {
 	TokenSemi,
 	TokenIdent,
 	TokenEq,
+	TokenRightBrac,
+	TokenLeftBrac,
 	TokenNoSignal,
 	TokenEof,
 }
@@ -47,6 +49,12 @@ impl<'a> Token<'a> {
 		}
 		return false;
 	}
+	pub fn expect(&self, c: &str, pos: &mut usize) -> bool {
+		if self.consume(c, pos) {
+			return true;
+		}
+		panic!("expect fun error: {} is expected, but got {}", c, &self.input[..self.val as usize]);
+	}
 }
 
 // return next number
@@ -76,6 +84,8 @@ fn signal2token (p: char) -> TokenType {
 	else if p == '/' { TokenDiv }
 	else if p == ';' { TokenSemi }
 	else if p == '=' { TokenEq }
+	else if p == '(' { TokenRightBrac }
+	else if p == ')' { TokenLeftBrac }
 	else { TokenNoSignal }
 }
 

@@ -112,6 +112,11 @@ impl Node {
 
 fn term(tokens: &Vec<Token>, pos: usize) -> (Node, usize) {
 	
+	if tokens[pos].ty == TokenRightBrac {
+		let (lhs, new_pos) = assign(tokens, pos+1);
+		assert_eq!(tokens[new_pos].ty, TokenLeftBrac);
+		return (lhs, new_pos+1);
+	}
 	if tokens[pos].ty == TokenNum {
 		return (Node::new_node_num(tokens[pos].val), pos+1);
 	}
@@ -154,7 +159,6 @@ fn assign(tokens: &Vec<Token>, pos: usize) -> (Node, usize) {
 	let (mut lhs, new_pos) = expr(tokens, pos);
 	let mut pos = new_pos;
 	if tokens[pos].consume("=", &mut pos) {
-		// panic!("ererererererr {}", tokens[pos].input);
 		let (rhs, new_pos) = expr(tokens, pos);
 		lhs = Node::new_eq(lhs, rhs);
 		pos = new_pos;
@@ -183,11 +187,7 @@ pub fn stmt(tokens: &Vec<Token>, pos: usize) -> Node {
 				pos = new_pos;
 			}
 		}
-		// assert_eq!(TokenSemi, tokens[pos].ty.clone());
-		if TokenSemi != tokens[pos].ty.clone() {
-			println!("{}", tokens[pos].input);
-			panic!("rerererererererer");
-		}
+		assert_eq!(TokenSemi, tokens[pos].ty.clone());
 		pos += 1;
 	}
 
