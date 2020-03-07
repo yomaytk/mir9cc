@@ -11,10 +11,12 @@ main:
 	mov rsi, 2
 	mov rax, rsi
 	jmp .Lend
+	jmp .L1
 .L1:
 	mov rsi, 3
 	mov rax, rsi
 	jmp .Lend
+.L2:
 .Lend:
 	mov rsp, rbp
 	mov rsp, rbp

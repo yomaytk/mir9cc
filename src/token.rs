@@ -15,6 +15,7 @@ pub enum TokenType {
 	TokenRightBrac,
 	TokenLeftBrac,
 	TokenIf,
+	TokenElse,
 	TokenNoSignal,
 	TokenEof,
 }
@@ -24,6 +25,7 @@ impl From<String> for TokenType {
 		match &s[..] {
 			"return" => { TokenRet }
 			"if" => { TokenIf }
+			"else" => { TokenElse }
 			_ => { TokenIdent }
 		}
 	}

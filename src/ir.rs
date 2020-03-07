@@ -12,7 +12,7 @@ lazy_static! {
 	pub static ref VARS: Mutex<HashMap<String, usize>> = Mutex::new(HashMap::new());
 	pub static ref BASEREG: Mutex<usize> = Mutex::new(0);
 	pub static ref BPOFF: Mutex<usize> = Mutex::new(0);
-	pub static ref IRINFO: [IrInfo; 15] = [
+	pub static ref IRINFO: [IrInfo; 16] = [
 		IrInfo::new(IrOp::IrAdd, "+", IrType::RegReg),
 		IrInfo::new(IrOp::IrSub, "-", IrType::RegReg),
 		IrInfo::new(IrOp::IrMul, "*", IrType::RegReg),
@@ -26,6 +26,7 @@ lazy_static! {
 		IrInfo::new(IrOp::IrAlloc, "ALLOCA", IrType::RegImm),
 		IrInfo::new(IrOp::IrLoad, "LOAD", IrType::RegReg),
 		IrInfo::new(IrOp::IrStore, "STORE", IrType::RegReg),
+		IrInfo::new(IrOp::IrJmp, "JMP", IrType::Label),
 		IrInfo::new(IrOp::IrKill, "KILL", IrType::Reg),
 		IrInfo::new(IrOp::IrNop, "NOP", IrType::NoArg)
 	];
@@ -49,6 +50,7 @@ pub enum IrOp {
 	IrLoad,
 	IrLabel,
 	IrUnless,
+	IrJmp,
 	IrKill,
 	IrNop,
 }
@@ -211,15 +213,26 @@ fn gen_stmt(node: &Node, code: &mut Vec<Ir>) {
 			code.push(Ir::new(IrKill, lhi, 0));
 		},
 		NodeType::Expr(lhs) => {
-			let _ = gen_expr(lhs.as_ref(), code);
+			gen_expr(lhs.as_ref(), code);
 		},
-		NodeType::IfThen(cond, then) => {
+		NodeType::IfThen(cond, then, elthen) => {
 			let lhi = gen_expr(cond, code);
 			*LABEL.lock().unwrap() += 1;
 			code.push(Ir::new(IrUnless, lhi, *LABEL.lock().unwrap()));
 			code.push(Ir::new(IrKill, lhi, 0));
 			gen_stmt(then, code);
-			code.push(Ir::new(IrLabel, *LABEL.lock().unwrap(), 0));
+			match elthen {
+				Some(elnode) => {
+					code.push(Ir::new(IrJmp, *LABEL.lock().unwrap(), 0));
+					code.push(Ir::new(IrLabel, *LABEL.lock().unwrap(), 0));
+					gen_stmt(elnode, code);
+					*LABEL.lock().unwrap() += 1;
+					code.push(Ir::new(IrLabel, *LABEL.lock().unwrap(), 0));
+				},
+				None => {
+					code.push(Ir::new(IrLabel, *LABEL.lock().unwrap(), 0));
+				}
+			}
 		}
 		NodeType::CompStmt(lhs) => {
 			for expr in lhs {

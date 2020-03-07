@@ -11,7 +11,7 @@ pub enum NodeType {
 	CompStmt(Vec<Node>),
 	Ident(String),
 	EqTree(TokenType, Box<Node>, Box<Node>),
-	IfThen(Box<Node>, Box<Node>),
+	IfThen(Box<Node>, Box<Node>, Option<Box<Node>>),
 }
 
 #[allow(dead_code)]
@@ -44,8 +44,15 @@ impl NodeType {
 		NodeType::EqTree(TokenEq, Box::new(lhs), Box::new(rhs))
 	}
 	
-	fn if_init(cond: Node, then: Node) -> Self {
-		NodeType::IfThen(Box::new(cond), Box::new(then))
+	fn if_init(cond: Node, then: Node, elthen: Option<Node>) -> Self {
+		match elthen {
+			Some(node) => {
+				NodeType::IfThen(Box::new(cond), Box::new(then), Some(Box::new(node)))
+			}
+			None => {
+				NodeType::IfThen(Box::new(cond), Box::new(then), None)
+			}
+		}
 	}
 }
 
@@ -113,10 +120,10 @@ impl Node {
 		}
 	}
 
-	pub fn new_if(cond: Node, then: Node) -> Self {
+	pub fn new_if(cond: Node, then: Node, elthen: Option<Node>) -> Self {
 		Self {
 			val: -1,
-			ty: NodeType::if_init(cond, then)
+			ty: NodeType::if_init(cond, then, elthen)
 		}
 	}
 }
@@ -194,9 +201,15 @@ pub fn stmt(tokens: &Vec<Token>, pos: usize) -> (Node, usize) {
 			tokens[poss].assert_ty("(", &mut poss);
 			let (cond, mut poss) = assign(tokens, poss);
 			tokens[poss].assert_ty(")", &mut poss);
-			let (then, new_pos) = stmt(tokens, poss);
-			node = Node::new_if(cond, then);
-			pos = new_pos;
+			let (then, mut poss) = stmt(tokens, poss);
+			if tokens[poss].consume("else", &mut poss) {
+				let (elthen, new_pos) = stmt(tokens, poss);
+				node = Node::new_if(cond, then, Some(elthen));
+				pos = new_pos;
+			} else {
+				node = Node::new_if(cond, then, None);
+				pos = poss;
+			}
 		}
 		_ => {
 			let (lhs, new_pos) = assign(tokens, pos);

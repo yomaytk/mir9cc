@@ -59,6 +59,9 @@ pub fn gen_x86(code: &Vec<Ir>) {
 			IrLabel => {
 				println!(".L{}:", ir.lhs);
 			}
+			IrJmp => {
+				println!("\tjmp .L{}", ir.lhs);
+			}
 			IrNop => {},
 			_ => { panic!("unexpected IrOp in gen_x86"); }
 		}
