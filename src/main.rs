@@ -1,5 +1,4 @@
 use std::env;
-use std::process;
 
 pub mod token;
 pub mod parse;
@@ -23,13 +22,24 @@ fn print_typename<T>(_: T) {
 }
 
 fn main() {
-    let args: Vec<String> = env::args().collect();
-    if args.len() != 2 {
-        eprintln!("wrong arguments.");
-        process::exit(1);
-    }
+	let args: Vec<String> = env::args().collect();
 	
-	let p:String = (&args[1][..]).chars().collect();
+	let mut dump_ir1 = false;
+	let mut dump_ir2 = false;
+
+	if args.len() == 4 && args[1] == "-dump-ir1" && args[2] == "-dump-ir2" {
+		dump_ir1 = true;
+		dump_ir2 = true;
+	} else if args.len() == 3 && args[1] == "-dump-ir1" {
+		dump_ir1 = true;
+	} else if args.len() == 3 {
+		dump_ir2 = true;
+	} else if args.len() == 2 {
+	} else {
+		panic!("Usage: mir9cc [-dump-ir] <code>");
+	}
+
+	let p:String = (&args[args.len()-1][..]).chars().collect();
 	
 	// lexical analysis
 	let tokens = tokenize(&p);
@@ -41,20 +51,26 @@ fn main() {
 	let node = parse(&tokens, 0);
 	// println!("{:#?}", &node);
 
+	
+	// alloc index for register
+	let mut irv = gen_ir(&node);
+	if dump_ir1 {
+		IrInfo::dump_ir(&irv, "-dump-ir1");
+	}
+	// for ir in &irv {
+	// 	println!("{:?}", ir);
+	// }
 	let mut reg_map: [i32; 10000] = [-1; 10000];
 	let mut used: [bool; 8] = [false; 8];
-	
-	// alloc register
-	let mut code = gen_ir(&node);
-	// for ins in &code {
-	// 	println!("{:?}", ins);
-	// }
-	alloc_regs(&mut reg_map, &mut used, &mut code);
+	alloc_regs(&mut reg_map, &mut used, &mut irv);
+	if dump_ir2 {
+		IrInfo::dump_ir(&irv, "-dump-ir2");
+	}
 
     println!(".intel_syntax noprefix");
     println!(".global main");
     println!("main:");
 	
 	// code generator
-	gen_x86(&code);
+	gen_x86(&irv);
 }

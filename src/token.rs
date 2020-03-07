@@ -14,6 +14,7 @@ pub enum TokenType {
 	TokenEq,
 	TokenRightBrac,
 	TokenLeftBrac,
+	TokenIf,
 	TokenNoSignal,
 	TokenEof,
 }
@@ -22,6 +23,7 @@ impl From<String> for TokenType {
 	fn from(s: String) -> Self {
 		match &s[..] {
 			"return" => { TokenRet }
+			"if" => { TokenIf }
 			_ => { TokenIdent }
 		}
 	}
@@ -54,6 +56,9 @@ impl<'a> Token<'a> {
 			return true;
 		}
 		panic!("expect fun error: {} is expected, but got {}", c, &self.input[..self.val as usize]);
+	}
+	pub fn assert_ty(&self, c: &str, pos: &mut usize) {
+		assert!(self.consume(c, pos));
 	}
 }
 

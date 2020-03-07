@@ -1,5 +1,4 @@
-use super::ir::IrType::*;
-use super::ir::*;
+use super::ir::{*, IrOp::*, IrType::*};
 
 static REG_SIZE: usize = 8;
 
@@ -24,8 +23,7 @@ fn alloc(reg_map: &mut [i32], used: &mut [bool], ir_reg: usize) -> usize {
 	panic!("register exhausted.");
 }
 
-fn kill(used: &mut [bool], i: i32){
-	let id: usize = i as usize;
+fn kill(used: &mut [bool], id: usize){
 	if !used[id] { panic!("cannot release the register not allocated."); }
 	used[id] = false;
 }
@@ -33,19 +31,20 @@ fn kill(used: &mut [bool], i: i32){
 // do allocating register to reg_map 
 pub fn alloc_regs(reg_map: &mut [i32], used: &mut [bool], code: &mut Vec<Ir>) {
 	for ir in code {
-		match ir.ty {
-			IrImm | IrRet | IrAlloc | IrAddImm => {
+		let info = ir.get_irinfo();
+		match info.ty {
+			Reg | RegImm | RegLabel => {
 				ir.lhs = alloc(reg_map, used, ir.lhs);
 			},
-			IrMov | IrAdd | IrSub | IrMul | IrDiv | IrStore | IrLoad => {
+			RegReg => {
 				ir.lhs = alloc(reg_map, used, ir.lhs);
 				ir.rhs = alloc(reg_map, used, ir.rhs);
 			},
-			IrKill => {
-				kill(used, reg_map[ir.lhs]);
-				ir.ty = IrNop;
-			},
-			_ => { panic!("unknown operator."); }
+			Label | NoArg => {}
+		}
+		if ir.op == IrKill {
+			kill(used, ir.lhs);
+			ir.op = IrNop;
 		}
 	}
 }

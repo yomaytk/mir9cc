@@ -1,4 +1,3 @@
-use std::process;
 use super::token::*;
 use super::token::TokenType::*;
 
@@ -12,6 +11,7 @@ pub enum NodeType {
 	CompStmt(Vec<Node>),
 	Ident(String),
 	EqTree(TokenType, Box<Node>, Box<Node>),
+	IfThen(Box<Node>, Box<Node>),
 }
 
 #[allow(dead_code)]
@@ -32,8 +32,8 @@ impl NodeType {
 		NodeType::Expr(Box::new(lhs))
 	}
 
-	fn stmt_init(compstmts: Vec<Node>) -> Self {
-		NodeType::CompStmt(compstmts)
+	fn stmt_init(stmts: Vec<Node>) -> Self {
+		NodeType::CompStmt(stmts)
 	}
 
 	fn ident_init(s: String) -> Self {
@@ -42,6 +42,10 @@ impl NodeType {
 
 	fn eq_init(lhs: Node, rhs: Node) -> Self {
 		NodeType::EqTree(TokenEq, Box::new(lhs), Box::new(rhs))
+	}
+	
+	fn if_init(cond: Node, then: Node) -> Self {
+		NodeType::IfThen(Box::new(cond), Box::new(then))
 	}
 }
 
@@ -88,10 +92,10 @@ impl Node {
 		}
 	}
 
-	pub fn new_stmt(compstmts: Vec<Node>) -> Self {
+	pub fn new_stmt(stmts: Vec<Node>) -> Self {
 		Self {
 			val: -1,
-			ty: NodeType::stmt_init(compstmts)
+			ty: NodeType::stmt_init(stmts)
 		}
 	}
 
@@ -106,6 +110,13 @@ impl Node {
 		Self {
 			val: -1,
 			ty: NodeType::eq_init(lhs, rhs)
+		}
+	}
+
+	pub fn new_if(cond: Node, then: Node) -> Self {
+		Self {
+			val: -1,
+			ty: NodeType::if_init(cond, then)
 		}
 	}
 }
@@ -123,8 +134,7 @@ fn term(tokens: &Vec<Token>, pos: usize) -> (Node, usize) {
 	if tokens[pos].ty == TokenIdent {
 		return (Node::new_ident(String::from(&tokens[pos].input[..tokens[pos].val as usize])), pos+1);
 	}
-	eprintln!("parse.rs: number expected, but got {}", tokens[pos].input);
-	process::exit(1);
+	panic!("parse.rs: number expected, but got {}", tokens[pos].input);
 }
 
 fn mul(tokens: &Vec<Token>, pos: usize) -> (Node, usize) {
@@ -166,38 +176,64 @@ fn assign(tokens: &Vec<Token>, pos: usize) -> (Node, usize) {
 	(lhs, pos)
 } 
 
-pub fn stmt(tokens: &Vec<Token>, pos: usize) -> Node {
+pub fn stmt(tokens: &Vec<Token>, pos: usize) -> (Node, usize) {
+	
+	let mut pos = pos;
+	let node;
+
+	match tokens[pos].ty.clone() {
+		TokenRet => {
+			let (lhs, new_pos) = assign(tokens, pos+1);
+			node = Node::new_ret(lhs);
+			pos = new_pos;
+			assert_eq!(TokenSemi, tokens[pos].ty.clone());
+			pos += 1;
+		},
+		TokenIf => {
+			let mut poss = pos+1;
+			tokens[poss].assert_ty("(", &mut poss);
+			let (cond, mut poss) = assign(tokens, poss);
+			tokens[poss].assert_ty(")", &mut poss);
+			let (then, new_pos) = stmt(tokens, poss);
+			node = Node::new_if(cond, then);
+			pos = new_pos;
+		}
+		_ => {
+			let (lhs, new_pos) = assign(tokens, pos);
+			node = Node::new_expr(lhs);
+			pos = new_pos;
+			assert_eq!(TokenSemi, tokens[pos].ty.clone());
+			pos += 1;
+		}
+	}
+
+	
+
+	return (node, pos);
+}
+
+pub fn compound_stmt(tokens: &Vec<Token>, pos: usize) -> Node {
 	
 	let mut pos = pos;
 	let mut compstmts = vec![];
 
 	loop {
-		if tokens[pos].ty == TokenEof {
-			break;
-		}
 		match tokens[pos].ty.clone() {
-			TokenRet => {
-				let (lhs, new_pos) = assign(tokens, pos+1);
-				compstmts.push(Node::new_ret(lhs));
-				pos = new_pos;
-			},
-			_ => {
-				let (lhs, new_pos) = assign(tokens, pos);
-				compstmts.push(Node::new_expr(lhs));
+			TokenEof => { break; },
+			_ => { 
+				let (stmt, new_pos) = stmt(tokens, pos);
+				compstmts.push(stmt);
 				pos = new_pos;
 			}
 		}
-		assert_eq!(TokenSemi, tokens[pos].ty.clone());
-		pos += 1;
 	}
 
-	let compstmt = Node::new_stmt(compstmts);
-	compstmt
+	return Node::new_stmt(compstmts);
 }
 
 pub fn parse(tokens: &Vec<Token>, pos: usize) -> Node {
 	
-	let compstmt = stmt(tokens, pos);
+	let program = compound_stmt(tokens, pos);
 
-	compstmt
+	return program;
 }

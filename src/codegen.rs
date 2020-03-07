@@ -1,20 +1,16 @@
-use super::ir::{*, IrType::*};
-
-use std::sync::Mutex;
+use super::ir::{*, IrOp::*};
 
 static REG: [&str; 8] = ["rdi", "rsi", "r10", "r11", "r12", "r13", "r14", "r15"];
-
-lazy_static! {
-	pub static ref LABEL: Mutex<usize> = Mutex::new(0);
-}
 
 pub fn gen_x86(code: &Vec<Ir>) {
 
 	println!("\tpush rbp");
 	println!("\tmov rbp, rsp");
 
+	let ret = ".Lend";
+
 	for ir in code {
-		match &ir.ty {
+		match &ir.op {
 			IrImm => {
 				println!("\tmov {}, {}", REG[ir.lhs], ir.rhs);
 			},
@@ -44,7 +40,7 @@ pub fn gen_x86(code: &Vec<Ir>) {
 			IrRet => {
 				*LABEL.lock().unwrap() += 1;
 				println!("\tmov rax, {}", REG[ir.lhs]);
-				println!("\tjmp .L{}", *LABEL.lock().unwrap());
+				println!("\tjmp {}", ret);
 			},
 			IrAlloc => {
 				println!("\tsub rsp, {}", ir.rhs);
@@ -56,12 +52,19 @@ pub fn gen_x86(code: &Vec<Ir>) {
 			IrLoad => {
 				println!("\tmov {}, [{}]", REG[ir.lhs], REG[ir.rhs]);
 			}
+			IrUnless => {
+				println!("\tcmp {}, 0", REG[ir.lhs]);
+				println!("\tje .L{}", ir.rhs);
+			}
+			IrLabel => {
+				println!(".L{}:", ir.lhs);
+			}
 			IrNop => {},
-			_ => { panic!("unexpected IrType in gen_x86"); }
+			_ => { panic!("unexpected IrOp in gen_x86"); }
 		}
 	}
 	
-	println!(".L{}:", *LABEL.lock().unwrap());
+	println!("{}:", ret);
 	println!("\tmov rsp, rbp");
 	println!("\tmov rsp, rbp");
 	println!("\tpop rbp");

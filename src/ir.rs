@@ -1,20 +1,40 @@
 use super::token::{*, TokenType::*};
+use IrOp::*;
 use IrType::*;
 use super::parse::*;
 
 use std::sync::Mutex;
 use std::collections::HashMap;
+use std::fmt;
 
 lazy_static! {
 	pub static ref REGNO: Mutex<usize> = Mutex::new(0);
 	pub static ref VARS: Mutex<HashMap<String, usize>> = Mutex::new(HashMap::new());
 	pub static ref BASEREG: Mutex<usize> = Mutex::new(0);
 	pub static ref BPOFF: Mutex<usize> = Mutex::new(0);
+	pub static ref IRINFO: [IrInfo; 15] = [
+		IrInfo::new(IrOp::IrAdd, "+", IrType::RegReg),
+		IrInfo::new(IrOp::IrSub, "-", IrType::RegReg),
+		IrInfo::new(IrOp::IrMul, "*", IrType::RegReg),
+		IrInfo::new(IrOp::IrDiv, "/", IrType::RegReg),
+		IrInfo::new(IrOp::IrImm, "MOV", IrType::RegImm),
+		IrInfo::new(IrOp::IrAddImm, "ADD", IrType::RegImm),
+		IrInfo::new(IrOp::IrMov, "MOV", IrType::RegReg),
+		IrInfo::new(IrOp::IrLabel, "", IrType::Label),
+		IrInfo::new(IrOp::IrUnless, "UNLESS", IrType::RegLabel),
+		IrInfo::new(IrOp::IrRet, "RET", IrType::Reg),
+		IrInfo::new(IrOp::IrAlloc, "ALLOCA", IrType::RegImm),
+		IrInfo::new(IrOp::IrLoad, "LOAD", IrType::RegReg),
+		IrInfo::new(IrOp::IrStore, "STORE", IrType::RegReg),
+		IrInfo::new(IrOp::IrKill, "KILL", IrType::Reg),
+		IrInfo::new(IrOp::IrNop, "NOP", IrType::NoArg)
+	];
+	pub static ref LABEL: Mutex<usize> = Mutex::new(0);
 }
 
 #[allow(dead_code)]
-#[derive(Debug)]
-pub enum IrType {
+#[derive(Debug, PartialEq)]
+pub enum IrOp {
 	IrImm,
 	IrMov,
 	IrAdd,
@@ -27,33 +47,99 @@ pub enum IrType {
 	IrAlloc,
 	IrStore,
 	IrLoad,
+	IrLabel,
+	IrUnless,
 	IrKill,
 	IrNop,
 }
 
 #[derive(Debug)]
 pub struct Ir {
-	pub ty: IrType,
+	pub op: IrOp,
 	pub lhs: usize,
 	pub rhs: usize,
 }
 
 impl Ir {
-	fn new(ty: IrType, lhs: usize, rhs: usize) -> Self {
+	fn new(ty: IrOp, lhs: usize, rhs: usize) -> Self {
 		Self {
-			ty: ty,
+			op: ty,
 			lhs: lhs,
 			rhs: rhs,
 		}
 	}
-	fn tokentype2irtype(ty: TokenType) -> IrType {
+	fn tokentype2irop(ty: TokenType) -> IrOp {
 		match ty {
 			TokenAdd => { IrAdd },
-			TokenSub => {  IrSub },
+			TokenSub => { IrSub },
 			TokenMul => { IrMul },
 			TokenDiv => { IrDiv },
 			TokenEof => { panic!("tokeneof!!!"); }
-			_ => { panic!("tokentype2irtype error."); }
+			_ => { panic!("tokentype2irop error."); }
+		}
+	}
+	pub fn get_irinfo(&self) -> &IrInfo {
+		for i in 0..IRINFO.len() {
+			if self.op == IRINFO[i].op {
+				return &IRINFO[i];
+			}
+		}
+		panic!("wrong IrOp found");
+	}
+	fn tostr(&self) -> String {
+		let irinfo = self.get_irinfo();
+		match irinfo.ty.clone() {
+			NoArg => { format!("Nop") },
+			Reg => { format!("{}, r{}", irinfo.ty, self.lhs) },
+			Label => { format!("{}", self.lhs) },
+			RegReg => { format!("{} r{}, r{}", irinfo.name, self.lhs, self.rhs) },
+			RegImm => { format!("{} r{}, {}", irinfo.name, self.lhs, self.rhs) },
+			RegLabel => { format!("{} r{}, .L{}", irinfo.name, self.lhs, self.rhs) },
+		}
+	}
+}
+
+#[derive(Clone)]
+pub enum IrType {
+	NoArg,
+	Reg,
+	Label,
+	RegReg,
+	RegImm,
+	RegLabel,
+}
+
+impl fmt::Display for IrType {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		match self {
+			NoArg => { write!(f, "NoArg") },
+			Reg => { write!(f, "Reg") },
+			Label => { write!(f, "Label") },
+			RegReg => { write!(f, "RegReg") },
+			RegImm => { write!(f, "RegImm") },
+			RegLabel => { write!(f, "RegLabel") },
+		}
+	}
+}
+
+pub struct IrInfo {
+	pub op: IrOp,
+	pub name: &'static str,
+	pub ty: IrType,
+}
+
+impl IrInfo {
+	fn new(op: IrOp, name: &'static str, ty: IrType) -> Self {
+		Self {
+			op,
+			name,
+			ty,
+		}
+	}
+	pub fn dump_ir(irv: &Vec<Ir>, dump_option: &str){
+		println!("{}: ", dump_option);
+		for ir in irv {
+			println!("{}", ir.tostr());
 		}
 	}
 }
@@ -95,7 +181,7 @@ fn gen_expr(node: &Node, code: &mut Vec<Ir>) -> usize {
 		NodeType::BinaryTree(ty, lhs, rhs) => {
 			let lhi = gen_expr(lhs.as_ref().unwrap(), code);
 			let rhi = gen_expr(rhs.as_ref().unwrap(), code);
-			code.push(Ir::new(Ir::tokentype2irtype(ty.clone()), lhi, rhi));
+			code.push(Ir::new(Ir::tokentype2irop(ty.clone()), lhi, rhi));
 			code.push(Ir::new(IrKill, rhi, 0));
 			return lhi;
 		},
@@ -127,6 +213,14 @@ fn gen_stmt(node: &Node, code: &mut Vec<Ir>) {
 		NodeType::Expr(lhs) => {
 			let _ = gen_expr(lhs.as_ref(), code);
 		},
+		NodeType::IfThen(cond, then) => {
+			let lhi = gen_expr(cond, code);
+			*LABEL.lock().unwrap() += 1;
+			code.push(Ir::new(IrUnless, lhi, *LABEL.lock().unwrap()));
+			code.push(Ir::new(IrKill, lhi, 0));
+			gen_stmt(then, code);
+			code.push(Ir::new(IrLabel, *LABEL.lock().unwrap(), 0));
+		}
 		NodeType::CompStmt(lhs) => {
 			for expr in lhs {
 				gen_stmt(expr, code);
