@@ -36,7 +36,7 @@ fn main() {
 		dump_ir2 = true;
 	} else if args.len() == 2 {
 	} else {
-		panic!("Usage: mir9cc [-dump-ir] <code>");
+		panic!("Usage: mir9cc [-dump-ir1] [-dump-ir2] <code>");
 	}
 
 	let p:String = (&args[args.len()-1][..]).chars().collect();
