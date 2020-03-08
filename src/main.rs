@@ -53,24 +53,19 @@ fn main() {
 
 	
 	// alloc index for register
-	let mut irv = gen_ir(&node);
+	let mut funcs = gen_ir(&node);
 	if dump_ir1 {
-		IrInfo::dump_ir(&irv, "-dump-ir1");
+		IrInfo::dump_ir(&funcs, "-dump-ir1");
 	}
 	// for ir in &irv {
 	// 	println!("{:?}", ir);
 	// }
-	let mut reg_map: [i32; 10000] = [-1; 10000];
-	let mut used: [bool; 8] = [false; 8];
-	alloc_regs(&mut reg_map, &mut used, &mut irv);
+	alloc_regs(&mut funcs);
 	if dump_ir2 {
-		IrInfo::dump_ir(&irv, "-dump-ir2");
+		IrInfo::dump_ir(&funcs, "-dump-ir2");
 	}
 
-    println!(".intel_syntax noprefix");
-    println!(".global main");
-    println!("main:");
 	
 	// code generator
-	gen_x86(&irv);
+	gen_x86(&funcs);
 }

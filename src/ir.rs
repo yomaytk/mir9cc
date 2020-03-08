@@ -166,10 +166,29 @@ impl IrInfo {
 			ty,
 		}
 	}
-	pub fn dump_ir(irv: &Vec<Ir>, dump_option: &str){
+	pub fn dump_ir(irv: &Vec<Function>, dump_option: &str){
 		println!("{}: ", dump_option);
-		for ir in irv {
-			println!("{}", ir.tostr());
+		for fun in irv {
+			println!("{}():", fun.name);
+			for ir in &fun.irs {
+				println!("{}", ir.tostr());
+			}
+		}
+	}
+}
+
+pub struct Function {
+	pub name: String,
+	pub args: Vec<usize>,
+	pub irs: Vec<Ir>,
+}
+
+impl Function {
+	fn new(name: String, args: Vec<usize>, irs: Vec<Ir>) -> Self {
+		Self {
+			name,
+			args,
+			irs
 		}
 	}
 }
@@ -286,10 +305,31 @@ fn gen_stmt(node: &Node, code: &mut Vec<Ir>) {
 }
 
 // generate IR Vector
-pub fn gen_ir(node: &Node) -> Vec<Ir>{
-	let mut code = vec![];
-	code.push(Ir::new(IrAlloc, *BASEREG.lock().unwrap(), 0));
-	gen_stmt(node, &mut code);
-	code[0].rhs = *BPOFF.lock().unwrap();
-	return code;
+pub fn gen_ir(funcs: &Vec<Node>) -> Vec<Function> {
+	
+	let mut v = vec![];
+
+	for funode in funcs {
+		
+		let mut code = vec![];
+		*REGNO.lock().unwrap() = 0;
+		*BASEREG.lock().unwrap() = 0;
+		*VARS.lock().unwrap() = HashMap::new();
+		*BPOFF.lock().unwrap() = 0;
+		*LABEL.lock().unwrap() = 0;
+		
+		code.push(Ir::new(IrAlloc, *BASEREG.lock().unwrap(), 0)); // alloc BASEREG
+		match &funode.ty {
+			NodeType::Func(name, _, body) => {
+				gen_stmt(body, &mut code);
+				code.push(Ir::new(IrKill, *BASEREG.lock().unwrap(), 0));
+				code[0].rhs = *BPOFF.lock().unwrap();
+				let func = Function::new(name.clone(), vec![], code);
+				v.push(func);
+			}
+			_ => { panic!(" should be func node at gen_ir: {:?}", funode); }
+		}
+	}
+
+	return v;
 }

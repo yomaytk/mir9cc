@@ -1,15 +1,21 @@
 use super::ir::{*, IrOp::*};
 
-static REG: [&str; 8] = ["rdi", "rsi", "r10", "r11", "r12", "r13", "r14", "r15"];
+static REG: [&str; 7] = ["r10", "r11", "rbx", "r12", "r13", "r14", "r15"];
 
-pub fn gen_x86(code: &Vec<Ir>) {
+pub fn gen(fun: &Function, label: usize) {
 
+	println!(".global {}", fun.name);
+	println!("{}:", fun.name);
+	println!("\tpush r12");
+	println!("\tpush r13");
+	println!("\tpush r14");
+	println!("\tpush r15");
 	println!("\tpush rbp");
 	println!("\tmov rbp, rsp");
 
-	let ret = ".Lend";
+	let ret = format!(".Lend{}", label);
 
-	for ir in code {
+	for ir in &fun.irs {
 		match &ir.op {
 			IrImm => {
 				println!("\tmov {}, {}", REG[ir.lhs], ir.rhs);
@@ -63,34 +69,18 @@ pub fn gen_x86(code: &Vec<Ir>) {
 				println!("\tjmp .L{}", ir.lhs);
 			}
 			IrCall { name, len , args } => {
-				println!("\tpush rbx");
-				println!("\tpush rbp");
-				println!("\tpush rsp");
-				println!("\tpush r12");
-				println!("\tpush r13");
-				println!("\tpush r14");
-				println!("\tpush r15");
-				// println!("\tpush rdi");
-				// println!("\tpush rsi");
 
 				let callarg = vec!["rdi", "rsi", "rdx", "rcx", "r8", "r9"];
 				for i in 0..*len {
 					println!("\tmov {}, {}", callarg[i], REG[args[i]]);
 				}
-
+				println!("\tpush r10");
+				println!("\tpush r11");
 				println!("\tmov rax, 0");
 				println!("\tcall {}", name);
+				println!("\tpop r11");
+				println!("\tpop r10");
 				println!("\tmov {}, rax", REG[ir.lhs]);
-
-				// println!("\tpop rsi");
-				// println!("\tpop rdi");
-				println!("\tpop r15");
-				println!("\tpop r14");
-				println!("\tpop r13");
-				println!("\tpop r12");
-				println!("\tpop rsp");
-				println!("\tpop rbp");
-				println!("\tpop rbx");
 			}
 			IrNop => {},
 			_ => { panic!("unexpected IrOp in gen_x86"); }
@@ -99,7 +89,19 @@ pub fn gen_x86(code: &Vec<Ir>) {
 	
 	println!("{}:", ret);
 	println!("\tmov rsp, rbp");
-	println!("\tmov rsp, rbp");
 	println!("\tpop rbp");
+	println!("\tpop r15");
+	println!("\tpop r14");
+	println!("\tpop r13");
+	println!("\tpop r12");
 	println!("\tret");
+}
+
+pub fn gen_x86(funcs: &Vec<Function>) {
+	
+    println!(".intel_syntax noprefix");
+
+	for i in 0..funcs.len() {
+		gen(&funcs[i], i);
+	}
 }

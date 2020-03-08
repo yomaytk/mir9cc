@@ -17,6 +17,8 @@ pub enum TokenType {
 	TokenIf,
 	TokenElse,
 	TokenComma,
+	TokenRightCurlyBrace,
+	TokenLeftCurlyBrace,
 	TokenNoSignal,
 	TokenEof,
 }
@@ -102,6 +104,8 @@ fn signal2token (p: char) -> TokenType {
 	else if p == '(' { TokenRightBrac }
 	else if p == ')' { TokenLeftBrac }
 	else if p == ',' { TokenComma }
+	else if p == '{' { TokenRightCurlyBrace }
+	else if p == '}' { TokenLeftCurlyBrace }
 	else { TokenNoSignal }
 }
 

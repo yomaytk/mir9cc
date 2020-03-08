@@ -13,6 +13,7 @@ pub enum NodeType {
 	EqTree(TokenType, Box<Node>, Box<Node>),
 	IfThen(Box<Node>, Box<Node>, Option<Box<Node>>),
 	Call(String, Vec<Node>),
+	Func(String, Vec<Node>, Box<Node>),
 }
 
 #[allow(dead_code)]
@@ -58,6 +59,10 @@ impl NodeType {
 
 	fn call_init(ident: String, args: Vec<Node>) -> Self {
 		NodeType::Call(ident, args)
+	}
+
+	fn func_init(ident: String, args: Vec<Node>, body: Node) -> Self {
+		NodeType::Func(ident, args, Box::new(body))
 	}
 }
 
@@ -136,6 +141,13 @@ impl Node {
 		Self {
 			val: -1,
 			ty: NodeType::call_init(ident, args)
+		}
+	}
+
+	pub fn new_func(ident: String, args: Vec<Node>, body: Node) -> Self {
+		Self {
+			val: -1,
+			ty: NodeType::func_init(ident, args, body)
 		}
 	}
 }
@@ -252,9 +264,9 @@ pub fn compound_stmt(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 	let mut compstmts = vec![];
 
 	loop {
-		match tokens[*pos].ty {
-			TokenEof => { break; },
-			_ => { 
+		match tokens[*pos].consume_ty(TokenLeftCurlyBrace, pos) {
+			true => { break; },
+			false => { 
 				let stmt = stmt(tokens, pos);
 				compstmts.push(stmt);
 			}
@@ -264,9 +276,42 @@ pub fn compound_stmt(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 	return Node::new_stmt(compstmts);
 }
 
-pub fn parse(tokens: &Vec<Token>, pos: &mut usize) -> Node {
+pub fn function(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 	
-	let program = compound_stmt(tokens, pos);
+	let mut args = vec![];
+	let name = String::from(&tokens[*pos].input[..tokens[*pos].val as usize]);
+	
+	if !tokens[*pos].consume_ty(TokenIdent, pos) {
+		panic!("function error: at {}", tokens[*pos].input)
+	}
+
+	// argument
+	tokens[*pos].assert_ty(TokenRightBrac, pos);
+	if !tokens[*pos].consume_ty(TokenLeftBrac, pos) {
+		loop {
+			args.push(term(tokens, pos));
+			if tokens[*pos].consume_ty(TokenLeftBrac, pos){ break; }
+			tokens[*pos].assert_ty(TokenComma, pos);
+		}
+	}
+	
+	// body
+	tokens[*pos].assert_ty(TokenRightCurlyBrace, pos);
+	let body = compound_stmt(tokens, pos);
+
+	return Node::new_func(name, args, body);
+}
+
+pub fn parse(tokens: &Vec<Token>, pos: &mut usize) -> Vec<Node> {
+	
+	let mut program = vec![];
+
+	loop {
+		match tokens[*pos].consume_ty(TokenEof, pos) {
+			true => { break; }
+			false => { program.push(function(tokens, pos)); }
+		}
+	}
 
 	return program;
 }

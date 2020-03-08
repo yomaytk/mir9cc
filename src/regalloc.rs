@@ -29,8 +29,8 @@ fn kill(used: &mut [bool], id: usize){
 }
 
 // do allocating register to reg_map 
-pub fn alloc_regs(reg_map: &mut [i32], used: &mut [bool], code: &mut Vec<Ir>) {
-	for ir in code {
+pub fn visit(reg_map: &mut Vec<i32>, used: &mut Vec<bool>, irs: &mut Vec<Ir>) {
+	for ir in irs {
 		let info = ir.get_irinfo();
 		match info.ty {
 			Reg | RegImm | RegLabel => {
@@ -58,5 +58,14 @@ pub fn alloc_regs(reg_map: &mut [i32], used: &mut [bool], code: &mut Vec<Ir>) {
 			kill(used, ir.lhs);
 			ir.op = IrNop;
 		}
+	}
+}
+
+pub fn alloc_regs(funcs: &mut Vec<Function>) {
+
+	for fun in funcs {
+		let mut reg_map: Vec<i32> = vec![-1; 10000];
+		let mut used: Vec<bool> = vec![false; 7];
+		visit(&mut reg_map, &mut used, &mut fun.irs);
 	}
 }
