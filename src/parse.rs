@@ -12,6 +12,7 @@ pub enum NodeType {
 	Ident(String),
 	EqTree(TokenType, Box<Node>, Box<Node>),
 	IfThen(Box<Node>, Box<Node>, Option<Box<Node>>),
+	Call(String, Vec<Node>)
 }
 
 #[allow(dead_code)]
@@ -53,6 +54,10 @@ impl NodeType {
 				NodeType::IfThen(Box::new(cond), Box::new(then), None)
 			}
 		}
+	}
+
+	fn call_init(ident: String, args: Vec<Node>) -> Self {
+		NodeType::Call(ident, args)
 	}
 }
 
@@ -126,6 +131,13 @@ impl Node {
 			ty: NodeType::if_init(cond, then, elthen)
 		}
 	}
+
+	pub fn new_call(ident: String, args: Vec<Node>) -> Self {
+		Self {
+			val: -1,
+			ty: NodeType::call_init(ident, args)
+		}
+	}
 }
 
 fn term(tokens: &Vec<Token>, pos: usize) -> (Node, usize) {
@@ -139,7 +151,28 @@ fn term(tokens: &Vec<Token>, pos: usize) -> (Node, usize) {
 		return (Node::new_node_num(tokens[pos].val), pos+1);
 	}
 	if tokens[pos].ty == TokenIdent {
-		return (Node::new_ident(String::from(&tokens[pos].input[..tokens[pos].val as usize])), pos+1);
+		
+		// variable
+		let mut poss = pos+1;
+		if !tokens[poss].consume("(", &mut poss){
+			return (Node::new_ident(String::from(&tokens[pos].input[..tokens[pos].val as usize])), pos+1);
+		}
+
+		// function call
+		let mut args = vec![];
+		if tokens[poss].consume(")", &mut poss){
+			return (Node::new_call(String::from(&tokens[pos].input[..tokens[pos].val as usize]), args), poss);
+		}
+		let (arg1, new_pos) = assign(tokens, poss);
+		poss = new_pos;
+		args.push(arg1);
+		while tokens[poss].consume(",", &mut poss) {
+			let (argv, new_pos) = assign(tokens, poss);
+			poss = new_pos;
+			args.push(argv);
+		}
+		tokens[poss].assert_ty(")", &mut poss);
+		return (Node::new_call(String::from(&tokens[pos].input[..tokens[pos].val as usize]), args), poss);
 	}
 	panic!("parse.rs: number expected, but got {}", tokens[pos].input);
 }

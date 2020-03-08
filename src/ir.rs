@@ -12,7 +12,7 @@ lazy_static! {
 	pub static ref VARS: Mutex<HashMap<String, usize>> = Mutex::new(HashMap::new());
 	pub static ref BASEREG: Mutex<usize> = Mutex::new(0);
 	pub static ref BPOFF: Mutex<usize> = Mutex::new(0);
-	pub static ref IRINFO: [IrInfo; 16] = [
+	pub static ref IRINFO: [IrInfo; 17] = [
 		IrInfo::new(IrOp::IrAdd, "+", IrType::RegReg),
 		IrInfo::new(IrOp::IrSub, "-", IrType::RegReg),
 		IrInfo::new(IrOp::IrMul, "*", IrType::RegReg),
@@ -27,6 +27,7 @@ lazy_static! {
 		IrInfo::new(IrOp::IrLoad, "LOAD", IrType::RegReg),
 		IrInfo::new(IrOp::IrStore, "STORE", IrType::RegReg),
 		IrInfo::new(IrOp::IrJmp, "JMP", IrType::Label),
+		IrInfo::new(IrOp::IrCall{ name: String::from(""), len: 0, args: vec![] }, "CALL", IrType::Call),
 		IrInfo::new(IrOp::IrKill, "KILL", IrType::Reg),
 		IrInfo::new(IrOp::IrNop, "NOP", IrType::NoArg)
 	];
@@ -51,6 +52,7 @@ pub enum IrOp {
 	IrLabel,
 	IrUnless,
 	IrJmp,
+	IrCall { name: String, len: usize, args: Vec<usize> },
 	IrKill,
 	IrNop,
 }
@@ -82,8 +84,18 @@ impl Ir {
 	}
 	pub fn get_irinfo(&self) -> &IrInfo {
 		for i in 0..IRINFO.len() {
-			if self.op == IRINFO[i].op {
-				return &IRINFO[i];
+			match &self.op {
+				IrCall { name, len, args } => {
+					let _name = name;
+					let _len = len;
+					let _args = args;
+					return &IRINFO[14];
+				},
+				_ => {
+					if self.op == IRINFO[i].op {
+						return &IRINFO[i];
+					}
+				}
 			}
 		}
 		panic!("wrong IrOp found");
@@ -97,6 +109,20 @@ impl Ir {
 			RegReg => { format!("{} r{}, r{}", irinfo.name, self.lhs, self.rhs) },
 			RegImm => { format!("{} r{}, {}", irinfo.name, self.lhs, self.rhs) },
 			RegLabel => { format!("{} r{}, .L{}", irinfo.name, self.lhs, self.rhs) },
+			Call => {
+				match &self.op {
+					IrCall{ name, len, args } => {
+						let _len = len;
+						let mut s = String::from(format!("{} {}(", irinfo.name, name));
+						for arg in args {
+							s += &format!(", {}", arg);
+						}
+						s += &format!("), {}, {})", self.lhs, self.rhs);
+						return s;
+					}
+					_ => { panic!("tostr call error {}"); }
+				}
+			}
 		}
 	}
 }
@@ -109,6 +135,7 @@ pub enum IrType {
 	RegReg,
 	RegImm,
 	RegLabel,
+	Call,
 }
 
 impl fmt::Display for IrType {
@@ -120,6 +147,7 @@ impl fmt::Display for IrType {
 			RegReg => { write!(f, "RegReg") },
 			RegImm => { write!(f, "RegImm") },
 			RegLabel => { write!(f, "RegLabel") },
+			Call => { write!(f, "Call") },
 		}
 	}
 }
@@ -198,6 +226,20 @@ fn gen_expr(node: &Node, code: &mut Vec<Ir>) -> usize {
 			code.push(Ir::new(IrStore, lhi, rhi));
 			code.push(Ir::new(IrKill, rhi, 0));
 			return lhi;
+		},
+		NodeType::Call(ident, callarg) => {
+			let mut args = vec![];
+			for arg in callarg {
+				args.push(gen_expr(arg, code));
+			}
+			*REGNO.lock().unwrap() += 1;
+			let r = *REGNO.lock().unwrap();
+			code.push(Ir::new(IrCall{ 
+				name: (*ident).clone(), 
+				len: args.len(),
+				args: args 
+			} , r, 0));
+			return r;
 		}
 		_ => { panic!("gen_expr error."); }
 	}

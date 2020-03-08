@@ -40,6 +40,18 @@ pub fn alloc_regs(reg_map: &mut [i32], used: &mut [bool], code: &mut Vec<Ir>) {
 				ir.lhs = alloc(reg_map, used, ir.lhs);
 				ir.rhs = alloc(reg_map, used, ir.rhs);
 			},
+			Call => {
+				match &mut ir.op {
+					IrCall { name, len, args } => {
+						let _name = name;
+						ir.lhs = alloc(reg_map, used, ir.lhs);
+						for i in 0..*len {
+							args[i] = alloc(reg_map, used, args[i]);
+						}
+					},
+					_ => { panic!("alloc_regs call error"); }
+				}
+			}
 			Label | NoArg => {}
 		}
 		if ir.op == IrKill {

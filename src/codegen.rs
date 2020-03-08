@@ -13,24 +13,24 @@ pub fn gen_x86(code: &Vec<Ir>) {
 		match &ir.op {
 			IrImm => {
 				println!("\tmov {}, {}", REG[ir.lhs], ir.rhs);
-			},
+			}
 			IrMov => {
 				println!("\tmov {}, {}", REG[ir.lhs], REG[ir.rhs]);
-			}, 
+			}
 			IrAdd => {
 				println!("\tadd {}, {}", REG[ir.lhs], REG[ir.rhs]);
-			},
+			}
 			IrAddImm => {
 				println!("\tadd {}, {}", REG[ir.lhs], ir.rhs);
 			}
 			IrSub => {
 				println!("\tsub {}, {}", REG[ir.lhs], REG[ir.rhs]);
-			},
+			}
 			IrMul => {
 				println!("\tmov rax, {}", REG[ir.rhs]);
 				println!("\tmul {}", REG[ir.lhs]);
 				println!("\tmov {}, rax", REG[ir.lhs]);
-			},
+			}
 			IrDiv => {
 				println!("\tmov rax, {}", REG[ir.lhs]);
 				println!("\tcqo");
@@ -41,7 +41,7 @@ pub fn gen_x86(code: &Vec<Ir>) {
 				*LABEL.lock().unwrap() += 1;
 				println!("\tmov rax, {}", REG[ir.lhs]);
 				println!("\tjmp {}", ret);
-			},
+			}
 			IrAlloc => {
 				println!("\tsub rsp, {}", ir.rhs);
 				println!("\tmov {}, rsp", REG[ir.lhs]);
@@ -61,6 +61,36 @@ pub fn gen_x86(code: &Vec<Ir>) {
 			}
 			IrJmp => {
 				println!("\tjmp .L{}", ir.lhs);
+			}
+			IrCall { name, len , args } => {
+				println!("\tpush rbx");
+				println!("\tpush rbp");
+				println!("\tpush rsp");
+				println!("\tpush r12");
+				println!("\tpush r13");
+				println!("\tpush r14");
+				println!("\tpush r15");
+				// println!("\tpush rdi");
+				// println!("\tpush rsi");
+
+				let callarg = vec!["rdi", "rsi", "rdx", "rcx", "r8", "r9"];
+				for i in 0..*len {
+					println!("\tmov {}, {}", callarg[i], REG[args[i]]);
+				}
+
+				println!("\tmov rax, 0");
+				println!("\tcall {}", name);
+				println!("\tmov {}, rax", REG[ir.lhs]);
+
+				// println!("\tpop rsi");
+				// println!("\tpop rdi");
+				println!("\tpop r15");
+				println!("\tpop r14");
+				println!("\tpop r13");
+				println!("\tpop r12");
+				println!("\tpop rsp");
+				println!("\tpop rbp");
+				println!("\tpop rbx");
 			}
 			IrNop => {},
 			_ => { panic!("unexpected IrOp in gen_x86"); }

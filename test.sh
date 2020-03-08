@@ -4,7 +4,7 @@ try() {
 	input="$2"
 
 	./target/debug/mir9cc "$input" > compile1.s
-	gcc -static -o compile compile1.s
+	gcc -static -o compile compile1.s tmp-plus.o
 	./compile
 	actual="$?"
 
@@ -35,6 +35,8 @@ compile_err() {
 
 echo -e "\n\e[32m*** try test start ***\e[m\n"
 
+echo 'int plus(int x, int y) { return x + y; }' | gcc -xc -c -o tmp-plus.o -
+
 try 10 'return 2*3+4;'
 try 14 'return 2+3*4;'
 try 26 'return 2*3+4*5;'
@@ -57,7 +59,8 @@ try 3 'if (0) return 2; return 3;'
 try 2 'if (1) return 2; else return 3;'
 try 3 'if (0) return 2; else return 3;'
 
-
+try 5 'return plus(2, 3);'
+# try 11 'return 2*3+plus(2, 3);'
 
 echo -e "\n\e[32m*** SUCCESS! ***\e[m\n"
 
