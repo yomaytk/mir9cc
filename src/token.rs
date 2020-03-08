@@ -60,8 +60,15 @@ impl<'a> Token<'a> {
 		}
 		panic!("expect fun error: {} is expected, but got {}", c, &self.input[..self.val as usize]);
 	}
-	pub fn assert_ty(&self, c: &str, pos: &mut usize) {
-		assert!(self.consume(c, pos));
+	pub fn assert_ty(&self, ty: TokenType, pos: &mut usize) {
+		assert!(self.consume_ty(ty, pos));
+	}
+	pub fn consume_ty(&self, ty: TokenType, pos: &mut usize) -> bool {
+		if self.ty == ty {
+			*pos += 1;
+			return true;
+		}
+		return false;
 	}
 }
 

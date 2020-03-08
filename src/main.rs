@@ -48,7 +48,7 @@ fn main() {
 	// }
 
 	// parsing analysis
-	let node = parse(&tokens, 0);
+	let node = parse(&tokens, &mut 0);
 	// println!("{:#?}", &node);
 
 	

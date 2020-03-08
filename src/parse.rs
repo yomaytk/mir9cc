@@ -12,7 +12,7 @@ pub enum NodeType {
 	Ident(String),
 	EqTree(TokenType, Box<Node>, Box<Node>),
 	IfThen(Box<Node>, Box<Node>, Option<Box<Node>>),
-	Call(String, Vec<Node>)
+	Call(String, Vec<Node>),
 }
 
 #[allow(dead_code)]
@@ -140,136 +140,123 @@ impl Node {
 	}
 }
 
-fn term(tokens: &Vec<Token>, pos: usize) -> (Node, usize) {
+fn term(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 	
-	if tokens[pos].ty == TokenRightBrac {
-		let (lhs, new_pos) = assign(tokens, pos+1);
-		assert_eq!(tokens[new_pos].ty, TokenLeftBrac);
-		return (lhs, new_pos+1);
+	if tokens[*pos].consume_ty(TokenRightBrac, pos) {
+		let lhs = assign(tokens, pos);
+		tokens[*pos].assert_ty(TokenLeftBrac, pos);
+		return lhs;
 	}
-	if tokens[pos].ty == TokenNum {
-		return (Node::new_node_num(tokens[pos].val), pos+1);
+	if tokens[*pos].consume_ty(TokenNum, pos) {
+		return Node::new_node_num(tokens[*pos-1].val);
 	}
-	if tokens[pos].ty == TokenIdent {
+	if tokens[*pos].consume_ty(TokenIdent, pos) {
+
+		let name = String::from(&tokens[*pos-1].input[..tokens[*pos-1].val as usize]);
 		
 		// variable
-		let mut poss = pos+1;
-		if !tokens[poss].consume("(", &mut poss){
-			return (Node::new_ident(String::from(&tokens[pos].input[..tokens[pos].val as usize])), pos+1);
+		if !tokens[*pos].consume_ty(TokenRightBrac, pos){
+			return Node::new_ident(name);
 		}
 
 		// function call
 		let mut args = vec![];
-		if tokens[poss].consume(")", &mut poss){
-			return (Node::new_call(String::from(&tokens[pos].input[..tokens[pos].val as usize]), args), poss);
+		//// arity = 0;
+		if tokens[*pos].consume_ty(TokenLeftBrac, pos){
+			return Node::new_call(name, args);
 		}
-		let (arg1, new_pos) = assign(tokens, poss);
-		poss = new_pos;
+		//// arity > 0;
+		let arg1 = assign(tokens, pos);
 		args.push(arg1);
-		while tokens[poss].consume(",", &mut poss) {
-			let (argv, new_pos) = assign(tokens, poss);
-			poss = new_pos;
+		while tokens[*pos].consume_ty(TokenComma, pos) {
+			let argv = assign(tokens, pos);
 			args.push(argv);
 		}
-		tokens[poss].assert_ty(")", &mut poss);
-		return (Node::new_call(String::from(&tokens[pos].input[..tokens[pos].val as usize]), args), poss);
+		tokens[*pos].assert_ty(TokenLeftBrac, pos);
+		return Node::new_call(name, args);
 	}
-	panic!("parse.rs: number expected, but got {}", tokens[pos].input);
+	panic!("parse.rs: term parse fail. and got {}", tokens[*pos].input);
 }
 
-fn mul(tokens: &Vec<Token>, pos: usize) -> (Node, usize) {
-	let (mut lhs, mut pos) = term(tokens, pos);
+fn mul(tokens: &Vec<Token>, pos: &mut usize) -> Node {
+	let mut lhs = term(tokens, pos);
 	
 	loop {
-		if tokens[pos].ty != TokenMul && tokens[pos].ty != TokenDiv {
-			return (lhs, pos);
+		if !tokens[*pos].consume_ty(TokenMul, pos) && !tokens[*pos].consume_ty(TokenDiv, pos) {
+			return lhs;
 		}
-		let (rhs, new_pos) = term(tokens, pos+1);
-		lhs = Node::new_bit(tokens[pos].ty.clone(), lhs, rhs);
-		pos = new_pos;
+		
+		let ty = tokens[*pos-1].ty.clone();
+		let rhs = term(tokens, pos);
+		lhs = Node::new_bit(ty, lhs, rhs);
 	}
 
 }
 
-fn expr(tokens: &Vec<Token>, pos: usize) -> (Node, usize) {
-	let (mut lhs, mut pos) = mul(tokens, pos);
-
+fn expr(tokens: &Vec<Token>, pos: &mut usize) -> Node {
+	let mut lhs = mul(tokens, pos);
+	
 	loop {
-		if tokens[pos].ty != TokenAdd && tokens[pos].ty != TokenSub {
-			return (lhs, pos);
+		if !tokens[*pos].consume_ty(TokenAdd, pos) && !tokens[*pos].consume_ty(TokenSub, pos) {
+			return lhs;
 		}
-		let (rhs, new_pos) = mul(tokens, pos+1);
-		lhs = Node::new_bit(tokens[pos].ty.clone(), lhs, rhs);
-		pos = new_pos;
+		let ty = tokens[*pos-1].ty.clone();
+		let rhs = mul(tokens, pos);
+		lhs = Node::new_bit(ty, lhs, rhs);
 	}
 	
 }
 
-fn assign(tokens: &Vec<Token>, pos: usize) -> (Node, usize) {
-	let (mut lhs, new_pos) = expr(tokens, pos);
-	let mut pos = new_pos;
-	if tokens[pos].consume("=", &mut pos) {
-		let (rhs, new_pos) = expr(tokens, pos);
+fn assign(tokens: &Vec<Token>, pos: &mut usize) -> Node {
+	let mut lhs = expr(tokens, pos);
+
+	if tokens[*pos].consume_ty(TokenEq, pos) {
+		let rhs = expr(tokens, pos);
 		lhs = Node::new_eq(lhs, rhs);
-		pos = new_pos;
 	}
-	(lhs, pos)
+	return lhs;
 } 
 
-pub fn stmt(tokens: &Vec<Token>, pos: usize) -> (Node, usize) {
+pub fn stmt(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 	
-	let mut pos = pos;
-	let node;
-
-	match tokens[pos].ty.clone() {
+	match tokens[*pos].ty {
 		TokenRet => {
-			let (lhs, new_pos) = assign(tokens, pos+1);
-			node = Node::new_ret(lhs);
-			pos = new_pos;
-			assert_eq!(TokenSemi, tokens[pos].ty.clone());
-			pos += 1;
+			*pos += 1;
+			let lhs = assign(tokens, pos);
+			tokens[*pos].assert_ty(TokenSemi, pos);
+			return Node::new_ret(lhs);
 		},
 		TokenIf => {
-			let mut poss = pos+1;
-			tokens[poss].assert_ty("(", &mut poss);
-			let (cond, mut poss) = assign(tokens, poss);
-			tokens[poss].assert_ty(")", &mut poss);
-			let (then, mut poss) = stmt(tokens, poss);
-			if tokens[poss].consume("else", &mut poss) {
-				let (elthen, new_pos) = stmt(tokens, poss);
-				node = Node::new_if(cond, then, Some(elthen));
-				pos = new_pos;
+			*pos += 1;
+			tokens[*pos].assert_ty(TokenRightBrac, pos);
+			let cond = assign(tokens, pos);
+			tokens[*pos].assert_ty(TokenLeftBrac, pos);
+			let then = stmt(tokens, pos);
+			if tokens[*pos].consume_ty(TokenElse, pos) {
+				let elthen = stmt(tokens, pos);
+				return Node::new_if(cond, then, Some(elthen));
 			} else {
-				node = Node::new_if(cond, then, None);
-				pos = poss;
+				return Node::new_if(cond, then, None);
 			}
 		}
 		_ => {
-			let (lhs, new_pos) = assign(tokens, pos);
-			node = Node::new_expr(lhs);
-			pos = new_pos;
-			assert_eq!(TokenSemi, tokens[pos].ty.clone());
-			pos += 1;
+			let lhs = assign(tokens, pos);
+			tokens[*pos].consume_ty(TokenSemi, pos);
+			return Node::new_expr(lhs);
 		}
 	}
-
-	
-
-	return (node, pos);
 }
 
-pub fn compound_stmt(tokens: &Vec<Token>, pos: usize) -> Node {
+pub fn compound_stmt(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 	
-	let mut pos = pos;
 	let mut compstmts = vec![];
 
 	loop {
-		match tokens[pos].ty.clone() {
+		match tokens[*pos].ty {
 			TokenEof => { break; },
 			_ => { 
-				let (stmt, new_pos) = stmt(tokens, pos);
+				let stmt = stmt(tokens, pos);
 				compstmts.push(stmt);
-				pos = new_pos;
 			}
 		}
 	}
@@ -277,7 +264,7 @@ pub fn compound_stmt(tokens: &Vec<Token>, pos: usize) -> Node {
 	return Node::new_stmt(compstmts);
 }
 
-pub fn parse(tokens: &Vec<Token>, pos: usize) -> Node {
+pub fn parse(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 	
 	let program = compound_stmt(tokens, pos);
 
