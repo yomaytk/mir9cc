@@ -57,14 +57,20 @@ fn main() {
 	if dump_ir1 {
 		IrInfo::dump_ir(&funcs, "-dump-ir1");
 	}
-	// for ir in &irv {
-	// 	println!("{:?}", ir);
+	// for func in &funcs {
+	// 	for ir in &func.irs{
+	// 		println!("{:?}", ir);
+	// 	}
 	// }
 	alloc_regs(&mut funcs);
 	if dump_ir2 {
 		IrInfo::dump_ir(&funcs, "-dump-ir2");
 	}
-
+	// for func in &funcs {
+	// 	for ir in &func.irs{
+	// 		println!("{:?}", ir);
+	// 	}
+	// }
 	
 	// code generator
 	gen_x86(&funcs);

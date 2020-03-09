@@ -1,17 +1,18 @@
 use super::ir::{*, IrOp::*};
 
-static REG: [&str; 7] = ["r10", "r11", "rbx", "r12", "r13", "r14", "r15"];
+pub static REG: [&str; 8] = ["rbp", "r10", "r11", "rbx", "r12", "r13", "r14", "r15"];
 
 pub fn gen(fun: &Function, label: usize) {
 
 	println!(".global {}", fun.name);
 	println!("{}:", fun.name);
+	println!("\tpush rbp");
+	println!("\tmov rbp, rsp");
+	println!("\tsub rsp, {}", fun.stacksize);
 	println!("\tpush r12");
 	println!("\tpush r13");
 	println!("\tpush r14");
 	println!("\tpush r15");
-	println!("\tpush rbp");
-	println!("\tmov rbp, rsp");
 
 	let ret = format!(".Lend{}", label);
 
@@ -32,6 +33,9 @@ pub fn gen(fun: &Function, label: usize) {
 			IrSub => {
 				println!("\tsub {}, {}", REG[ir.lhs], REG[ir.rhs]);
 			}
+			IrSubImm => {
+				println!("\tsub {}, {}", REG[ir.lhs], ir.rhs);
+			}
 			IrMul => {
 				println!("\tmov rax, {}", REG[ir.rhs]);
 				println!("\tmul {}", REG[ir.lhs]);
@@ -47,10 +51,6 @@ pub fn gen(fun: &Function, label: usize) {
 				*LABEL.lock().unwrap() += 1;
 				println!("\tmov rax, {}", REG[ir.lhs]);
 				println!("\tjmp {}", ret);
-			}
-			IrAlloc => {
-				println!("\tsub rsp, {}", ir.rhs);
-				println!("\tmov {}, rsp", REG[ir.lhs]);
 			}
 			IrStore => {
 				println!("\tmov [{}], {}", REG[ir.lhs], REG[ir.rhs]);
@@ -74,12 +74,14 @@ pub fn gen(fun: &Function, label: usize) {
 				for i in 0..*len {
 					println!("\tmov {}, {}", callarg[i], REG[args[i]]);
 				}
+				
 				println!("\tpush r10");
 				println!("\tpush r11");
 				println!("\tmov rax, 0");
 				println!("\tcall {}", name);
 				println!("\tpop r11");
 				println!("\tpop r10");
+				
 				println!("\tmov {}, rax", REG[ir.lhs]);
 			}
 			IrNop => {},
@@ -88,12 +90,12 @@ pub fn gen(fun: &Function, label: usize) {
 	}
 	
 	println!("{}:", ret);
-	println!("\tmov rsp, rbp");
-	println!("\tpop rbp");
 	println!("\tpop r15");
 	println!("\tpop r14");
 	println!("\tpop r13");
 	println!("\tpop r12");
+	println!("\tmov rsp, rbp");
+	println!("\tpop rbp");
 	println!("\tret");
 }
 

@@ -1,6 +1,7 @@
 use super::ir::{*, IrOp::*, IrType::*};
+use super::codegen::REG;
 
-static REG_SIZE: usize = 8;
+static REG_SIZE: usize = REG.len();
 
 // allocate the register can be used
 fn alloc(reg_map: &mut [i32], used: &mut [bool], ir_reg: usize) -> usize {
@@ -66,6 +67,8 @@ pub fn alloc_regs(funcs: &mut Vec<Function>) {
 	for fun in funcs {
 		let mut reg_map: Vec<i32> = vec![-1; 10000];
 		let mut used: Vec<bool> = vec![false; 7];
+		reg_map[0] = 0;
+		used[0] = true;
 		visit(&mut reg_map, &mut used, &mut fun.irs);
 	}
 }

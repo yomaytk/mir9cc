@@ -8,17 +8,17 @@ use std::collections::HashMap;
 use std::fmt;
 
 lazy_static! {
-	pub static ref REGNO: Mutex<usize> = Mutex::new(0);
+	pub static ref REGNO: Mutex<usize> = Mutex::new(1);
 	pub static ref VARS: Mutex<HashMap<String, usize>> = Mutex::new(HashMap::new());
-	pub static ref BASEREG: Mutex<usize> = Mutex::new(0);
-	pub static ref BPOFF: Mutex<usize> = Mutex::new(0);
-	pub static ref IRINFO: [IrInfo; 17] = [
-		IrInfo::new(IrOp::IrAdd, "+", IrType::RegReg),
-		IrInfo::new(IrOp::IrSub, "-", IrType::RegReg),
-		IrInfo::new(IrOp::IrMul, "*", IrType::RegReg),
-		IrInfo::new(IrOp::IrDiv, "/", IrType::RegReg),
+	pub static ref STACKSIZE: Mutex<usize> = Mutex::new(0);
+	pub static ref IRINFO: [IrInfo; 18] = [
+		IrInfo::new(IrOp::IrAdd, "ADD", IrType::RegReg),
+		IrInfo::new(IrOp::IrSub, "SUB", IrType::RegReg),
+		IrInfo::new(IrOp::IrMul, "MUL", IrType::RegReg),
+		IrInfo::new(IrOp::IrDiv, "DIV", IrType::RegReg),
 		IrInfo::new(IrOp::IrImm, "MOV", IrType::RegImm),
 		IrInfo::new(IrOp::IrAddImm, "ADD", IrType::RegImm),
+		IrInfo::new(IrOp::IrSubImm, "SUB", IrType::RegImm),
 		IrInfo::new(IrOp::IrMov, "MOV", IrType::RegReg),
 		IrInfo::new(IrOp::IrLabel, "", IrType::Label),
 		IrInfo::new(IrOp::IrUnless, "UNLESS", IrType::RegLabel),
@@ -41,6 +41,7 @@ pub enum IrOp {
 	IrMov,
 	IrAdd,
 	IrAddImm,
+	IrSubImm,
 	IrSub,
 	IrMul,
 	IrDiv,
@@ -89,7 +90,9 @@ impl Ir {
 					let _name = name;
 					let _len = len;
 					let _args = args;
-					return &IRINFO[14];
+					let op = &IRINFO[15];
+					assert_eq!(op, &IrInfo::new(IrOp::IrCall{ name: String::from(""), len: 0, args: vec![] }, "CALL", IrType::Call));
+					return op;
 				},
 				_ => {
 					if self.op == IRINFO[i].op {
@@ -127,7 +130,7 @@ impl Ir {
 	}
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum IrType {
 	NoArg,
 	Reg,
@@ -152,6 +155,7 @@ impl fmt::Display for IrType {
 	}
 }
 
+#[derive(Debug, PartialEq)]
 pub struct IrInfo {
 	pub op: IrOp,
 	pub name: &'static str,
@@ -181,14 +185,16 @@ pub struct Function {
 	pub name: String,
 	pub args: Vec<usize>,
 	pub irs: Vec<Ir>,
+	pub stacksize: usize,
 }
 
 impl Function {
-	fn new(name: String, args: Vec<usize>, irs: Vec<Ir>) -> Self {
+	fn new(name: String, args: Vec<usize>, irs: Vec<Ir>, stacksize: usize) -> Self {
 		Self {
 			name,
 			args,
-			irs
+			irs,
+			stacksize
 		}
 	}
 }
@@ -198,18 +204,18 @@ fn gen_lval(node: &Node, code: &mut Vec<Ir>) -> usize {
 	match &node.ty {
 		NodeType::Ident(s) => {
 			if VARS.lock().unwrap().get(s).is_none() {
+				*STACKSIZE.lock().unwrap() += 8;
 				VARS.lock().unwrap().insert(
 					s.clone(),
-					*BPOFF.lock().unwrap(),
+					*STACKSIZE.lock().unwrap(),
 				);
-				*BPOFF.lock().unwrap() += 8;
 			}
 			*REGNO.lock().unwrap() += 1;
 			let r1 = *REGNO.lock().unwrap();
-			code.push(Ir::new(IrMov, r1, *BASEREG.lock().unwrap()));	// mov rbp to the register 
+			code.push(Ir::new(IrMov, r1, 0)); 
 			
 			let off = *VARS.lock().unwrap().get(s).unwrap();
-			code.push(Ir::new(IrAddImm, r1, off));
+			code.push(Ir::new(IrSubImm, r1, off));
 			return r1;
 		},
 		_ => { panic!("not an lvalue")}
@@ -312,19 +318,14 @@ pub fn gen_ir(funcs: &Vec<Node>) -> Vec<Function> {
 	for funode in funcs {
 		
 		let mut code = vec![];
-		*REGNO.lock().unwrap() = 0;
-		*BASEREG.lock().unwrap() = 0;
+		*REGNO.lock().unwrap() = 1;
 		*VARS.lock().unwrap() = HashMap::new();
-		*BPOFF.lock().unwrap() = 0;
-		*LABEL.lock().unwrap() = 0;
+		*STACKSIZE.lock().unwrap() = 8;
 		
-		code.push(Ir::new(IrAlloc, *BASEREG.lock().unwrap(), 0)); // alloc BASEREG
 		match &funode.ty {
 			NodeType::Func(name, _, body) => {
 				gen_stmt(body, &mut code);
-				code.push(Ir::new(IrKill, *BASEREG.lock().unwrap(), 0));
-				code[0].rhs = *BPOFF.lock().unwrap();
-				let func = Function::new(name.clone(), vec![], code);
+				let func = Function::new(name.clone(), vec![], code, *STACKSIZE.lock().unwrap());
 				v.push(func);
 			}
 			_ => { panic!(" should be func node at gen_ir: {:?}", funode); }
