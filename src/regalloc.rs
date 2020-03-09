@@ -1,7 +1,7 @@
 use super::ir::{*, IrOp::*, IrType::*};
 use super::codegen::REG;
 
-static REG_SIZE: usize = REG.len();
+static REG_SIZE: usize = 8;
 
 // allocate the register can be used
 fn alloc(reg_map: &mut [i32], used: &mut [bool], ir_reg: usize) -> usize {
@@ -53,7 +53,7 @@ pub fn visit(reg_map: &mut Vec<i32>, used: &mut Vec<bool>, irs: &mut Vec<Ir>) {
 					_ => { panic!("alloc_regs call error"); }
 				}
 			}
-			Label | NoArg => {}
+			Label | NoArg | Imm => {}
 		}
 		if ir.op == IrKill {
 			kill(used, ir.lhs);
@@ -66,7 +66,7 @@ pub fn alloc_regs(funcs: &mut Vec<Function>) {
 
 	for fun in funcs {
 		let mut reg_map: Vec<i32> = vec![-1; 10000];
-		let mut used: Vec<bool> = vec![false; 7];
+		let mut used: Vec<bool> = vec![false; 8];
 		reg_map[0] = 0;
 		used[0] = true;
 		visit(&mut reg_map, &mut used, &mut fun.irs);

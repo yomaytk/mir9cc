@@ -1,6 +1,7 @@
 use super::ir::{*, IrOp::*};
 
 pub static REG: [&str; 8] = ["rbp", "r10", "r11", "rbx", "r12", "r13", "r14", "r15"];
+static ARGREG: [&str; 6] = ["rdi", "rsi", "rdx", "rcx", "r8", "r9"];
 
 pub fn gen(fun: &Function, label: usize) {
 
@@ -26,9 +27,6 @@ pub fn gen(fun: &Function, label: usize) {
 			}
 			IrAdd => {
 				println!("\tadd {}, {}", REG[ir.lhs], REG[ir.rhs]);
-			}
-			IrAddImm => {
-				println!("\tadd {}, {}", REG[ir.lhs], ir.rhs);
 			}
 			IrSub => {
 				println!("\tsub {}, {}", REG[ir.lhs], REG[ir.rhs]);
@@ -70,9 +68,8 @@ pub fn gen(fun: &Function, label: usize) {
 			}
 			IrCall { name, len , args } => {
 
-				let callarg = vec!["rdi", "rsi", "rdx", "rcx", "r8", "r9"];
 				for i in 0..*len {
-					println!("\tmov {}, {}", callarg[i], REG[args[i]]);
+					println!("\tmov {}, {}", ARGREG[i], REG[args[i]]);
 				}
 				
 				println!("\tpush r10");
@@ -83,6 +80,12 @@ pub fn gen(fun: &Function, label: usize) {
 				println!("\tpop r10");
 				
 				println!("\tmov {}, rax", REG[ir.lhs]);
+			}
+			IrSaveArgs => {
+				let len = ir.lhs;
+				for i in 0..len {
+					println!("\tmov [rbp-{}], {}", (i+1)*8, ARGREG[i]);
+				}
 			}
 			IrNop => {},
 			_ => { panic!("unexpected IrOp in gen_x86"); }

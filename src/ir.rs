@@ -17,7 +17,6 @@ lazy_static! {
 		IrInfo::new(IrOp::IrMul, "MUL", IrType::RegReg),
 		IrInfo::new(IrOp::IrDiv, "DIV", IrType::RegReg),
 		IrInfo::new(IrOp::IrImm, "MOV", IrType::RegImm),
-		IrInfo::new(IrOp::IrAddImm, "ADD", IrType::RegImm),
 		IrInfo::new(IrOp::IrSubImm, "SUB", IrType::RegImm),
 		IrInfo::new(IrOp::IrMov, "MOV", IrType::RegReg),
 		IrInfo::new(IrOp::IrLabel, "", IrType::Label),
@@ -28,6 +27,7 @@ lazy_static! {
 		IrInfo::new(IrOp::IrStore, "STORE", IrType::RegReg),
 		IrInfo::new(IrOp::IrJmp, "JMP", IrType::Label),
 		IrInfo::new(IrOp::IrCall{ name: String::from(""), len: 0, args: vec![] }, "CALL", IrType::Call),
+		IrInfo::new(IrOp::IrSaveArgs, "SAVEARGS", IrType::Imm),
 		IrInfo::new(IrOp::IrKill, "KILL", IrType::Reg),
 		IrInfo::new(IrOp::IrNop, "NOP", IrType::NoArg)
 	];
@@ -40,7 +40,6 @@ pub enum IrOp {
 	IrImm,
 	IrMov,
 	IrAdd,
-	IrAddImm,
 	IrSubImm,
 	IrSub,
 	IrMul,
@@ -54,6 +53,7 @@ pub enum IrOp {
 	IrUnless,
 	IrJmp,
 	IrCall { name: String, len: usize, args: Vec<usize> },
+	IrSaveArgs,
 	IrKill,
 	IrNop,
 }
@@ -90,7 +90,7 @@ impl Ir {
 					let _name = name;
 					let _len = len;
 					let _args = args;
-					let op = &IRINFO[15];
+					let op = &IRINFO[14];
 					assert_eq!(op, &IrInfo::new(IrOp::IrCall{ name: String::from(""), len: 0, args: vec![] }, "CALL", IrType::Call));
 					return op;
 				},
@@ -126,6 +126,7 @@ impl Ir {
 					_ => { panic!("tostr call error {}"); }
 				}
 			}
+			Imm => { format!("{} {}", irinfo.name, self.lhs) },
 		}
 	}
 }
@@ -139,6 +140,7 @@ pub enum IrType {
 	RegImm,
 	RegLabel,
 	Call,
+	Imm,
 }
 
 impl fmt::Display for IrType {
@@ -151,6 +153,7 @@ impl fmt::Display for IrType {
 			RegImm => { write!(f, "RegImm") },
 			RegLabel => { write!(f, "RegLabel") },
 			Call => { write!(f, "Call") },
+			Imm => { write!(f, "Imm") },
 		}
 	}
 }
@@ -310,6 +313,24 @@ fn gen_stmt(node: &Node, code: &mut Vec<Ir>) {
 	}
 }
 
+pub fn gen_args(args: &Vec<Node>, code: &mut Vec<Ir>) {
+	
+	code.push(Ir::new(IrSaveArgs, args.len(), 0));
+
+	for arg in args {
+		match &arg.ty {
+			NodeType::Ident(s) => {
+				*STACKSIZE.lock().unwrap() += 8;
+				VARS.lock().unwrap().insert(
+					s.clone(),
+					*STACKSIZE.lock().unwrap(),
+				);
+			}
+			_ => { panic!("dummy argument should be ident."); }
+		}
+	}
+}
+
 // generate IR Vector
 pub fn gen_ir(funcs: &Vec<Node>) -> Vec<Function> {
 	
@@ -320,10 +341,11 @@ pub fn gen_ir(funcs: &Vec<Node>) -> Vec<Function> {
 		let mut code = vec![];
 		*REGNO.lock().unwrap() = 1;
 		*VARS.lock().unwrap() = HashMap::new();
-		*STACKSIZE.lock().unwrap() = 8;
+		*STACKSIZE.lock().unwrap() = 0;
 		
 		match &funode.ty {
-			NodeType::Func(name, _, body) => {
+			NodeType::Func(name, args, body) => {
+				gen_args(args, &mut code);
 				gen_stmt(body, &mut code);
 				let func = Function::new(name.clone(), vec![], code, *STACKSIZE.lock().unwrap());
 				v.push(func);
