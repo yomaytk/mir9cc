@@ -73,14 +73,14 @@ impl Ir {
 			rhs: rhs,
 		}
 	}
-	fn tokentype2irop(ty: TokenType) -> IrOp {
+	fn fouroperator2irop(ty: TokenType) -> IrOp {
 		match ty {
 			TokenAdd => { IrAdd },
 			TokenSub => { IrSub },
 			TokenMul => { IrMul },
 			TokenDiv => { IrDiv },
 			TokenEof => { panic!("tokeneof!!!"); }
-			_ => { panic!("tokentype2irop error."); }
+			_ => { panic!("fouroperator2irop error."); }
 		}
 	}
 	pub fn get_irinfo(&self) -> &IrInfo {
@@ -237,7 +237,7 @@ fn gen_expr(node: &Node, code: &mut Vec<Ir>) -> usize {
 		NodeType::BinaryTree(ty, lhs, rhs) => {
 			let lhi = gen_expr(lhs.as_ref().unwrap(), code);
 			let rhi = gen_expr(rhs.as_ref().unwrap(), code);
-			code.push(Ir::new(Ir::tokentype2irop(ty.clone()), lhi, rhi));
+			code.push(Ir::new(Ir::fouroperator2irop(ty.clone()), lhi, rhi));
 			code.push(Ir::new(IrKill, rhi, 0));
 			return lhi;
 		},

@@ -1,5 +1,4 @@
 use super::ir::{*, IrOp::*, IrType::*};
-use super::codegen::REG;
 
 static REG_SIZE: usize = 8;
 
