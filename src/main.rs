@@ -42,7 +42,7 @@ fn main() {
 	let p:String = (&args[args.len()-1][..]).chars().collect();
 	
 	// lexical analysis
-	let tokens = tokenize(&p);
+	let tokens = scan(&p);
 	// for token in &tokens {
 	// 	println!("{:?}", token);
 	// }

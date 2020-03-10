@@ -236,6 +236,36 @@ fn gen_expr(node: &Node, code: &mut Vec<Ir>) -> usize {
 			code.push(ir);
 			return r;
 		},
+		NodeType::LogAnd(lhs, rhs) => {
+			let r1 = gen_expr(lhs, code);
+			*LABEL.lock().unwrap() += 1;
+			let x = *LABEL.lock().unwrap();
+			code.push(Ir::new(IrUnless, r1, x));
+			let r2 = gen_expr(rhs, code);
+			code.push(Ir::new(IrMov, r1, r2));
+			code.push(Ir::new(IrKill, r2, 0));
+			code.push(Ir::new(IrUnless, r1, x));
+			code.push(Ir::new(IrImm, r1, 1));
+			code.push(Ir::new(IrLabel, x, 0));
+			return r1;
+		}
+		NodeType::LogOr(lhs, rhs) => {
+			let r1 = gen_expr(lhs, code);
+			*LABEL.lock().unwrap() += 2;
+			let x = *LABEL.lock().unwrap()-1;
+			let y = x+1;
+			code.push(Ir::new(IrUnless, r1, x));
+			code.push(Ir::new(IrImm, r1, 1));
+			code.push(Ir::new(IrJmp, y, 0));
+			code.push(Ir::new(IrLabel, x, 0));
+			let r2 = gen_expr(rhs, code);
+			code.push(Ir::new(IrMov, r1, r2));
+			code.push(Ir::new(IrKill, r2, 0));
+			code.push(Ir::new(IrUnless, r1, y));
+			code.push(Ir::new(IrImm, r1, 1));
+			code.push(Ir::new(IrLabel, y, 0));
+			return r1;
+		}
 		NodeType::BinaryTree(ty, lhs, rhs) => {
 			let lhi = gen_expr(lhs.as_ref().unwrap(), code);
 			let rhi = gen_expr(rhs.as_ref().unwrap(), code);

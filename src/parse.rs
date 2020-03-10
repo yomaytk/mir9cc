@@ -14,6 +14,8 @@ pub enum NodeType {
 	IfThen(Box<Node>, Box<Node>, Option<Box<Node>>),
 	Call(String, Vec<Node>),
 	Func(String, Vec<Node>, Box<Node>),
+	LogAnd(Box<Node>, Box<Node>),
+	LogOr(Box<Node>, Box<Node>),
 }
 
 #[allow(dead_code)]
@@ -63,6 +65,14 @@ impl NodeType {
 
 	fn func_init(ident: String, args: Vec<Node>, body: Node) -> Self {
 		NodeType::Func(ident, args, Box::new(body))
+	}
+
+	fn logand_init(lhs: Node, rhs: Node) -> Self {
+		NodeType::LogAnd(Box::new(lhs), Box::new(rhs))
+	}
+
+	fn logor_init(lhs: Node, rhs: Node) -> Self {
+		NodeType::LogOr(Box::new(lhs), Box::new(rhs))
 	}
 }
 
@@ -150,6 +160,20 @@ impl Node {
 			ty: NodeType::func_init(ident, args, body)
 		}
 	}
+
+	pub fn new_and(lhs: Node, rhs: Node) -> Self {
+		Self {
+			val: -1, 
+			ty: NodeType::logand_init(lhs, rhs)
+		}
+	}
+
+	pub fn new_or(lhs: Node, rhs: Node) -> Self {
+		Self {
+			val: -1, 
+			ty: NodeType::logor_init(lhs, rhs)
+		}
+	}
 }
 
 fn term(tokens: &Vec<Token>, pos: &mut usize) -> Node {
@@ -205,7 +229,7 @@ fn mul(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 
 }
 
-fn expr(tokens: &Vec<Token>, pos: &mut usize) -> Node {
+fn add(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 	let mut lhs = mul(tokens, pos);
 	
 	loop {
@@ -219,11 +243,35 @@ fn expr(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 	
 }
 
+fn logand(tokens: &Vec<Token>, pos: &mut usize) -> Node {
+	let mut lhs = add(tokens, pos);
+
+	loop {
+		if !tokens[*pos].consume_ty(TokenLogAnd, pos) {
+			return lhs;
+		}
+		let rhs = add(tokens, pos);
+		lhs = Node::new_and(lhs, rhs);
+	}
+}
+
+fn logor(tokens: &Vec<Token>, pos: &mut usize) -> Node {
+	let mut lhs = logand(tokens, pos);
+
+	loop {
+		if !tokens[*pos].consume_ty(TokenLogOr, pos) {
+			return lhs;
+		}
+		let rhs = logand(tokens, pos);
+		lhs = Node::new_or(lhs, rhs);
+	}
+}
+
 fn assign(tokens: &Vec<Token>, pos: &mut usize) -> Node {
-	let mut lhs = expr(tokens, pos);
+	let mut lhs = logor(tokens, pos);
 
 	if tokens[*pos].consume_ty(TokenEq, pos) {
-		let rhs = expr(tokens, pos);
+		let rhs = logor(tokens, pos);
 		lhs = Node::new_eq(lhs, rhs);
 	}
 	return lhs;

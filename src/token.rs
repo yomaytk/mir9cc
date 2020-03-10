@@ -1,5 +1,20 @@
-use std::process;
 use TokenType::*;
+
+pub static SIGNALS: [Signal; 13] = [
+	Signal::new("&&", TokenLogAnd),
+	Signal::new("||", TokenLogOr),
+	Signal::new("+", TokenAdd),
+	Signal::new("-", TokenSub),
+	Signal::new("*", TokenMul),
+	Signal::new("/", TokenDiv),
+	Signal::new(";", TokenSemi),
+	Signal::new("=", TokenEq),
+	Signal::new("(", TokenRightBrac),
+	Signal::new(")", TokenLeftBrac),
+	Signal::new(",", TokenComma),
+	Signal::new("{", TokenRightCurlyBrace),
+	Signal::new("}", TokenLeftCurlyBrace),
+];
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum TokenType {
@@ -19,6 +34,8 @@ pub enum TokenType {
 	TokenComma,
 	TokenRightCurlyBrace,
 	TokenLeftCurlyBrace,
+	TokenLogAnd,
+	TokenLogOr,
 	TokenNoSignal,
 	TokenEof,
 }
@@ -74,6 +91,20 @@ impl<'a> Token<'a> {
 	}
 }
 
+pub struct Signal {
+	pub name: &'static str,
+	pub ty: TokenType
+}
+
+impl Signal {
+	const fn new(name: &'static str, ty: TokenType) -> Self {
+		Self {
+			name,
+			ty,
+		}
+	}
+}
+
 // return next number
 fn strtol(p: &mut core::str::Chars, pos: &mut usize, c: char) -> i32 {
 
@@ -93,29 +124,13 @@ fn strtol(p: &mut core::str::Chars, pos: &mut usize, c: char) -> i32 {
 	num_str.parse::<i32>().unwrap()
 }
 
-// return TokenType of given character
-fn signal2token (p: char) -> TokenType {
-	if p == '+' { TokenAdd }
-	else if p == '-' { TokenSub }
-	else if p == '*' { TokenMul }
-	else if p == '/' { TokenDiv }
-	else if p == ';' { TokenSemi }
-	else if p == '=' { TokenEq }
-	else if p == '(' { TokenRightBrac }
-	else if p == ')' { TokenLeftBrac }
-	else if p == ',' { TokenComma }
-	else if p == '{' { TokenRightCurlyBrace }
-	else if p == '}' { TokenLeftCurlyBrace }
-	else { TokenNoSignal }
-}
-
-pub fn tokenize(input: &String) -> Vec<Token> {
+pub fn scan(input: &String) -> Vec<Token> {
 	
 	let mut tokens: Vec<Token> = vec![];
 	let mut pos = 0;
 	let mut p = input.chars();
 
-	while let Some(c) = p.next() {
+	'outer: while let Some(c) = p.next() {
 
 		// space
 		if c.is_whitespace() {
@@ -123,12 +138,16 @@ pub fn tokenize(input: &String) -> Vec<Token> {
 			continue;
 		}
 		
-		// operator or signal
-		if signal2token(c) != TokenNoSignal {
-			let token = Token::new(signal2token(c), 1, &input[pos..]);
-			tokens.push(token);
-			pos += 1;
-			continue;
+		// signal
+		for signal in &SIGNALS {
+			let len = signal.name.len();
+			if input.len() >= pos+len && *signal.name == input[pos..pos+len] {
+				let token = Token::new(signal.ty.clone(), len as i32, &input[pos..]);
+				tokens.push(token);
+				pos += len;
+				for _ in 0..len-1 { p.next(); }
+				continue 'outer;
+			}
 		}
 
 		// ident
@@ -164,9 +183,7 @@ pub fn tokenize(input: &String) -> Vec<Token> {
 			pos += 1;
 			continue;
 		}
-
-		eprintln!("cannot tokenize.");
-		process::exit(1);
+		panic!("cannot scan at {}", &input[pos..]);
 	}
 
 	// guard
