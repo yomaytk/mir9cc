@@ -7,35 +7,47 @@ use std::sync::Mutex;
 use std::collections::HashMap;
 use std::fmt;
 
+macro_rules! hash {
+	( $( $t:expr),* ) => {
+		{
+			let mut temp_hash = HashMap::new();
+			$(
+				temp_hash.insert($t.0, $t.1);
+			)*
+			temp_hash
+		}
+	};
+}
+
+
 lazy_static! {
 	pub static ref REGNO: Mutex<usize> = Mutex::new(1);
 	pub static ref VARS: Mutex<HashMap<String, usize>> = Mutex::new(HashMap::new());
 	pub static ref STACKSIZE: Mutex<usize> = Mutex::new(0);
-	pub static ref IRINFO: [IrInfo; 18] = [
-		IrInfo::new(IrOp::IrAdd, "ADD", IrType::RegReg),
-		IrInfo::new(IrOp::IrSub, "SUB", IrType::RegReg),
-		IrInfo::new(IrOp::IrMul, "MUL", IrType::RegReg),
-		IrInfo::new(IrOp::IrDiv, "DIV", IrType::RegReg),
-		IrInfo::new(IrOp::IrImm, "MOV", IrType::RegImm),
-		IrInfo::new(IrOp::IrSubImm, "SUB", IrType::RegImm),
-		IrInfo::new(IrOp::IrMov, "MOV", IrType::RegReg),
-		IrInfo::new(IrOp::IrLabel, "", IrType::Label),
-		IrInfo::new(IrOp::IrUnless, "UNLESS", IrType::RegLabel),
-		IrInfo::new(IrOp::IrRet, "RET", IrType::Reg),
-		IrInfo::new(IrOp::IrAlloc, "ALLOCA", IrType::RegImm),
-		IrInfo::new(IrOp::IrLoad, "LOAD", IrType::RegReg),
-		IrInfo::new(IrOp::IrStore, "STORE", IrType::RegReg),
-		IrInfo::new(IrOp::IrJmp, "JMP", IrType::Label),
-		IrInfo::new(IrOp::IrCall{ name: String::from(""), len: 0, args: vec![] }, "CALL", IrType::Call),
-		IrInfo::new(IrOp::IrSaveArgs, "SAVEARGS", IrType::Imm),
-		IrInfo::new(IrOp::IrKill, "KILL", IrType::Reg),
-		IrInfo::new(IrOp::IrNop, "NOP", IrType::NoArg)
-	];
+	pub static ref IRINFO: Mutex<HashMap<IrOp, IrInfo>> = Mutex::new(hash![
+		(IrOp::IrAdd, IrInfo::new("ADD", IrType::RegReg)),
+		(IrOp::IrSub, IrInfo::new("SUB", IrType::RegReg)),
+		(IrOp::IrMul, IrInfo::new("MUL", IrType::RegReg)),
+		(IrOp::IrDiv, IrInfo::new("DIV", IrType::RegReg)),
+		(IrOp::IrImm, IrInfo::new("MOV", IrType::RegImm)),
+		(IrOp::IrSubImm, IrInfo::new("SUB", IrType::RegImm)),
+		(IrOp::IrMov, IrInfo::new("MOV", IrType::RegReg)),
+		(IrOp::IrLabel, IrInfo::new("", IrType::Label)),
+		(IrOp::IrUnless, IrInfo::new("UNLESS", IrType::RegLabel)),
+		(IrOp::IrRet, IrInfo::new("RET", IrType::Reg)),
+		(IrOp::IrLoad, IrInfo::new("LOAD", IrType::RegReg)),
+		(IrOp::IrStore, IrInfo::new("STORE", IrType::RegReg)),
+		(IrOp::IrJmp, IrInfo::new("JMP", IrType::Label)),
+		(IrOp::IrCall { name: format!(""), len: 0, args: vec![] }, IrInfo::new("CALL", IrType::Call)),
+		(IrOp::IrSaveArgs, IrInfo::new("SAVEARGS", IrType::Imm)),
+		(IrOp::IrKill, IrInfo::new("KILL", IrType::Reg)),
+		(IrOp::IrNop, IrInfo::new("NOP", IrType::NoArg))
+	]);
 	pub static ref LABEL: Mutex<usize> = Mutex::new(0);
 }
 
 #[allow(dead_code)]
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, std::cmp::Eq, std::hash::Hash)]
 pub enum IrOp {
 	IrImm,
 	IrMov,
@@ -46,7 +58,6 @@ pub enum IrOp {
 	IrDiv,
 	IrRet,
 	IrExpr,
-	IrAlloc,
 	IrStore,
 	IrLoad,
 	IrLabel,
@@ -83,25 +94,18 @@ impl Ir {
 			_ => { panic!("fouroperator2irop error."); }
 		}
 	}
-	pub fn get_irinfo(&self) -> &IrInfo {
-		for i in 0..IRINFO.len() {
-			match &self.op {
-				IrCall { name, len, args } => {
-					let _name = name;
-					let _len = len;
-					let _args = args;
-					let op = &IRINFO[14];
-					assert_eq!(op, &IrInfo::new(IrOp::IrCall{ name: String::from(""), len: 0, args: vec![] }, "CALL", IrType::Call));
-					return op;
-				},
-				_ => {
-					if self.op == IRINFO[i].op {
-						return &IRINFO[i];
-					}
-				}
+	pub fn get_irinfo(&self) -> IrInfo {
+		match &self.op {
+			IrCall { name, len, args } => {
+				let _name = name;
+				let _len = len;
+				let _args = args;
+				return IRINFO.lock().unwrap().get(&IrOp::IrCall { name: format!(""), len: 0, args: vec![] }).unwrap().clone();
+			},
+			_ => {
+				return IRINFO.lock().unwrap().get(&self.op).unwrap().clone();
 			}
 		}
-		panic!("wrong IrOp found");
 	}
 	fn tostr(&self) -> String {
 		let irinfo = self.get_irinfo();
@@ -158,17 +162,15 @@ impl fmt::Display for IrType {
 	}
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct IrInfo {
-	pub op: IrOp,
 	pub name: &'static str,
 	pub ty: IrType,
 }
 
 impl IrInfo {
-	fn new(op: IrOp, name: &'static str, ty: IrType) -> Self {
+	fn new(name: &'static str, ty: IrType) -> Self {
 		Self {
-			op,
 			name,
 			ty,
 		}

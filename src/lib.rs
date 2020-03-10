@@ -1,4 +1,4 @@
-// pub mod tok
+// pub mod tok;
 // pub mod parse;
 // pub mod ir;
 // pub mod regalloc;
