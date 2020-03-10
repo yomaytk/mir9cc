@@ -1,4 +1,4 @@
-use super::ir::{*, IrOp::*};
+use super::gen_ir::{*, IrOp::*};
 
 pub static REG: [&str; 8] = ["rbp", "r10", "r11", "rbx", "r12", "r13", "r14", "r15"];
 static ARGREG: [&str; 6] = ["rdi", "rsi", "rdx", "rcx", "r8", "r9"];

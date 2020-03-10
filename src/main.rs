@@ -2,16 +2,16 @@ use std::env;
 
 pub mod token;
 pub mod parse;
-pub mod ir;
+pub mod gen_ir;
 pub mod regalloc;
-pub mod codegen;
+pub mod gen_x86;
 pub mod lib;
 
 use token::*;
 use parse::*;
-use ir::*;
+use gen_ir::*;
 use regalloc::*;
-use codegen::*;
+use gen_x86::*;
 
 #[macro_use]
 extern crate lazy_static;

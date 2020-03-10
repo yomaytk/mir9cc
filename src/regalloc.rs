@@ -1,4 +1,4 @@
-use super::ir::{*, IrOp::*, IrType::*};
+use super::gen_ir::{*, IrOp::*, IrType::*};
 
 static REG_SIZE: usize = 8;
 
