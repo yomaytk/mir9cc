@@ -29,6 +29,7 @@ lazy_static! {
 		(IrOp::IrSub, IrInfo::new("SUB", IrType::RegReg)),
 		(IrOp::IrMul, IrInfo::new("MUL", IrType::RegReg)),
 		(IrOp::IrDiv, IrInfo::new("DIV", IrType::RegReg)),
+		(IrOp::IrLt, IrInfo::new("LT", IrType::RegReg)),
 		(IrOp::IrImm, IrInfo::new("MOV", IrType::RegImm)),
 		(IrOp::IrSubImm, IrInfo::new("SUB", IrType::RegImm)),
 		(IrOp::IrMov, IrInfo::new("MOV", IrType::RegReg)),
@@ -65,6 +66,7 @@ pub enum IrOp {
 	IrJmp,
 	IrCall { name: String, len: usize, args: Vec<usize> },
 	IrSaveArgs,
+	IrLt,
 	IrKill,
 	IrNop,
 }
@@ -90,6 +92,7 @@ impl Ir {
 			TokenSub => { IrSub },
 			TokenMul => { IrMul },
 			TokenDiv => { IrDiv },
+			TokenLt => { IrLt },
 			TokenEof => { panic!("tokeneof!!!"); }
 			_ => { panic!("fouroperator2irop error."); }
 		}

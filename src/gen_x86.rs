@@ -1,7 +1,8 @@
 use super::gen_ir::{*, IrOp::*};
 
 pub static REG: [&str; 8] = ["rbp", "r10", "r11", "rbx", "r12", "r13", "r14", "r15"];
-static ARGREG: [&str; 6] = ["rdi", "rsi", "rdx", "rcx", "r8", "r9"];
+pub static ARGREG: [&str; 6] = ["rdi", "rsi", "rdx", "rcx", "r8", "r9"];
+pub static REG8: [&str; 8] = ["bpl", "r10b", "r11b", "bl", "r12b", "r13b", "r14b", "r15b"];
 
 pub fn gen(fun: &Function, label: usize) {
 
@@ -86,6 +87,11 @@ pub fn gen(fun: &Function, label: usize) {
 				for i in 0..len {
 					println!("\tmov [rbp-{}], {}", (i+1)*8, ARGREG[i]);
 				}
+			}
+			IrLt => {
+				println!("\tcmp {}, {}", REG[ir.lhs], REG[ir.rhs]);
+				println!("\tsetl {}", REG8[ir.lhs]);
+				println!("\tmovzb {}, {}", REG[ir.lhs], REG8[ir.lhs]);
 			}
 			IrNop => {},
 			_ => { panic!("unexpected IrOp in gen_x86"); }

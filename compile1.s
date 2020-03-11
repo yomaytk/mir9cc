@@ -8,15 +8,11 @@ main:
 	push r13
 	push r14
 	push r15
-	mov r10, 1
-	cmp r10, 0
-	je .L1
+	mov r10, 0
 	mov r11, 1
-	mov r10, r11
-	cmp r10, 0
-	je .L1
-	mov r10, 1
-.L1:
+	cmp r10, r11
+	setl r10b
+	movzb r10, r10b
 	mov rax, r10
 	jmp .Lend0
 .Lend0:

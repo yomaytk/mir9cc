@@ -243,8 +243,24 @@ fn add(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 	
 }
 
-fn logand(tokens: &Vec<Token>, pos: &mut usize) -> Node {
+fn rel(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 	let mut lhs = add(tokens, pos);
+
+	loop {
+		if tokens[*pos].consume_ty(TokenLt, pos) {
+			lhs = Node::new_bit(TokenLt, lhs, add(tokens, pos));
+			continue;
+		}
+		if tokens[*pos].consume_ty(TokenRt, pos) {
+			lhs = Node::new_bit(TokenLt, add(tokens, pos), lhs);
+			continue;
+		}
+		return lhs;
+	}
+}
+
+fn logand(tokens: &Vec<Token>, pos: &mut usize) -> Node {
+	let mut lhs = rel(tokens, pos);
 
 	loop {
 		if !tokens[*pos].consume_ty(TokenLogAnd, pos) {

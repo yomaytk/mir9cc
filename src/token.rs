@@ -1,6 +1,6 @@
 use TokenType::*;
 
-pub static SIGNALS: [Signal; 13] = [
+pub static SIGNALS: [Signal; 15] = [
 	Signal::new("&&", TokenLogAnd),
 	Signal::new("||", TokenLogOr),
 	Signal::new("+", TokenAdd),
@@ -14,6 +14,8 @@ pub static SIGNALS: [Signal; 13] = [
 	Signal::new(",", TokenComma),
 	Signal::new("{", TokenRightCurlyBrace),
 	Signal::new("}", TokenLeftCurlyBrace),
+	Signal::new("<", TokenLt),
+	Signal::new(">", TokenRt),
 ];
 
 #[derive(Debug, PartialEq, Clone)]
@@ -36,6 +38,8 @@ pub enum TokenType {
 	TokenLeftCurlyBrace,
 	TokenLogAnd,
 	TokenLogOr,
+	TokenLt,
+	TokenRt,
 	TokenNoSignal,
 	TokenEof,
 }
