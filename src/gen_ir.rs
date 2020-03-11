@@ -301,7 +301,7 @@ fn gen_expr(node: &Node, code: &mut Vec<Ir>) -> usize {
 			}
 			return r;
 		}
-		_ => { panic!("gen_expr error."); }
+		_ => { panic!("gen_expr NodeType error at {:?}", node.ty); }
 	}
 
 }
@@ -346,8 +346,7 @@ fn gen_stmt(node: &Node, code: &mut Vec<Ir>) {
 			*LABEL.lock().unwrap() += 2;
 			let x = *LABEL.lock().unwrap()-1;
 			let y = x+1;
-			let r1 = gen_expr(init, code);
-			code.push(Ir::new(IrKill, r1, 0));
+			gen_stmt(init, code);
 			code.push(Ir::new(IrLabel, x, 0));
 			let r2 = gen_expr(cond, code);
 			code.push(Ir::new(IrUnless, r2, y));

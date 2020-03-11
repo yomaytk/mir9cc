@@ -318,7 +318,26 @@ fn assign(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 		lhs = Node::new_eq(lhs, rhs);
 	}
 	return lhs;
-} 
+}
+
+fn decl(tokens: &Vec<Token>, pos: &mut usize) -> Node {
+	let name = String::from(&tokens[*pos].input[..tokens[*pos].val as usize]);
+	tokens[*pos].assert_ty(TokenIdent, pos);
+	if tokens[*pos].consume_ty(TokenEq, pos) {
+		let rhs = assign(tokens, pos);
+		tokens[*pos].assert_ty(TokenSemi, pos);
+		return Node::new_var(TokenInt, name, Some(rhs));
+	} else {
+		tokens[*pos].assert_ty(TokenSemi, pos);
+		return Node::new_var(TokenInt, name, None);
+	}
+}
+
+fn expr_stmt(tokens: &Vec<Token>, pos: &mut usize) -> Node {
+	let lhs = assign(tokens, pos);
+	tokens[*pos].consume_ty(TokenSemi, pos);
+	return Node::new_expr(lhs);
+}
 
 pub fn stmt(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 	
@@ -345,8 +364,12 @@ pub fn stmt(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 		TokenFor => {
 			*pos += 1;
 			tokens[*pos].assert_ty(TokenRightBrac, pos);
-			let init = assign(tokens, pos);
-			tokens[*pos].assert_ty(TokenSemi, pos);
+			let init;
+			if tokens[*pos].is_typename(pos) {
+				init = decl(tokens, pos);
+			} else {
+				init = expr_stmt(tokens, pos);
+			}
 			let cond = assign(tokens, pos);
 			tokens[*pos].assert_ty(TokenSemi, pos);
 			let inc = assign(tokens, pos);
@@ -364,21 +387,10 @@ pub fn stmt(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 		}
 		TokenInt => {
 			*pos += 1;
-			let name = String::from(&tokens[*pos].input[..tokens[*pos].val as usize]);
-			tokens[*pos].assert_ty(TokenIdent, pos);
-			if tokens[*pos].consume_ty(TokenEq, pos) {
-				let rhs = assign(tokens, pos);
-				tokens[*pos].assert_ty(TokenSemi, pos);
-				return Node::new_var(TokenInt, name, Some(rhs));
-			} else {
-				tokens[*pos].assert_ty(TokenSemi, pos);
-				return Node::new_var(TokenInt, name, None);
-			}
+			return decl(tokens, pos);
 		}
 		_ => {
-			let lhs = assign(tokens, pos);
-			tokens[*pos].consume_ty(TokenSemi, pos);
-			return Node::new_expr(lhs);
+			return expr_stmt(tokens, pos);
 		}
 	}
 }

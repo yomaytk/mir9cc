@@ -97,6 +97,13 @@ impl<'a> Token<'a> {
 		}
 		return false;
 	}
+	pub fn is_typename(&self, pos: &mut usize) -> bool {
+		if self.ty == TokenInt {
+			*pos += 1;
+			return true;
+		}
+		return false;
+	}
 }
 
 pub struct Signal {
