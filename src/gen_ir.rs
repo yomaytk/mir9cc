@@ -357,12 +357,23 @@ fn gen_stmt(node: &Node, code: &mut Vec<Ir>) {
 			code.push(Ir::new(IrJmp, x, 0));
 			code.push(Ir::new(IrLabel, y, 0));
 		}
-		NodeType::VarDef(_, name) => {
+		NodeType::VarDef(_, name, somerhs) => {
 			*STACKSIZE.lock().unwrap() += 8;
 			VARS.lock().unwrap().insert(
 				name.clone(),
 				*STACKSIZE.lock().unwrap(),
 			);
+			if let Some(rhs) = somerhs {
+				*REGNO.lock().unwrap() += 1;
+				let r1 = *REGNO.lock().unwrap();
+				let off = *STACKSIZE.lock().unwrap();
+				code.push(Ir::new(IrMov, r1, 0));
+				code.push(Ir::new(IrSubImm, r1, off));
+				let r2 = gen_expr(rhs, code);
+				code.push(Ir::new(IrStore, r1, r2));
+				code.push(Ir::new(IrKill, r1, 0));
+				code.push(Ir::new(IrKill, r2, 0));
+			}
 		}
 		enode => { panic!("unexpeceted node {:?}", enode); }
 	}

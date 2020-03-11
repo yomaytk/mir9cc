@@ -17,7 +17,7 @@ pub enum NodeType {
 	LogAnd(Box<Node>, Box<Node>),
 	LogOr(Box<Node>, Box<Node>),
 	For(Box<Node>, Box<Node>, Box<Node>, Box<Node>),
-	VarDef(TokenType, String),
+	VarDef(TokenType, String, Option<Box<Node>>),
 }
 
 #[allow(dead_code)]
@@ -81,8 +81,11 @@ impl NodeType {
 		NodeType::For(Box::new(init), Box::new(cond), Box::new(inc), Box::new(body))
 	}
 
-	fn var_init(ty: TokenType, name: String) -> Self {
-		NodeType::VarDef(ty, name)
+	fn var_init(ty: TokenType, name: String, rhs: Option<Node>) -> Self {
+		match rhs {
+			Some(node) => { NodeType::VarDef(ty, name, Some(Box::new(node))) }
+			_ => { NodeType::VarDef(ty, name, None)}
+		}
 	}
 }
 
@@ -192,10 +195,10 @@ impl Node {
 		}
 	}
 
-	pub fn new_var(ty: TokenType, name: String) -> Self {
+	pub fn new_var(ty: TokenType, name: String, rhs: Option<Node>) -> Self {
 		Self {
 			val: -1,
-			ty: NodeType::var_init(ty, name)
+			ty: NodeType::var_init(ty, name, rhs)
 		}
 	}
 }
@@ -363,8 +366,14 @@ pub fn stmt(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 			*pos += 1;
 			let name = String::from(&tokens[*pos].input[..tokens[*pos].val as usize]);
 			tokens[*pos].assert_ty(TokenIdent, pos);
-			tokens[*pos].assert_ty(TokenSemi, pos);
-			return Node::new_var(TokenInt, name);
+			if tokens[*pos].consume_ty(TokenEq, pos) {
+				let rhs = assign(tokens, pos);
+				tokens[*pos].assert_ty(TokenSemi, pos);
+				return Node::new_var(TokenInt, name, Some(rhs));
+			} else {
+				tokens[*pos].assert_ty(TokenSemi, pos);
+				return Node::new_var(TokenInt, name, None);
+			}
 		}
 		_ => {
 			let lhs = assign(tokens, pos);
