@@ -339,6 +339,14 @@ pub fn stmt(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 			let body = stmt(tokens, pos);
 			return Node::new_for(init, cond, inc, body);
 		}
+		TokenRightCurlyBrace => {
+			*pos += 1;
+			let mut stmts = vec![];
+			while !tokens[*pos].consume_ty(TokenLeftCurlyBrace, pos) {
+				stmts.push(stmt(tokens, pos));
+			}
+			return Node::new_stmt(stmts);
+		}
 		_ => {
 			let lhs = assign(tokens, pos);
 			tokens[*pos].consume_ty(TokenSemi, pos);

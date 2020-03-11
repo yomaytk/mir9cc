@@ -298,8 +298,11 @@ fn gen_expr(node: &Node, code: &mut Vec<Ir>) -> usize {
 			code.push(Ir::new(IrCall{ 
 				name: (*ident).clone(), 
 				len: args.len(),
-				args: args 
+				args: args.clone()
 			} , r, 0));
+			for arg in args {
+				code.push(Ir::new(IrKill, arg, 0));
+			}
 			return r;
 		}
 		_ => { panic!("gen_expr error."); }
@@ -316,7 +319,8 @@ fn gen_stmt(node: &Node, code: &mut Vec<Ir>) {
 			code.push(Ir::new(IrKill, lhi, 0));
 		}
 		NodeType::Expr(lhs) => {
-			gen_expr(lhs.as_ref(), code);
+			let r = gen_expr(lhs.as_ref(), code);
+			code.push(Ir::new(IrKill, r, 0));
 		}
 		NodeType::IfThen(cond, then, elthen) => {
 			let lhi = gen_expr(cond, code);
