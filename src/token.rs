@@ -41,6 +41,7 @@ pub enum TokenType {
 	TokenLt,
 	TokenRt,
 	TokenFor,
+	TokenInt,
 	TokenNoSignal,
 	TokenEof,
 }
@@ -52,6 +53,7 @@ impl From<String> for TokenType {
 			"if" => { TokenIf }
 			"else" => { TokenElse }
 			"for" => { TokenFor }
+			"int" => { TokenInt }
 			_ => { TokenIdent }
 		}
 	}

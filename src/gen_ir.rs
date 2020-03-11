@@ -210,11 +210,7 @@ fn gen_lval(node: &Node, code: &mut Vec<Ir>) -> usize {
 	match &node.ty {
 		NodeType::Ident(s) => {
 			if VARS.lock().unwrap().get(s).is_none() {
-				*STACKSIZE.lock().unwrap() += 8;
-				VARS.lock().unwrap().insert(
-					s.clone(),
-					*STACKSIZE.lock().unwrap(),
-				);
+				panic!("undefined variable: {}.", s);
 			}
 			*REGNO.lock().unwrap() += 1;
 			let r1 = *REGNO.lock().unwrap();
@@ -342,8 +338,8 @@ fn gen_stmt(node: &Node, code: &mut Vec<Ir>) {
 			}
 		}
 		NodeType::CompStmt(lhs) => {
-			for expr in lhs {
-				gen_stmt(expr, code);
+			for stmt in lhs {
+				gen_stmt(stmt, code);
 			}
 		}
 		NodeType::For(init, cond, inc, body) => {
@@ -360,6 +356,13 @@ fn gen_stmt(node: &Node, code: &mut Vec<Ir>) {
 			gen_expr(inc, code);
 			code.push(Ir::new(IrJmp, x, 0));
 			code.push(Ir::new(IrLabel, y, 0));
+		}
+		NodeType::VarDef(_, name) => {
+			*STACKSIZE.lock().unwrap() += 8;
+			VARS.lock().unwrap().insert(
+				name.clone(),
+				*STACKSIZE.lock().unwrap(),
+			);
 		}
 		enode => { panic!("unexpeceted node {:?}", enode); }
 	}

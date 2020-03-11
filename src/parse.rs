@@ -17,6 +17,7 @@ pub enum NodeType {
 	LogAnd(Box<Node>, Box<Node>),
 	LogOr(Box<Node>, Box<Node>),
 	For(Box<Node>, Box<Node>, Box<Node>, Box<Node>),
+	VarDef(TokenType, String),
 }
 
 #[allow(dead_code)]
@@ -78,6 +79,10 @@ impl NodeType {
 
 	fn for_init(init: Node, cond: Node, inc: Node, body: Node) -> Self {
 		NodeType::For(Box::new(init), Box::new(cond), Box::new(inc), Box::new(body))
+	}
+
+	fn var_init(ty: TokenType, name: String) -> Self {
+		NodeType::VarDef(ty, name)
 	}
 }
 
@@ -184,6 +189,13 @@ impl Node {
 		Self {
 			val: -1,
 			ty: NodeType::for_init(init, cond, inc, body)
+		}
+	}
+
+	pub fn new_var(ty: TokenType, name: String) -> Self {
+		Self {
+			val: -1,
+			ty: NodeType::var_init(ty, name)
 		}
 	}
 }
@@ -347,6 +359,13 @@ pub fn stmt(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 			}
 			return Node::new_stmt(stmts);
 		}
+		TokenInt => {
+			*pos += 1;
+			let name = String::from(&tokens[*pos].input[..tokens[*pos].val as usize]);
+			tokens[*pos].assert_ty(TokenIdent, pos);
+			tokens[*pos].assert_ty(TokenSemi, pos);
+			return Node::new_var(TokenInt, name);
+		}
 		_ => {
 			let lhs = assign(tokens, pos);
 			tokens[*pos].consume_ty(TokenSemi, pos);
@@ -375,10 +394,14 @@ pub fn compound_stmt(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 pub fn function(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 	
 	let mut args = vec![];
-	let name = String::from(&tokens[*pos].input[..tokens[*pos].val as usize]);
 	
+	if !tokens[*pos].consume_ty(TokenInt, pos) {
+		panic!("function should have type: at {}", tokens[*pos].input)
+	}
+
+	let name = String::from(&tokens[*pos].input[..tokens[*pos].val as usize]);
 	if !tokens[*pos].consume_ty(TokenIdent, pos) {
-		panic!("function error: at {}", tokens[*pos].input)
+		panic!("function should start from ident : at {}", tokens[*pos].input)
 	}
 
 	// argument
