@@ -132,7 +132,7 @@ fn strtol(p: &mut core::str::Chars, pos: &mut usize, c: char) -> i32 {
 	num_str.parse::<i32>().unwrap()
 }
 
-pub fn scan(input: &String) -> Vec<Token> {
+pub fn tokenize(input: &String) -> Vec<Token> {
 	
 	let mut tokens: Vec<Token> = vec![];
 	let mut pos = 0;
