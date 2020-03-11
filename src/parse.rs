@@ -16,6 +16,7 @@ pub enum NodeType {
 	Func(String, Vec<Node>, Box<Node>),
 	LogAnd(Box<Node>, Box<Node>),
 	LogOr(Box<Node>, Box<Node>),
+	For(Box<Node>, Box<Node>, Box<Node>, Box<Node>),
 }
 
 #[allow(dead_code)]
@@ -73,6 +74,10 @@ impl NodeType {
 
 	fn logor_init(lhs: Node, rhs: Node) -> Self {
 		NodeType::LogOr(Box::new(lhs), Box::new(rhs))
+	}
+
+	fn for_init(init: Node, cond: Node, inc: Node, body: Node) -> Self {
+		NodeType::For(Box::new(init), Box::new(cond), Box::new(inc), Box::new(body))
 	}
 }
 
@@ -172,6 +177,13 @@ impl Node {
 		Self {
 			val: -1, 
 			ty: NodeType::logor_init(lhs, rhs)
+		}
+	}
+
+	pub fn new_for(init: Node, cond: Node, inc: Node, body: Node) -> Self {
+		Self {
+			val: -1,
+			ty: NodeType::for_init(init, cond, inc, body)
 		}
 	}
 }
@@ -314,6 +326,18 @@ pub fn stmt(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 			} else {
 				return Node::new_if(cond, then, None);
 			}
+		}
+		TokenFor => {
+			*pos += 1;
+			tokens[*pos].assert_ty(TokenRightBrac, pos);
+			let init = assign(tokens, pos);
+			tokens[*pos].assert_ty(TokenSemi, pos);
+			let cond = assign(tokens, pos);
+			tokens[*pos].assert_ty(TokenSemi, pos);
+			let inc = assign(tokens, pos);
+			tokens[*pos].assert_ty(TokenLeftBrac, pos);
+			let body = stmt(tokens, pos);
+			return Node::new_for(init, cond, inc, body);
 		}
 		_ => {
 			let lhs = assign(tokens, pos);

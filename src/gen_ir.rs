@@ -314,10 +314,10 @@ fn gen_stmt(node: &Node, code: &mut Vec<Ir>) {
 			let lhi= gen_expr(lhs.as_ref(), code);
 			code.push(Ir::new(IrRet, lhi, 0));
 			code.push(Ir::new(IrKill, lhi, 0));
-		},
+		}
 		NodeType::Expr(lhs) => {
 			gen_expr(lhs.as_ref(), code);
-		},
+		}
 		NodeType::IfThen(cond, then, elthen) => {
 			let lhi = gen_expr(cond, code);
 			*LABEL.lock().unwrap() += 1;
@@ -341,7 +341,22 @@ fn gen_stmt(node: &Node, code: &mut Vec<Ir>) {
 			for expr in lhs {
 				gen_stmt(expr, code);
 			}
-		},
+		}
+		NodeType::For(init, cond, inc, body) => {
+			*LABEL.lock().unwrap() += 2;
+			let x = *LABEL.lock().unwrap()-1;
+			let y = x+1;
+			let r1 = gen_expr(init, code);
+			code.push(Ir::new(IrKill, r1, 0));
+			code.push(Ir::new(IrLabel, x, 0));
+			let r2 = gen_expr(cond, code);
+			code.push(Ir::new(IrUnless, r2, y));
+			code.push(Ir::new(IrKill, r2, 0));
+			gen_stmt(body, code);
+			gen_expr(inc, code);
+			code.push(Ir::new(IrJmp, x, 0));
+			code.push(Ir::new(IrLabel, y, 0));
+		}
 		enode => { panic!("unexpeceted node {:?}", enode); }
 	}
 }
