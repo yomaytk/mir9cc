@@ -23,11 +23,6 @@ fn alloc(reg_map: &mut [i32], used: &mut [bool], ir_reg: usize) -> usize {
 	panic!("register exhausted.");
 }
 
-fn kill(used: &mut [bool], id: usize){
-	if !used[id] { panic!("cannot release the register not allocated."); }
-	used[id] = false;
-}
-
 // do allocating register to reg_map 
 pub fn visit(reg_map: &mut Vec<i32>, used: &mut Vec<bool>, irs: &mut Vec<Ir>) {
 	for ir in irs {
@@ -55,7 +50,8 @@ pub fn visit(reg_map: &mut Vec<i32>, used: &mut Vec<bool>, irs: &mut Vec<Ir>) {
 			Label | NoArg | Imm => {}
 		}
 		if ir.op == IrKill {
-			kill(used, ir.lhs);
+			assert!(used[ir.lhs]);
+			used[ir.lhs] = false;
 			ir.op = IrNop;
 		}
 	}
