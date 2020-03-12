@@ -384,10 +384,10 @@ pub fn gen_args(args: &Vec<Node>, code: &mut Vec<Ir>) {
 
 	for arg in args {
 		match &arg.ty {
-			NodeType::Ident(s) => {
+			NodeType::VarDef(_, name, _) => {
 				*STACKSIZE.lock().unwrap() += 8;
 				VARS.lock().unwrap().insert(
-					s.clone(),
+					name.clone(),
 					*STACKSIZE.lock().unwrap(),
 				);
 			}

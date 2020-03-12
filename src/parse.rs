@@ -18,6 +18,7 @@ pub enum NodeType {
 	LogOr(Box<Node>, Box<Node>),
 	For(Box<Node>, Box<Node>, Box<Node>, Box<Node>),
 	VarDef(TokenType, String, Option<Box<Node>>),
+	LVAR(usize),
 }
 
 #[allow(dead_code)]
@@ -81,11 +82,15 @@ impl NodeType {
 		NodeType::For(Box::new(init), Box::new(cond), Box::new(inc), Box::new(body))
 	}
 
-	fn var_init(ty: TokenType, name: String, rhs: Option<Node>) -> Self {
+	fn vardef_init(ty: TokenType, name: String, rhs: Option<Node>) -> Self {
 		match rhs {
 			Some(node) => { NodeType::VarDef(ty, name, Some(Box::new(node))) }
 			_ => { NodeType::VarDef(ty, name, None)}
 		}
+	}
+
+	fn lvar_init(stacksize: usize) -> Self {
+		NodeType::LVAR(stacksize)
 	}
 }
 
@@ -195,10 +200,17 @@ impl Node {
 		}
 	}
 
-	pub fn new_var(ty: TokenType, name: String, rhs: Option<Node>) -> Self {
+	pub fn new_vardef(ty: TokenType, name: String, rhs: Option<Node>) -> Self {
 		Self {
 			val: -1,
-			ty: NodeType::var_init(ty, name, rhs)
+			ty: NodeType::vardef_init(ty, name, rhs)
+		}
+	}
+
+	pub fn new_lvar(stacksize: usize) -> Self {
+		Self {
+			val: -1,
+			ty: NodeType::lvar_init(stacksize)
 		}
 	}
 }
@@ -326,10 +338,10 @@ fn decl(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 	if tokens[*pos].consume_ty(TokenEq, pos) {
 		let rhs = assign(tokens, pos);
 		tokens[*pos].assert_ty(TokenSemi, pos);
-		return Node::new_var(TokenInt, name, Some(rhs));
+		return Node::new_vardef(TokenInt, name, Some(rhs));
 	} else {
 		tokens[*pos].assert_ty(TokenSemi, pos);
-		return Node::new_var(TokenInt, name, None);
+		return Node::new_vardef(TokenInt, name, None);
 	}
 }
 
@@ -412,6 +424,18 @@ pub fn compound_stmt(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 	return Node::new_stmt(compstmts);
 }
 
+pub fn param(tokens: &Vec<Token>, pos: &mut usize) -> Node {
+	
+	// type
+	let ty = tokens[*pos].ty.clone();
+	tokens[*pos].assert_ty(TokenInt, pos);
+
+	// variable definition
+	let name = String::from(&tokens[*pos].input[..tokens[*pos].val as usize]);
+	tokens[*pos].assert_ty(TokenIdent, pos);
+	return Node::new_vardef(ty, name, None);
+}
+
 pub fn function(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 	
 	let mut args = vec![];
@@ -429,7 +453,7 @@ pub fn function(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 	tokens[*pos].assert_ty(TokenRightBrac, pos);
 	if !tokens[*pos].consume_ty(TokenLeftBrac, pos) {
 		loop {
-			args.push(term(tokens, pos));
+			args.push(param(tokens, pos));
 			if tokens[*pos].consume_ty(TokenLeftBrac, pos){ break; }
 			tokens[*pos].assert_ty(TokenComma, pos);
 		}

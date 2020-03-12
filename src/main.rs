@@ -5,6 +5,7 @@ pub mod parse;
 pub mod gen_ir;
 pub mod regalloc;
 pub mod gen_x86;
+// pub mod sema;
 pub mod lib;
 
 use token::*;
