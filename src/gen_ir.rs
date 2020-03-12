@@ -203,6 +203,14 @@ impl Function {
 	}
 }
 
+fn kill(r: usize, code: &mut Vec<Ir>) {
+	code.push(Ir::new(IrKill, r, 0));
+}
+
+fn label(r: usize, code: &mut Vec<Ir>) {
+	code.push(Ir::new(IrLabel, r, 0));
+}
+
 fn gen_lval(node: &Node, code: &mut Vec<Ir>) -> usize {
 	
 	match &node.ty {
@@ -235,10 +243,10 @@ fn gen_expr(node: &Node, code: &mut Vec<Ir>) -> usize {
 			code.push(Ir::new(IrUnless, r1, x));
 			let r2 = gen_expr(rhs, code);
 			code.push(Ir::new(IrMov, r1, r2));
-			code.push(Ir::new(IrKill, r2, 0));
+			kill(r2, code);
 			code.push(Ir::new(IrUnless, r1, x));
 			code.push(Ir::new(IrImm, r1, 1));
-			code.push(Ir::new(IrLabel, x, 0));
+			label(x, code);
 			return r1;
 		}
 		NodeType::LogOr(lhs, rhs) => {
@@ -249,20 +257,20 @@ fn gen_expr(node: &Node, code: &mut Vec<Ir>) -> usize {
 			code.push(Ir::new(IrUnless, r1, x));
 			code.push(Ir::new(IrImm, r1, 1));
 			code.push(Ir::new(IrJmp, y, 0));
-			code.push(Ir::new(IrLabel, x, 0));
+			label(x, code);
 			let r2 = gen_expr(rhs, code);
 			code.push(Ir::new(IrMov, r1, r2));
-			code.push(Ir::new(IrKill, r2, 0));
+			kill(r2, code);
 			code.push(Ir::new(IrUnless, r1, y));
 			code.push(Ir::new(IrImm, r1, 1));
-			code.push(Ir::new(IrLabel, y, 0));
+			label(y, code);
 			return r1;
 		}
 		NodeType::BinaryTree(ty, lhs, rhs) => {
 			let lhi = gen_expr(lhs.as_ref().unwrap(), code);
 			let rhi = gen_expr(rhs.as_ref().unwrap(), code);
 			code.push(Ir::new(Ir::fouroperator2irop(ty.clone()), lhi, rhi));
-			code.push(Ir::new(IrKill, rhi, 0));
+			kill(rhi, code);
 			return lhi;
 		},
 		NodeType::Lvar(_) => {
@@ -274,7 +282,7 @@ fn gen_expr(node: &Node, code: &mut Vec<Ir>) -> usize {
 			let lhi = gen_lval(lhs, code);
 			let rhi = gen_expr(rhs, code);
 			code.push(Ir::new(IrStore, lhi, rhi));
-			code.push(Ir::new(IrKill, rhi, 0));
+			kill(rhi, code);
 			return lhi;
 		},
 		NodeType::Call(ident, callarg) => {
@@ -290,7 +298,7 @@ fn gen_expr(node: &Node, code: &mut Vec<Ir>) -> usize {
 				args: args.clone()
 			} , r, 0));
 			for arg in args {
-				code.push(Ir::new(IrKill, arg, 0));
+				kill(arg, code);
 			}
 			return r;
 		}
@@ -305,28 +313,28 @@ fn gen_stmt(node: &Node, code: &mut Vec<Ir>) {
 		NodeType::Ret(lhs) => {
 			let lhi= gen_expr(lhs.as_ref(), code);
 			code.push(Ir::new(IrRet, lhi, 0));
-			code.push(Ir::new(IrKill, lhi, 0));
+			kill(lhi, code);
 		}
 		NodeType::Expr(lhs) => {
 			let r = gen_expr(lhs.as_ref(), code);
-			code.push(Ir::new(IrKill, r, 0));
+			kill(r, code);
 		}
 		NodeType::IfThen(cond, then, elthen) => {
 			let lhi = gen_expr(cond, code);
 			*LABEL.lock().unwrap() += 1;
 			code.push(Ir::new(IrUnless, lhi, *LABEL.lock().unwrap()));
-			code.push(Ir::new(IrKill, lhi, 0));
+			kill(lhi, code);
 			gen_stmt(then, code);
 			match elthen {
 				Some(elnode) => {
 					code.push(Ir::new(IrJmp, *LABEL.lock().unwrap(), 0));
-					code.push(Ir::new(IrLabel, *LABEL.lock().unwrap(), 0));
+					label(*LABEL.lock().unwrap(), code);
 					gen_stmt(elnode, code);
 					*LABEL.lock().unwrap() += 1;
-					code.push(Ir::new(IrLabel, *LABEL.lock().unwrap(), 0));
+					label(*LABEL.lock().unwrap(), code);
 				},
 				None => {
-					code.push(Ir::new(IrLabel, *LABEL.lock().unwrap(), 0));
+					label(*LABEL.lock().unwrap(), code);
 				}
 			}
 		}
@@ -340,14 +348,14 @@ fn gen_stmt(node: &Node, code: &mut Vec<Ir>) {
 			let x = *LABEL.lock().unwrap()-1;
 			let y = x+1;
 			gen_stmt(init, code);
-			code.push(Ir::new(IrLabel, x, 0));
+			label(x, code);
 			let r2 = gen_expr(cond, code);
 			code.push(Ir::new(IrUnless, r2, y));
-			code.push(Ir::new(IrKill, r2, 0));
+			kill(r2, code);
 			gen_stmt(body, code);
 			gen_expr(inc, code);
 			code.push(Ir::new(IrJmp, x, 0));
-			code.push(Ir::new(IrLabel, y, 0));
+			label(y, code);
 		}
 		NodeType::VarDef(_, _, off, init) => {
 			if let Some(rhs) = init {
@@ -357,8 +365,8 @@ fn gen_stmt(node: &Node, code: &mut Vec<Ir>) {
 				code.push(Ir::new(IrSubImm, r1, *off));
 				let r2 = gen_expr(rhs, code);
 				code.push(Ir::new(IrStore, r1, r2));
-				code.push(Ir::new(IrKill, r1, 0));
-				code.push(Ir::new(IrKill, r2, 0));
+				kill(r1, code);
+				kill(r2, code);
 			}
 		}
 		enode => { panic!("unexpeceted node {:?}", enode); }
