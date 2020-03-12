@@ -22,8 +22,6 @@ macro_rules! hash {
 
 lazy_static! {
 	pub static ref REGNO: Mutex<usize> = Mutex::new(1);
-	pub static ref VARS: Mutex<HashMap<String, usize>> = Mutex::new(HashMap::new());
-	pub static ref STACKSIZE: Mutex<usize> = Mutex::new(0);
 	pub static ref IRINFO: Mutex<HashMap<IrOp, IrInfo>> = Mutex::new(hash![
 		(IrOp::IrAdd, IrInfo::new("ADD", IrType::RegReg)),
 		(IrOp::IrSub, IrInfo::new("SUB", IrType::RegReg)),
@@ -208,16 +206,11 @@ impl Function {
 fn gen_lval(node: &Node, code: &mut Vec<Ir>) -> usize {
 	
 	match &node.ty {
-		NodeType::Ident(s) => {
-			if VARS.lock().unwrap().get(s).is_none() {
-				panic!("undefined variable: {}.", s);
-			}
+		NodeType::Lvar(off) => {
 			*REGNO.lock().unwrap() += 1;
 			let r1 = *REGNO.lock().unwrap();
 			code.push(Ir::new(IrMov, r1, 0)); 
-			
-			let off = *VARS.lock().unwrap().get(s).unwrap();
-			code.push(Ir::new(IrSubImm, r1, off));
+			code.push(Ir::new(IrSubImm, r1, *off));
 			return r1;
 		},
 		_ => { panic!("not an lvalue")}
@@ -272,12 +265,12 @@ fn gen_expr(node: &Node, code: &mut Vec<Ir>) -> usize {
 			code.push(Ir::new(IrKill, rhi, 0));
 			return lhi;
 		},
-		NodeType::Ident(_) => {
+		NodeType::Lvar(_) => {
 			let lhi = gen_lval(node, code);
 			code.push(Ir::new(IrLoad, lhi, lhi));
 			return lhi;
 		},
-		NodeType::EqTree(_, lhs, rhs) => {
+		NodeType::EqTree(lhs, rhs) => {
 			let lhi = gen_lval(lhs, code);
 			let rhi = gen_expr(rhs, code);
 			code.push(Ir::new(IrStore, lhi, rhi));
@@ -356,18 +349,12 @@ fn gen_stmt(node: &Node, code: &mut Vec<Ir>) {
 			code.push(Ir::new(IrJmp, x, 0));
 			code.push(Ir::new(IrLabel, y, 0));
 		}
-		NodeType::VarDef(_, name, somerhs) => {
-			*STACKSIZE.lock().unwrap() += 8;
-			VARS.lock().unwrap().insert(
-				name.clone(),
-				*STACKSIZE.lock().unwrap(),
-			);
-			if let Some(rhs) = somerhs {
+		NodeType::VarDef(_, _, off, init) => {
+			if let Some(rhs) = init {
 				*REGNO.lock().unwrap() += 1;
 				let r1 = *REGNO.lock().unwrap();
-				let off = *STACKSIZE.lock().unwrap();
 				code.push(Ir::new(IrMov, r1, 0));
-				code.push(Ir::new(IrSubImm, r1, off));
+				code.push(Ir::new(IrSubImm, r1, *off));
 				let r2 = gen_expr(rhs, code);
 				code.push(Ir::new(IrStore, r1, r2));
 				code.push(Ir::new(IrKill, r1, 0));
@@ -375,24 +362,6 @@ fn gen_stmt(node: &Node, code: &mut Vec<Ir>) {
 			}
 		}
 		enode => { panic!("unexpeceted node {:?}", enode); }
-	}
-}
-
-pub fn gen_args(args: &Vec<Node>, code: &mut Vec<Ir>) {
-	
-	code.push(Ir::new(IrSaveArgs, args.len(), 0));
-
-	for arg in args {
-		match &arg.ty {
-			NodeType::VarDef(_, name, _) => {
-				*STACKSIZE.lock().unwrap() += 8;
-				VARS.lock().unwrap().insert(
-					name.clone(),
-					*STACKSIZE.lock().unwrap(),
-				);
-			}
-			_ => { panic!("dummy argument should be ident."); }
-		}
 	}
 }
 
@@ -405,14 +374,12 @@ pub fn gen_ir(funcs: &Vec<Node>) -> Vec<Function> {
 		
 		let mut code = vec![];
 		*REGNO.lock().unwrap() = 1;
-		*VARS.lock().unwrap() = HashMap::new();
-		*STACKSIZE.lock().unwrap() = 0;
 		
 		match &funode.ty {
-			NodeType::Func(name, args, body) => {
-				gen_args(args, &mut code);
+			NodeType::Func(name, args, body, stacksize) => {
+				code.push(Ir::new(IrSaveArgs, args.len(), 0));
 				gen_stmt(body, &mut code);
-				let func = Function::new(name.clone(), code, *STACKSIZE.lock().unwrap());
+				let func = Function::new(name.clone(), code, *stacksize);
 				v.push(func);
 			}
 			_ => { panic!(" should be func node at gen_ir: {:?}", funode); }

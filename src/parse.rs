@@ -10,15 +10,15 @@ pub enum NodeType {
 	Expr(Box<Node>),
 	CompStmt(Vec<Node>),
 	Ident(String),
-	EqTree(TokenType, Box<Node>, Box<Node>),
+	EqTree(Box<Node>, Box<Node>),
 	IfThen(Box<Node>, Box<Node>, Option<Box<Node>>),
 	Call(String, Vec<Node>),
-	Func(String, Vec<Node>, Box<Node>),
+	Func(String, Vec<Node>, Box<Node>, usize),
 	LogAnd(Box<Node>, Box<Node>),
 	LogOr(Box<Node>, Box<Node>),
 	For(Box<Node>, Box<Node>, Box<Node>, Box<Node>),
-	VarDef(TokenType, String, Option<Box<Node>>),
-	LVAR(usize),
+	VarDef(TokenType, String, usize, Option<Box<Node>>),
+	Lvar(usize),
 }
 
 #[allow(dead_code)]
@@ -52,7 +52,7 @@ impl NodeType {
 	}
 
 	fn eq_init(lhs: Node, rhs: Node) -> Self {
-		NodeType::EqTree(TokenEq, Box::new(lhs), Box::new(rhs))
+		NodeType::EqTree(Box::new(lhs), Box::new(rhs))
 	}
 	
 	fn if_init(cond: Node, then: Node, elthen: Option<Node>) -> Self {
@@ -70,8 +70,8 @@ impl NodeType {
 		NodeType::Call(ident, args)
 	}
 
-	fn func_init(ident: String, args: Vec<Node>, body: Node) -> Self {
-		NodeType::Func(ident, args, Box::new(body))
+	fn func_init(ident: String, args: Vec<Node>, body: Node, stacksize: usize) -> Self {
+		NodeType::Func(ident, args, Box::new(body), stacksize)
 	}
 
 	fn logand_init(lhs: Node, rhs: Node) -> Self {
@@ -86,15 +86,15 @@ impl NodeType {
 		NodeType::For(Box::new(init), Box::new(cond), Box::new(inc), Box::new(body))
 	}
 
-	fn vardef_init(ty: TokenType, name: String, rhs: Option<Node>) -> Self {
+	fn vardef_init(ty: TokenType, name: String, off: usize, rhs: Option<Node>) -> Self {
 		match rhs {
-			Some(node) => { NodeType::VarDef(ty, name, Some(Box::new(node))) }
-			_ => { NodeType::VarDef(ty, name, None)}
+			Some(node) => { NodeType::VarDef(ty, name, off, Some(Box::new(node))) }
+			_ => { NodeType::VarDef(ty, name, off, None)}
 		}
 	}
 
 	fn lvar_init(stacksize: usize) -> Self {
-		NodeType::LVAR(stacksize)
+		NodeType::Lvar(stacksize)
 	}
 }
 
@@ -165,9 +165,9 @@ impl Node {
 		}
 	}
 
-	pub fn new_func(ident: String, args: Vec<Node>, body: Node) -> Self {
+	pub fn new_func(ident: String, args: Vec<Node>, body: Node, stacksize: usize) -> Self {
 		Self {
-			ty: NodeType::func_init(ident, args, body)
+			ty: NodeType::func_init(ident, args, body, stacksize)
 		}
 	}
 
@@ -189,9 +189,9 @@ impl Node {
 		}
 	}
 
-	pub fn new_vardef(ty: TokenType, name: String, rhs: Option<Node>) -> Self {
+	pub fn new_vardef(ty: TokenType, name: String, off: usize, rhs: Option<Node>) -> Self {
 		Self {
-			ty: NodeType::vardef_init(ty, name, rhs)
+			ty: NodeType::vardef_init(ty, name, off, rhs)
 		}
 	}
 
@@ -325,10 +325,10 @@ fn decl(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 	if tokens[*pos].consume_ty(TokenEq, pos) {
 		let rhs = assign(tokens, pos);
 		tokens[*pos].assert_ty(TokenSemi, pos);
-		return Node::new_vardef(TokenInt, name, Some(rhs));
+		return Node::new_vardef(TokenInt, name, 0, Some(rhs));
 	} else {
 		tokens[*pos].assert_ty(TokenSemi, pos);
-		return Node::new_vardef(TokenInt, name, None);
+		return Node::new_vardef(TokenInt, name, 0, None);
 	}
 }
 
@@ -420,7 +420,7 @@ pub fn param(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 	// variable definition
 	let name = String::from(&tokens[*pos].input[..tokens[*pos].val as usize]);
 	tokens[*pos].assert_ty(TokenIdent, pos);
-	return Node::new_vardef(ty, name, None);
+	return Node::new_vardef(ty, name, 0, None);
 }
 
 pub fn function(tokens: &Vec<Token>, pos: &mut usize) -> Node {
@@ -450,7 +450,7 @@ pub fn function(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 	tokens[*pos].assert_ty(TokenRightCurlyBrace, pos);
 	let body = compound_stmt(tokens, pos);
 
-	return Node::new_func(name, args, body);
+	return Node::new_func(name, args, body, 0);
 }
 
 pub fn parse(tokens: &Vec<Token>, pos: &mut usize) -> Vec<Node> {

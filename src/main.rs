@@ -5,7 +5,7 @@ pub mod parse;
 pub mod gen_ir;
 pub mod regalloc;
 pub mod gen_x86;
-// pub mod sema;
+pub mod sema;
 pub mod lib;
 
 use token::*;
@@ -13,6 +13,7 @@ use parse::*;
 use gen_ir::*;
 use regalloc::*;
 use gen_x86::*;
+use sema::*;
 
 #[macro_use]
 extern crate lazy_static;
@@ -49,12 +50,12 @@ fn main() {
 	// }
 
 	// parsing analysis
-	let node = parse(&tokens, &mut 0);
+	let nodes = parse(&tokens, &mut 0);
 	// println!("{:#?}", &node);
-
+	let nodes = sema(&nodes);
 	
 	// alloc index for register
-	let mut funcs = gen_ir(&node);
+	let mut funcs = gen_ir(&nodes);
 	if dump_ir1 {
 		IrInfo::dump_ir(&funcs, "-dump-ir1");
 	}
