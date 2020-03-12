@@ -228,10 +228,10 @@ fn gen_lval(node: &Node, code: &mut Vec<Ir>) -> usize {
 fn gen_expr(node: &Node, code: &mut Vec<Ir>) -> usize {
 
 	match &node.ty {
-		NodeType::Num => {
+		NodeType::Num(val) => {
 			*REGNO.lock().unwrap() += 1;
 			let r = *REGNO.lock().unwrap();
-			let ir = Ir::new(IrImm, r, node.val as usize);
+			let ir = Ir::new(IrImm, r, *val as usize);
 			code.push(ir);
 			return r;
 		},

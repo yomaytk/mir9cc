@@ -4,7 +4,7 @@ use super::token::TokenType::*;
 #[allow(dead_code)]
 #[derive(Debug)]
 pub enum NodeType {
-	Num,
+	Num(i32),
 	BinaryTree(TokenType, Option<Box<Node>>, Option<Box<Node>>),
 	Ret(Box<Node>),
 	Expr(Box<Node>),
@@ -23,6 +23,10 @@ pub enum NodeType {
 
 #[allow(dead_code)]
 impl NodeType {
+	fn num_init(val: i32) -> Self {
+		NodeType::Num(val)
+	}
+
 	fn bit_new(tk_ty: TokenType) -> Self {
 		NodeType::BinaryTree(tk_ty, None, None)
 	}
@@ -96,7 +100,6 @@ impl NodeType {
 
 #[derive(Debug)]
 pub struct Node {
-	pub val: i32,
 	pub ty: NodeType,
 }
 
@@ -104,112 +107,96 @@ pub struct Node {
 impl Node {
 	pub fn new(tk_ty: TokenType) -> Self {
 		Self {
-			val: -1,
 			ty: NodeType::bit_new(tk_ty),
 		}
 	}
 
 	pub fn new_bit(tk_ty: TokenType, lhs: Node, rhs: Node) -> Self {
 		Self {
-			val: -1,
 			ty: NodeType::bit_init(tk_ty, lhs, rhs),
 		}
 	}
 	
-	pub fn new_node_num(val: i32) -> Self {
+	pub fn new_num(val: i32) -> Self {
 		Self {
-			val: val,
-			ty: NodeType::Num,
+			ty: NodeType::num_init(val),
 		}
 	}
 
 	pub fn new_ret(lhs: Node) -> Self {
 		Self {
-			val: -1,
 			ty: NodeType::ret_init(lhs)
 		}
 	}
 
 	pub fn new_expr(lhs: Node) -> Self {
 		Self {
-			val: -1,
 			ty: NodeType::expr_init(lhs)
 		}
 	}
 
 	pub fn new_stmt(stmts: Vec<Node>) -> Self {
 		Self {
-			val: -1,
 			ty: NodeType::stmt_init(stmts)
 		}
 	}
 
 	pub fn new_ident(s: String) -> Self {
 		Self {
-			val: -1,
 			ty: NodeType::ident_init(s)
 		}
 	}
 
 	pub fn new_eq(lhs: Node, rhs: Node) -> Self {
 		Self {
-			val: -1,
 			ty: NodeType::eq_init(lhs, rhs)
 		}
 	}
 
 	pub fn new_if(cond: Node, then: Node, elthen: Option<Node>) -> Self {
 		Self {
-			val: -1,
 			ty: NodeType::if_init(cond, then, elthen)
 		}
 	}
 
 	pub fn new_call(ident: String, args: Vec<Node>) -> Self {
 		Self {
-			val: -1,
 			ty: NodeType::call_init(ident, args)
 		}
 	}
 
 	pub fn new_func(ident: String, args: Vec<Node>, body: Node) -> Self {
 		Self {
-			val: -1,
 			ty: NodeType::func_init(ident, args, body)
 		}
 	}
 
 	pub fn new_and(lhs: Node, rhs: Node) -> Self {
 		Self {
-			val: -1, 
 			ty: NodeType::logand_init(lhs, rhs)
 		}
 	}
 
 	pub fn new_or(lhs: Node, rhs: Node) -> Self {
 		Self {
-			val: -1, 
 			ty: NodeType::logor_init(lhs, rhs)
 		}
 	}
 
 	pub fn new_for(init: Node, cond: Node, inc: Node, body: Node) -> Self {
 		Self {
-			val: -1,
 			ty: NodeType::for_init(init, cond, inc, body)
 		}
 	}
 
 	pub fn new_vardef(ty: TokenType, name: String, rhs: Option<Node>) -> Self {
 		Self {
-			val: -1,
 			ty: NodeType::vardef_init(ty, name, rhs)
 		}
 	}
 
 	pub fn new_lvar(stacksize: usize) -> Self {
 		Self {
-			val: -1,
 			ty: NodeType::lvar_init(stacksize)
 		}
 	}
@@ -223,7 +210,7 @@ fn term(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 		return lhs;
 	}
 	if tokens[*pos].consume_ty(TokenNum, pos) {
-		return Node::new_node_num(tokens[*pos-1].val);
+		return Node::new_num(tokens[*pos-1].val);
 	}
 	if tokens[*pos].consume_ty(TokenIdent, pos) {
 
