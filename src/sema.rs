@@ -4,12 +4,26 @@ use std::collections::HashMap;
 use std::sync::Mutex;
 
 lazy_static! {
-	pub static ref VARS: Mutex<HashMap<String, usize>> = Mutex::new(HashMap::new());
+	pub static ref VARS: Mutex<HashMap<String, Var>> = Mutex::new(HashMap::new());
 	pub static ref STACKSIZE: Mutex<usize> = Mutex::new(0);
 }
 
+pub struct Var {
+	typeis: Type,
+	offset: usize,
+}
+
+impl Var {
+	pub fn new(typeis: Type, offset: usize) -> Self {
+		Self {
+			typeis,
+			offset,
+		}
+	}
+}
+
 pub fn walk(node: &Node) -> Node {
-	match &node.ty {
+	match &node.op {
 		Num(val) => { return Node::new_num(*val); }
 		BinaryTree(ty, lhs, rhs)  => {
 			return Node::new_bit(ty.clone(),
@@ -27,8 +41,8 @@ pub fn walk(node: &Node) -> Node {
 			return Node::new_stmt(v);
 		}
 		Ident(name) => {
-			if let Some(off) = VARS.lock().unwrap().get(name) {
-				return Node::new_lvar(*off);
+			if let Some(var) = VARS.lock().unwrap().get(name) {
+				return Node::new_lvar(var.typeis.clone(), var.offset);
 			}
 			panic!("\"{}\" is not defined.", name);
 		}
@@ -60,19 +74,20 @@ pub fn walk(node: &Node) -> Node {
 		For(init, cond, inc, body) => {
 			return Node::new_for(walk(init), walk(cond), walk(inc), walk(body));
 		}
-		VarDef(ty, name, _, init) => {
+		VarDef(typeis, name, _, init) => {
 			let mut rexpr = None;
 			if let Some(rhs) = init {
 				rexpr = Some(walk(rhs));
 			}
 			*STACKSIZE.lock().unwrap() += 8;
-			let off = *STACKSIZE.lock().unwrap();
+			let offset = *STACKSIZE.lock().unwrap();
 			VARS.lock().unwrap().insert(
 				name.clone(),
-				off,
+				Var::new(typeis.clone(), offset),
 			);
-			return Node::new_vardef(ty.clone(), name.clone(), off, rexpr)
+			return Node::new_vardef(typeis.clone(), name.clone(), offset, rexpr)
 		}
+		Deref(lhs) => { return Node::new_deref(walk(lhs)); }
 		_ => { panic!("sema error at: {:?}", node); }
 	}
 }
@@ -82,7 +97,7 @@ pub fn sema(nodes: &Vec<Node>) -> Vec<Node> {
 	let mut funcv = vec![];
 	for funode in nodes {
 		let node;
-		match walk(funode).ty {
+		match walk(funode).op {
 			Func(name, args, body, _) => { node = Node::new_func(name.clone(), args, *body, *STACKSIZE.lock().unwrap()); }
 			_ => { panic!("funode should be NodeType::Func. "); }
 		}

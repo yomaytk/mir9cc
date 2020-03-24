@@ -5,7 +5,7 @@ pub static SIGNALS: [Signal; 15] = [
 	Signal::new("||", TokenLogOr),
 	Signal::new("+", TokenAdd),
 	Signal::new("-", TokenSub),
-	Signal::new("*", TokenMul),
+	Signal::new("*", TokenStar),
 	Signal::new("/", TokenDiv),
 	Signal::new(";", TokenSemi),
 	Signal::new("=", TokenEq),
@@ -23,7 +23,7 @@ pub enum TokenType {
 	TokenNum,
 	TokenAdd,
 	TokenSub,
-	TokenMul,
+	TokenStar,
 	TokenDiv,
 	TokenRet,
 	TokenSemi,
@@ -88,7 +88,9 @@ impl<'a> Token<'a> {
 		panic!("expect fun error: {} is expected, but got {}", c, &self.input[..self.val as usize]);
 	}
 	pub fn assert_ty(&self, ty: TokenType, pos: &mut usize) {
-		assert!(self.consume_ty(ty, pos));
+		if !self.consume_ty(ty, pos) {
+			panic!("assertion failed at: {}", &self.input[..self.val as usize])
+		}
 	}
 	pub fn consume_ty(&self, ty: TokenType, pos: &mut usize) -> bool {
 		if self.ty == ty {

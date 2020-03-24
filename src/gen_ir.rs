@@ -88,7 +88,7 @@ impl Ir {
 		match ty {
 			TokenAdd => { IrAdd },
 			TokenSub => { IrSub },
-			TokenMul => { IrMul },
+			TokenStar => { IrMul },
 			TokenDiv => { IrDiv },
 			TokenLt => { IrLt },
 			TokenEof => { panic!("tokeneof!!!"); }
@@ -213,8 +213,8 @@ fn label(r: usize, code: &mut Vec<Ir>) {
 
 fn gen_lval(node: &Node, code: &mut Vec<Ir>) -> usize {
 	
-	match &node.ty {
-		NodeType::Lvar(off) => {
+	match &node.op {
+		NodeType::Lvar(_, off) => {
 			*REGNO.lock().unwrap() += 1;
 			let r1 = *REGNO.lock().unwrap();
 			code.push(Ir::new(IrMov, r1, 0)); 
@@ -228,7 +228,7 @@ fn gen_lval(node: &Node, code: &mut Vec<Ir>) -> usize {
 // allocate of index for register to NodeNum
 fn gen_expr(node: &Node, code: &mut Vec<Ir>) -> usize {
 
-	match &node.ty {
+	match &node.op {
 		NodeType::Num(val) => {
 			*REGNO.lock().unwrap() += 1;
 			let r = *REGNO.lock().unwrap();
@@ -273,7 +273,7 @@ fn gen_expr(node: &Node, code: &mut Vec<Ir>) -> usize {
 			kill(rhi, code);
 			return lhi;
 		},
-		NodeType::Lvar(_) => {
+		NodeType::Lvar(_, _) => {
 			let lhi = gen_lval(node, code);
 			code.push(Ir::new(IrLoad, lhi, lhi));
 			return lhi;
@@ -302,14 +302,19 @@ fn gen_expr(node: &Node, code: &mut Vec<Ir>) -> usize {
 			}
 			return r;
 		}
-		_ => { panic!("gen_expr NodeType error at {:?}", node.ty); }
+		NodeType::Deref(lhs) => {
+			let r = gen_expr(lhs, code);
+			code.push(Ir::new(IrLoad, r, r));
+			return r;
+		}
+		_ => { panic!("gen_expr NodeType error at {:?}", node.op); }
 	}
 
 }
 
 
 fn gen_stmt(node: &Node, code: &mut Vec<Ir>) {
-	match &node.ty {
+	match &node.op {
 		NodeType::Ret(lhs) => {
 			let lhi= gen_expr(lhs.as_ref(), code);
 			code.push(Ir::new(IrRet, lhi, 0));
@@ -383,7 +388,7 @@ pub fn gen_ir(funcs: &Vec<Node>) -> Vec<Function> {
 		let mut code = vec![];
 		*REGNO.lock().unwrap() = 1;
 		
-		match &funode.ty {
+		match &funode.op {
 			NodeType::Func(name, args, body, stacksize) => {
 				code.push(Ir::new(IrSaveArgs, args.len(), 0));
 				gen_stmt(body, &mut code);

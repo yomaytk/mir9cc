@@ -17,8 +17,36 @@ pub enum NodeType {
 	LogAnd(Box<Node>, Box<Node>),
 	LogOr(Box<Node>, Box<Node>),
 	For(Box<Node>, Box<Node>, Box<Node>, Box<Node>),
-	VarDef(TokenType, String, usize, Option<Box<Node>>),
-	Lvar(usize),
+	VarDef(Type, String, usize, Option<Box<Node>>),
+	Lvar(Type, usize),
+	Deref(Box<Node>),
+}
+
+#[derive(Debug, Clone)]
+pub enum Ty {
+	INT,
+	PTR,
+}
+
+#[derive(Debug, Clone)]
+pub struct Type {
+	pub ty: Ty,
+	pub ptr_of: Option<Box<Type>>,
+}
+
+impl Type {
+	pub fn new(ty: Ty, ptr_of: Option<Box<Type>>) -> Self {
+		Self {
+			ty,
+			ptr_of,
+		}
+	}
+	pub fn ptr_of(self) -> Self {
+		Self {
+			ty: Ty::PTR,
+			ptr_of: Some(Box::new(self)),
+		}
+	}
 }
 
 #[allow(dead_code)]
@@ -86,118 +114,128 @@ impl NodeType {
 		NodeType::For(Box::new(init), Box::new(cond), Box::new(inc), Box::new(body))
 	}
 
-	fn vardef_init(ty: TokenType, name: String, off: usize, rhs: Option<Node>) -> Self {
+	fn vardef_init(ty: Type, name: String, off: usize, rhs: Option<Node>) -> Self {
 		match rhs {
 			Some(node) => { NodeType::VarDef(ty, name, off, Some(Box::new(node))) }
 			_ => { NodeType::VarDef(ty, name, off, None)}
 		}
 	}
 
-	fn lvar_init(stacksize: usize) -> Self {
-		NodeType::Lvar(stacksize)
+	fn lvar_init(ty: Type, stacksize: usize) -> Self {
+		NodeType::Lvar(ty, stacksize)
+	}
+
+	fn deref_init(lhs: Node) -> Self {
+		NodeType::Deref(Box::new(lhs))
 	}
 }
 
 #[derive(Debug)]
 pub struct Node {
-	pub ty: NodeType,
+	pub op: NodeType,
 }
 
 #[allow(dead_code)]
 impl Node {
 	pub fn new(tk_ty: TokenType) -> Self {
 		Self {
-			ty: NodeType::bit_new(tk_ty),
+			op: NodeType::bit_new(tk_ty),
 		}
 	}
 
 	pub fn new_bit(tk_ty: TokenType, lhs: Node, rhs: Node) -> Self {
 		Self {
-			ty: NodeType::bit_init(tk_ty, lhs, rhs),
+			op: NodeType::bit_init(tk_ty, lhs, rhs),
 		}
 	}
 	
 	pub fn new_num(val: i32) -> Self {
 		Self {
-			ty: NodeType::num_init(val),
+			op: NodeType::num_init(val),
 		}
 	}
 
 	pub fn new_ret(lhs: Node) -> Self {
 		Self {
-			ty: NodeType::ret_init(lhs)
+			op: NodeType::ret_init(lhs)
 		}
 	}
 
 	pub fn new_expr(lhs: Node) -> Self {
 		Self {
-			ty: NodeType::expr_init(lhs)
+			op: NodeType::expr_init(lhs)
 		}
 	}
 
 	pub fn new_stmt(stmts: Vec<Node>) -> Self {
 		Self {
-			ty: NodeType::stmt_init(stmts)
+			op: NodeType::stmt_init(stmts)
 		}
 	}
 
 	pub fn new_ident(s: String) -> Self {
 		Self {
-			ty: NodeType::ident_init(s)
+			op: NodeType::ident_init(s)
 		}
 	}
 
 	pub fn new_eq(lhs: Node, rhs: Node) -> Self {
 		Self {
-			ty: NodeType::eq_init(lhs, rhs)
+			op: NodeType::eq_init(lhs, rhs)
 		}
 	}
 
 	pub fn new_if(cond: Node, then: Node, elthen: Option<Node>) -> Self {
 		Self {
-			ty: NodeType::if_init(cond, then, elthen)
+			op: NodeType::if_init(cond, then, elthen)
 		}
 	}
 
 	pub fn new_call(ident: String, args: Vec<Node>) -> Self {
 		Self {
-			ty: NodeType::call_init(ident, args)
+			op: NodeType::call_init(ident, args)
 		}
 	}
 
 	pub fn new_func(ident: String, args: Vec<Node>, body: Node, stacksize: usize) -> Self {
 		Self {
-			ty: NodeType::func_init(ident, args, body, stacksize)
+			op: NodeType::func_init(ident, args, body, stacksize)
 		}
 	}
 
 	pub fn new_and(lhs: Node, rhs: Node) -> Self {
 		Self {
-			ty: NodeType::logand_init(lhs, rhs)
+			op: NodeType::logand_init(lhs, rhs)
 		}
 	}
 
 	pub fn new_or(lhs: Node, rhs: Node) -> Self {
 		Self {
-			ty: NodeType::logor_init(lhs, rhs)
+			op: NodeType::logor_init(lhs, rhs)
 		}
 	}
 
 	pub fn new_for(init: Node, cond: Node, inc: Node, body: Node) -> Self {
 		Self {
-			ty: NodeType::for_init(init, cond, inc, body)
+			op: NodeType::for_init(init, cond, inc, body)
 		}
 	}
 
-	pub fn new_vardef(ty: TokenType, name: String, off: usize, rhs: Option<Node>) -> Self {
+	pub fn new_vardef(ty: Type, name: String, off: usize, rhs: Option<Node>) -> Self {
 		Self {
-			ty: NodeType::vardef_init(ty, name, off, rhs)
+			op: NodeType::vardef_init(ty, name, off, rhs)
 		}
 	}
 
-	pub fn new_lvar(stacksize: usize) -> Self {
+	pub fn new_lvar(ty: Type, stacksize: usize) -> Self {
 		Self {
-			ty: NodeType::lvar_init(stacksize)
+			op: NodeType::lvar_init(ty, stacksize)
+		}
+	}
+
+	pub fn new_deref(lhs: Node) -> Self {
+		Self {
+			op: NodeType::deref_init(lhs)
 		}
 	}
 }
@@ -240,16 +278,23 @@ fn term(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 	panic!("parse.rs: term parse fail. and got {}", tokens[*pos].input);
 }
 
+fn unary(tokens: &Vec<Token>, pos: &mut usize) -> Node {
+	if tokens[*pos].consume_ty(TokenStar, pos) {
+		return Node::new_deref(mul(tokens, pos));
+	}
+	return term(tokens, pos);
+}
+
 fn mul(tokens: &Vec<Token>, pos: &mut usize) -> Node {
-	let mut lhs = term(tokens, pos);
+	let mut lhs = unary(tokens, pos);
 	
 	loop {
-		if !tokens[*pos].consume_ty(TokenMul, pos) && !tokens[*pos].consume_ty(TokenDiv, pos) {
+		if !tokens[*pos].consume_ty(TokenStar, pos) && !tokens[*pos].consume_ty(TokenDiv, pos) {
 			return lhs;
 		}
 		
 		let ty = tokens[*pos-1].ty.clone();
-		let rhs = term(tokens, pos);
+		let rhs = unary(tokens, pos);
 		lhs = Node::new_bit(ty, lhs, rhs);
 	}
 
@@ -319,20 +364,30 @@ fn assign(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 	return lhs;
 }
 
+fn typeis(tokens: &Vec<Token>, pos: &mut usize) -> Type {
+	tokens[*pos].assert_ty(TokenInt, pos);
+	let mut ty = Type::new(Ty::INT, None);
+	while tokens[*pos].consume_ty(TokenStar, pos) {
+		ty = ty.ptr_of();
+	}
+	return ty;
+}
+
 fn decl(tokens: &Vec<Token>, pos: &mut usize) -> Node {
+	let ty = typeis(tokens, pos);
 	let name = String::from(&tokens[*pos].input[..tokens[*pos].val as usize]);
 	tokens[*pos].assert_ty(TokenIdent, pos);
 	if tokens[*pos].consume_ty(TokenEq, pos) {
 		let rhs = assign(tokens, pos);
 		tokens[*pos].assert_ty(TokenSemi, pos);
-		return Node::new_vardef(TokenInt, name, 0, Some(rhs));
+		return Node::new_vardef(ty, name, 0, Some(rhs));
 	} else {
 		tokens[*pos].assert_ty(TokenSemi, pos);
-		return Node::new_vardef(TokenInt, name, 0, None);
+		return Node::new_vardef(ty, name, 0, None);
 	}
 }
 
-fn expr_stmt(tokens: &Vec<Token>, pos: &mut usize) -> Node {
+fn expr(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 	let lhs = assign(tokens, pos);
 	tokens[*pos].consume_ty(TokenSemi, pos);
 	return Node::new_expr(lhs);
@@ -365,9 +420,10 @@ pub fn stmt(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 			tokens[*pos].assert_ty(TokenRightBrac, pos);
 			let init;
 			if tokens[*pos].is_typename(pos) {
+				*pos -= 1;
 				init = decl(tokens, pos);
 			} else {
-				init = expr_stmt(tokens, pos);
+				init = expr(tokens, pos);
 			}
 			let cond = assign(tokens, pos);
 			tokens[*pos].assert_ty(TokenSemi, pos);
@@ -385,11 +441,10 @@ pub fn stmt(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 			return Node::new_stmt(stmts);
 		}
 		TokenInt => {
-			*pos += 1;
 			return decl(tokens, pos);
 		}
 		_ => {
-			return expr_stmt(tokens, pos);
+			return expr(tokens, pos);
 		}
 	}
 }
@@ -397,6 +452,7 @@ pub fn stmt(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 pub fn compound_stmt(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 	
 	let mut compstmts = vec![];
+	tokens[*pos].assert_ty(TokenRightCurlyBrace, pos);
 
 	loop {
 		match tokens[*pos].consume_ty(TokenLeftCurlyBrace, pos) {
@@ -414,10 +470,9 @@ pub fn compound_stmt(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 pub fn param(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 	
 	// type
-	let ty = tokens[*pos].ty.clone();
-	tokens[*pos].assert_ty(TokenInt, pos);
+	let ty = typeis(tokens, pos);
 
-	// variable definition
+	// identifier
 	let name = String::from(&tokens[*pos].input[..tokens[*pos].val as usize]);
 	tokens[*pos].assert_ty(TokenIdent, pos);
 	return Node::new_vardef(ty, name, 0, None);
@@ -447,7 +502,6 @@ pub fn function(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 	}
 	
 	// body
-	tokens[*pos].assert_ty(TokenRightCurlyBrace, pos);
 	let body = compound_stmt(tokens, pos);
 
 	return Node::new_func(name, args, body, 0);
