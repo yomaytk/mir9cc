@@ -266,9 +266,30 @@ fn gen_expr(node: &Node, code: &mut Vec<Ir>) -> usize {
 			label(y, code);
 			return r1;
 		}
-		NodeType::BinaryTree(ty, lhs, rhs) => {
+		NodeType::BinaryTree(ctype, ty, lhs, rhs) => {
 			let lhi = gen_expr(lhs.as_ref().unwrap(), code);
 			let rhi = gen_expr(rhs.as_ref().unwrap(), code);
+			match ty {
+				TokenAdd | TokenSub if ctype.ty == Ty::PTR => {
+					if let Some(lhs2) = lhs {
+						match &lhs2.op {
+							NodeType::Lvar(ctype, _) | NodeType::BinaryTree(ctype, _, _, _) => {
+								let mut size_of = 200;
+								if let Some(ptr) = &ctype.ptr_of {
+									size_of = ptr.ty.clone().size_of();
+								}
+								*REGNO.lock().unwrap() += 1;
+								let r1 = *REGNO.lock().unwrap();
+								code.push(Ir::new(IrImm, r1, size_of));
+								code.push(Ir::new(IrMul, rhi, r1));
+								kill(r1, code);
+							}
+							_ => { panic!("operand must be pointer."); }
+						}
+					}
+				}
+				_ => {}
+			}
 			code.push(Ir::new(Ir::fouroperator2irop(ty.clone()), lhi, rhi));
 			kill(rhi, code);
 			return lhi;
@@ -302,7 +323,7 @@ fn gen_expr(node: &Node, code: &mut Vec<Ir>) -> usize {
 			}
 			return r;
 		}
-		NodeType::Deref(lhs) => {
+		NodeType::Deref(_, lhs) => {
 			let r = gen_expr(lhs, code);
 			code.push(Ir::new(IrLoad, r, r));
 			return r;

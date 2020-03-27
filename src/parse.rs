@@ -5,7 +5,7 @@ use super::token::TokenType::*;
 #[derive(Debug)]
 pub enum NodeType {
 	Num(i32),
-	BinaryTree(TokenType, Option<Box<Node>>, Option<Box<Node>>),
+	BinaryTree(Type, TokenType, Option<Box<Node>>, Option<Box<Node>>),
 	Ret(Box<Node>),
 	Expr(Box<Node>),
 	CompStmt(Vec<Node>),
@@ -19,13 +19,22 @@ pub enum NodeType {
 	For(Box<Node>, Box<Node>, Box<Node>, Box<Node>),
 	VarDef(Type, String, usize, Option<Box<Node>>),
 	Lvar(Type, usize),
-	Deref(Box<Node>),
+	Deref(Type, Box<Node>),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Ty {
 	INT,
 	PTR,
+}
+
+impl Ty {
+	pub fn size_of(self) -> usize {
+		match self {
+			Ty::INT => { return 4; }
+			Ty::PTR => { return 8; }
+		}
+	}
 }
 
 #[derive(Debug, Clone)]
@@ -55,12 +64,8 @@ impl NodeType {
 		NodeType::Num(val)
 	}
 
-	fn bit_new(tk_ty: TokenType) -> Self {
-		NodeType::BinaryTree(tk_ty, None, None)
-	}
-
-	fn bit_init(tk_ty: TokenType, lhs: Node, rhs: Node) -> Self {
-		NodeType::BinaryTree(tk_ty, Some(Box::new(lhs)), Some(Box::new(rhs)))
+	fn bit_init(ctype: Type, tk_ty: TokenType, lhs: Node, rhs: Node) -> Self {
+		NodeType::BinaryTree(ctype, tk_ty, Some(Box::new(lhs)), Some(Box::new(rhs)))
 	}
 
 	fn ret_init(lhs: Node) -> Self {
@@ -125,8 +130,8 @@ impl NodeType {
 		NodeType::Lvar(ty, stacksize)
 	}
 
-	fn deref_init(lhs: Node) -> Self {
-		NodeType::Deref(Box::new(lhs))
+	fn deref_init(ctype: Type, lhs: Node) -> Self {
+		NodeType::Deref(ctype, Box::new(lhs))
 	}
 }
 
@@ -137,15 +142,9 @@ pub struct Node {
 
 #[allow(dead_code)]
 impl Node {
-	pub fn new(tk_ty: TokenType) -> Self {
+	pub fn new_bit(ctype: Type, tk_ty: TokenType, lhs: Node, rhs: Node) -> Self {
 		Self {
-			op: NodeType::bit_new(tk_ty),
-		}
-	}
-
-	pub fn new_bit(tk_ty: TokenType, lhs: Node, rhs: Node) -> Self {
-		Self {
-			op: NodeType::bit_init(tk_ty, lhs, rhs),
+			op: NodeType::bit_init(ctype, tk_ty, lhs, rhs),
 		}
 	}
 	
@@ -233,9 +232,9 @@ impl Node {
 		}
 	}
 
-	pub fn new_deref(lhs: Node) -> Self {
+	pub fn new_deref(ctype: Type, lhs: Node) -> Self {
 		Self {
-			op: NodeType::deref_init(lhs)
+			op: NodeType::deref_init(ctype, lhs)
 		}
 	}
 }
@@ -280,7 +279,7 @@ fn term(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 
 fn unary(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 	if tokens[*pos].consume_ty(TokenStar, pos) {
-		return Node::new_deref(mul(tokens, pos));
+		return Node::new_deref(Type::new(Ty::INT, None), mul(tokens, pos));
 	}
 	return term(tokens, pos);
 }
@@ -295,7 +294,8 @@ fn mul(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 		
 		let ty = tokens[*pos-1].ty.clone();
 		let rhs = unary(tokens, pos);
-		lhs = Node::new_bit(ty, lhs, rhs);
+		let ctype = Type::new(Ty::INT, None);
+		lhs = Node::new_bit(ctype, ty, lhs, rhs);
 	}
 
 }
@@ -309,21 +309,24 @@ fn add(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 		}
 		let ty = tokens[*pos-1].ty.clone();
 		let rhs = mul(tokens, pos);
-		lhs = Node::new_bit(ty, lhs, rhs);
+		let ctype = Type::new(Ty::INT, None);
+		lhs = Node::new_bit(ctype, ty, lhs, rhs);
 	}
 	
 }
 
 fn rel(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 	let mut lhs = add(tokens, pos);
-
+	
 	loop {
 		if tokens[*pos].consume_ty(TokenLt, pos) {
-			lhs = Node::new_bit(TokenLt, lhs, add(tokens, pos));
+			let ctype = Type::new(Ty::INT, None);
+			lhs = Node::new_bit(ctype, TokenLt, lhs, add(tokens, pos));
 			continue;
 		}
 		if tokens[*pos].consume_ty(TokenRt, pos) {
-			lhs = Node::new_bit(TokenLt, add(tokens, pos), lhs);
+			let ctype = Type::new(Ty::INT, None);
+			lhs = Node::new_bit(ctype, TokenLt, add(tokens, pos), lhs);
 			continue;
 		}
 		return lhs;
@@ -364,7 +367,7 @@ fn assign(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 	return lhs;
 }
 
-fn typeis(tokens: &Vec<Token>, pos: &mut usize) -> Type {
+fn ctype(tokens: &Vec<Token>, pos: &mut usize) -> Type {
 	tokens[*pos].assert_ty(TokenInt, pos);
 	let mut ty = Type::new(Ty::INT, None);
 	while tokens[*pos].consume_ty(TokenStar, pos) {
@@ -374,7 +377,7 @@ fn typeis(tokens: &Vec<Token>, pos: &mut usize) -> Type {
 }
 
 fn decl(tokens: &Vec<Token>, pos: &mut usize) -> Node {
-	let ty = typeis(tokens, pos);
+	let ty = ctype(tokens, pos);
 	let name = String::from(&tokens[*pos].input[..tokens[*pos].val as usize]);
 	tokens[*pos].assert_ty(TokenIdent, pos);
 	if tokens[*pos].consume_ty(TokenEq, pos) {
@@ -470,7 +473,7 @@ pub fn compound_stmt(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 pub fn param(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 	
 	// type
-	let ty = typeis(tokens, pos);
+	let ty = ctype(tokens, pos);
 
 	// identifier
 	let name = String::from(&tokens[*pos].input[..tokens[*pos].val as usize]);

@@ -1,4 +1,5 @@
 use super::parse::{*, NodeType::*};
+use super::token::TokenType::*;
 
 use std::collections::HashMap;
 use std::sync::Mutex;
@@ -9,14 +10,14 @@ lazy_static! {
 }
 
 pub struct Var {
-	typeis: Type,
+	ctype: Type,
 	offset: usize,
 }
 
 impl Var {
-	pub fn new(typeis: Type, offset: usize) -> Self {
+	pub fn new(ctype: Type, offset: usize) -> Self {
 		Self {
-			typeis,
+			ctype,
 			offset,
 		}
 	}
@@ -25,11 +26,34 @@ impl Var {
 pub fn walk(node: &Node) -> Node {
 	match &node.op {
 		Num(val) => { return Node::new_num(*val); }
-		BinaryTree(ty, lhs, rhs)  => {
-			return Node::new_bit(ty.clone(),
-				walk(lhs.as_ref().unwrap()), 
-				walk(rhs.as_ref().unwrap())
-			);
+		BinaryTree(_ctype, op, lhs, rhs)  => {
+			let lhs2 = walk(lhs.as_ref().unwrap());
+			let rhs2 = walk(rhs.as_ref().unwrap());
+			let mut ctype = Type::new(Ty::INT, None);
+			match &lhs2.op {
+				NodeType::Lvar(cty, _) | NodeType::BinaryTree(cty, _, _, _) | NodeType::Deref(cty, _) => {
+					ctype = cty.clone();
+				}
+				_ => {}
+			}
+			match op {
+				TokenAdd | TokenSub => {
+					match &rhs2.op {
+						NodeType::Lvar(cty, _) | NodeType::BinaryTree(cty, _, _, _) | NodeType::Deref(cty, _) if cty.ty == Ty::PTR => {
+							match &lhs2.op {
+								NodeType::Lvar(cty2, _) | NodeType::BinaryTree(cty2, _, _, _) | NodeType::Deref(cty2, _) if cty2.ty == Ty::PTR => {
+									panic!("pointer +- pointer is not defind.");
+								}
+								_ => {}
+							}
+							ctype = cty.clone();
+						}
+						_ => {}
+					}
+				}
+				_ => {}
+			}
+			return Node::new_bit(ctype, op.clone(), lhs2, rhs2);
 		}
 		Ret(lhs) => { return Node::new_ret(walk(lhs)); }
 		Expr(lhs) => { return Node::new_expr(walk(lhs)); }
@@ -42,7 +66,7 @@ pub fn walk(node: &Node) -> Node {
 		}
 		Ident(name) => {
 			if let Some(var) = VARS.lock().unwrap().get(name) {
-				return Node::new_lvar(var.typeis.clone(), var.offset);
+				return Node::new_lvar(var.ctype.clone(), var.offset);
 			}
 			panic!("\"{}\" is not defined.", name);
 		}
@@ -74,7 +98,7 @@ pub fn walk(node: &Node) -> Node {
 		For(init, cond, inc, body) => {
 			return Node::new_for(walk(init), walk(cond), walk(inc), walk(body));
 		}
-		VarDef(typeis, name, _, init) => {
+		VarDef(ctype, name, _, init) => {
 			let mut rexpr = None;
 			if let Some(rhs) = init {
 				rexpr = Some(walk(rhs));
@@ -83,11 +107,24 @@ pub fn walk(node: &Node) -> Node {
 			let offset = *STACKSIZE.lock().unwrap();
 			VARS.lock().unwrap().insert(
 				name.clone(),
-				Var::new(typeis.clone(), offset),
+				Var::new(ctype.clone(), offset),
 			);
-			return Node::new_vardef(typeis.clone(), name.clone(), offset, rexpr)
+			return Node::new_vardef(ctype.clone(), name.clone(), offset, rexpr)
 		}
-		Deref(lhs) => { return Node::new_deref(walk(lhs)); }
+		Deref(_, lhs) => { 
+			let lhs2 = walk(lhs);
+			match &lhs2.op {
+				NodeType::Lvar(cty, _) | NodeType::BinaryTree(cty, _, _, _) | NodeType::Deref(cty, _) if cty.ty == Ty::PTR => { 
+					match &cty.ptr_of {
+						Some(cty2) => {
+							return Node::new_deref(cty2.as_ref().clone(), lhs2);
+						}
+						None => { panic!("cannot refer to no pointer. "); }
+					}
+				}
+				_ => { panic!("operand must be a pointer."); }
+			}
+		}
 		_ => { panic!("sema error at: {:?}", node); }
 	}
 }

@@ -10,18 +10,19 @@ main:
 	push r15
 	mov r10, rbp
 	sub r10, 8
-	mov r11, 42
+	mov r11, 2
 	mov rdi, r11
 	push r10
 	push r11
 	mov rax, 0
-	call alloc
+	call alloc_ptr_ptr
 	pop r11
 	pop r10
 	mov rbx, rax
 	mov [r10], rbx
 	mov r10, rbp
 	sub r10, 8
+	mov r10, [r10]
 	mov r10, [r10]
 	mov r10, [r10]
 	mov rax, r10
