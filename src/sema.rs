@@ -30,27 +30,16 @@ pub fn walk(node: &Node, decay: bool) -> Node {
 			let lhs2 = walk(lhs.as_ref().unwrap(), true);
 			let rhs2 = walk(rhs.as_ref().unwrap(), true);
 			let mut ctype = Type::new(Ty::INT, None, None, 0);
-			match &lhs2.op {
-				NodeType::Lvar(cty, _) | NodeType::BinaryTree(cty, _, _, _) | NodeType::Deref(cty, _) | NodeType::Addr(cty, _) => {
-					ctype = cty.clone();
-				}
-				_ => {}
+			if lhs2.hasctype(){
+				ctype = lhs2.nodesctype();
 			}
 			match op {
 				TokenAdd | TokenSub => {
-					match &rhs2.op {
-						NodeType::Lvar(cty, _) | NodeType::BinaryTree(cty, _, _, _) 
-						| NodeType::Deref(cty, _) | NodeType::Addr(cty, _) if cty.ty == Ty::PTR => {
-							match &lhs2.op {
-								NodeType::Lvar(cty2, _) | NodeType::BinaryTree(cty2, _, _, _) 
-								| NodeType::Deref(cty2, _) | NodeType::Addr(cty2, _) if cty2.ty == Ty::PTR => {
-									panic!("pointer +- pointer is not defind.");
-								}
-								_ => {}
-							}
-							ctype = cty.clone();
+					if rhs2.hasctype() && rhs2.nodesctype().ty == Ty::PTR {
+						if lhs2.hasctype() && lhs2.nodesctype().ty == Ty::PTR {
+							panic!("pointer +- pointer is not defind.");
 						}
-						_ => {}
+						ctype = rhs2.nodesctype();
 					}
 				}
 				_ => {}
@@ -128,12 +117,11 @@ pub fn walk(node: &Node, decay: bool) -> Node {
 		}
 		Deref(_, lhs) => { 
 			let lhs2 = walk(lhs, true);
-			match &lhs2.op {
-				NodeType::Lvar(cty, _) | NodeType::BinaryTree(cty, _, _, _) | NodeType::Deref(cty, _) | NodeType::Addr(cty, _)  => { 
-					return Node::new_deref(cty.ptr_of.as_ref().unwrap().as_ref().clone(), lhs2);
-				}
-				_ => { panic!("operand must be a pointer."); }
+			let lhs2cty = lhs2.nodesctype();
+			if lhs2.hasctype() && lhs2cty.ty == Ty::PTR {
+				return Node::new_deref(lhs2cty.ptr_of.as_ref().unwrap().as_ref().clone(), lhs2);
 			}
+			{ panic!("operand must be a pointer."); }
 		}
 		_ => { panic!("sema error at: {:?}", node); }
 	}

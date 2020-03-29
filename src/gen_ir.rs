@@ -339,12 +339,9 @@ fn gen_expr(node: &Node, code: &mut Vec<Ir>) -> usize {
 			}
 			return r;
 		}
-		NodeType::Deref(ctype, lhs) => {
+		NodeType::Deref(_, lhs) => {
 			let r = gen_expr(lhs, code);
-			match ctype.ty {
-				Ty::PTR => { code.push(Ir::new(IrLoad64, r, r)); }
-				_ => { code.push(Ir::new(IrLoad32, r, r)); }
-			}
+			code.push(Ir::new(IrLoad64, r, r));
 			return r;
 		}
 		NodeType::Addr(_, lhs) => {

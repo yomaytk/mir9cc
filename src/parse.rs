@@ -163,6 +163,22 @@ impl Node {
 		}
 	}
 
+	pub fn hasctype(&self) -> bool {
+		match &self.op {
+			NodeType::Lvar(_, _) | NodeType::BinaryTree(_, _, _, _) 
+			| NodeType::Deref(_, _) | NodeType::Addr(_, _) => { return true; }
+			_ => { return false; }
+		}
+	}
+
+	pub fn nodesctype(&self) -> Type {
+		match &self.op {
+			NodeType::Lvar(ctype, _) | NodeType::BinaryTree(ctype, _, _, _) 
+			| NodeType::Deref(ctype, _) | NodeType::Addr(ctype, _) => { return ctype.clone(); }
+			_ => { panic!("nodesctype fun error."); }
+		} 
+	}
+
 	pub fn new_bit(ctype: Type, tk_ty: TokenType, lhs: Node, rhs: Node) -> Self {
 		Self {
 			op: NodeType::bit_init(ctype, tk_ty, lhs, rhs),

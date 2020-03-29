@@ -24,7 +24,7 @@ main:
 	mov [r10], r11d
 	mov r10, rbp
 	sub r10, 8
-	mov r10d, [r10]
+	mov r10, [r10]
 	mov r11, rbp
 	sub r11, 8
 	mov rbx, 1
@@ -33,7 +33,7 @@ main:
 	mul rbx
 	mov rbx, rax
 	add r11, rbx
-	mov r11d, [r11]
+	mov r11, [r11]
 	add r10, r11
 	mov rax, r10
 	jmp .Lend0
