@@ -10,21 +10,31 @@ main:
 	push r15
 	mov r10, rbp
 	sub r10, 8
-	mov r11, 2
-	mov rdi, r11
-	push r10
-	push r11
-	mov rax, 0
-	call alloc_ptr_ptr
-	pop r11
-	pop r10
-	mov rbx, rax
-	mov [r10], rbx
+	mov r11, 1
+	mov [r10], r11d
 	mov r10, rbp
 	sub r10, 8
-	mov r10, [r10]
-	mov r10, [r10]
-	mov r10, [r10]
+	mov r11, 1
+	mov rbx, 4
+	mov rax, rbx
+	mul r11
+	mov r11, rax
+	add r10, r11
+	mov r11, 2
+	mov [r10], r11d
+	mov r10, rbp
+	sub r10, 8
+	mov r10d, [r10]
+	mov r11, rbp
+	sub r11, 8
+	mov rbx, 1
+	mov r12, 4
+	mov rax, r12
+	mul rbx
+	mov rbx, rax
+	add r11, rbx
+	mov r11d, [r11]
+	add r10, r11
 	mov rax, r10
 	jmp .Lend0
 .Lend0:

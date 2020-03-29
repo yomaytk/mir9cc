@@ -34,11 +34,14 @@ lazy_static! {
 		(IrOp::IrLabel, IrInfo::new("", IrType::Label)),
 		(IrOp::IrUnless, IrInfo::new("UNLESS", IrType::RegLabel)),
 		(IrOp::IrRet, IrInfo::new("RET", IrType::Reg)),
-		(IrOp::IrLoad, IrInfo::new("LOAD", IrType::RegReg)),
-		(IrOp::IrStore, IrInfo::new("STORE", IrType::RegReg)),
+		(IrOp::IrLoad32, IrInfo::new("LOAD32", IrType::RegReg)),
+		(IrOp::IrLoad64, IrInfo::new("LOAD64", IrType::RegReg)),
+		(IrOp::IrStore32, IrInfo::new("STORE32", IrType::RegReg)),
+		(IrOp::IrStore64, IrInfo::new("STORE64", IrType::RegReg)),
 		(IrOp::IrJmp, IrInfo::new("JMP", IrType::Label)),
 		(IrOp::IrCall { name: format!(""), len: 0, args: vec![] }, IrInfo::new("CALL", IrType::Call)),
-		(IrOp::IrSaveArgs, IrInfo::new("SAVEARGS", IrType::Imm)),
+		(IrOp::IrStoreArgs32, IrInfo::new("STOREARGS32", IrType::ImmImm)),
+		(IrOp::IrStoreArgs64, IrInfo::new("STOREARGS64", IrType::ImmImm)),
 		(IrOp::IrKill, IrInfo::new("KILL", IrType::Reg)),
 		(IrOp::IrNop, IrInfo::new("NOP", IrType::NoArg))
 	]);
@@ -57,13 +60,16 @@ pub enum IrOp {
 	IrDiv,
 	IrRet,
 	IrExpr,
-	IrStore,
-	IrLoad,
+	IrStore32,
+	IrStore64,
+	IrLoad32,
+	IrLoad64,
 	IrLabel,
 	IrUnless,
 	IrJmp,
 	IrCall { name: String, len: usize, args: Vec<usize> },
-	IrSaveArgs,
+	IrStoreArgs32,
+	IrStoreArgs64,
 	IrLt,
 	IrKill,
 	IrNop,
@@ -132,6 +138,7 @@ impl Ir {
 				}
 			}
 			Imm => { format!("{} {}", irinfo.name, self.lhs) },
+			ImmImm => { format!("{} {} {}", irinfo.name, self.lhs, self.rhs) }
 		}
 	}
 }
@@ -146,6 +153,7 @@ pub enum IrType {
 	RegLabel,
 	Call,
 	Imm,
+	ImmImm,
 }
 
 impl fmt::Display for IrType {
@@ -159,6 +167,7 @@ impl fmt::Display for IrType {
 			RegLabel => { write!(f, "RegLabel") },
 			Call => { write!(f, "Call") },
 			Imm => { write!(f, "Imm") },
+			ImmImm => { write!(f, "ImmImm") },
 		}
 	}
 }
@@ -220,7 +229,10 @@ fn gen_lval(node: &Node, code: &mut Vec<Ir>) -> usize {
 			code.push(Ir::new(IrMov, r1, 0)); 
 			code.push(Ir::new(IrSubImm, r1, *off));
 			return r1;
-		},
+		}
+		NodeType::Deref(_, expr) => {
+			return gen_expr(expr, code);
+		}
 		_ => { panic!("not an lvalue")}
 	}
 }
@@ -273,11 +285,9 @@ fn gen_expr(node: &Node, code: &mut Vec<Ir>) -> usize {
 				TokenAdd | TokenSub if ctype.ty == Ty::PTR => {
 					if let Some(lhs2) = lhs {
 						match &lhs2.op {
-							NodeType::Lvar(ctype, _) | NodeType::BinaryTree(ctype, _, _, _) => {
-								let mut size_of = 200;
-								if let Some(ptr) = &ctype.ptr_of {
-									size_of = ptr.ty.clone().size_of();
-								}
+							NodeType::Lvar(ctype, _) | NodeType::BinaryTree(ctype, _, _, _) 
+							| NodeType::Deref(ctype, _) | NodeType::Addr(ctype, _) => {
+								let size_of = ctype.ptr_of.as_ref().unwrap().size_of();
 								*REGNO.lock().unwrap() += 1;
 								let r1 = *REGNO.lock().unwrap();
 								code.push(Ir::new(IrImm, r1, size_of));
@@ -294,15 +304,21 @@ fn gen_expr(node: &Node, code: &mut Vec<Ir>) -> usize {
 			kill(rhi, code);
 			return lhi;
 		},
-		NodeType::Lvar(_, _) => {
+		NodeType::Lvar(ctype, _) => {
 			let lhi = gen_lval(node, code);
-			code.push(Ir::new(IrLoad, lhi, lhi));
+			match ctype.ty {
+				Ty::PTR => { code.push(Ir::new(IrLoad64, lhi, lhi)); }
+				_ => { code.push(Ir::new(IrLoad32, lhi, lhi)); }
+			}
 			return lhi;
 		},
-		NodeType::EqTree(lhs, rhs) => {
+		NodeType::EqTree(ctype, lhs, rhs) => {
 			let lhi = gen_lval(lhs, code);
 			let rhi = gen_expr(rhs, code);
-			code.push(Ir::new(IrStore, lhi, rhi));
+			match ctype.ty {
+				Ty::PTR => { code.push(Ir::new(IrStore64, lhi, rhi)); }
+				_ => { code.push(Ir::new(IrStore32, lhi, rhi)); }
+			}
 			kill(rhi, code);
 			return lhi;
 		},
@@ -323,10 +339,16 @@ fn gen_expr(node: &Node, code: &mut Vec<Ir>) -> usize {
 			}
 			return r;
 		}
-		NodeType::Deref(_, lhs) => {
+		NodeType::Deref(ctype, lhs) => {
 			let r = gen_expr(lhs, code);
-			code.push(Ir::new(IrLoad, r, r));
+			match ctype.ty {
+				Ty::PTR => { code.push(Ir::new(IrLoad64, r, r)); }
+				_ => { code.push(Ir::new(IrLoad32, r, r)); }
+			}
 			return r;
+		}
+		NodeType::Addr(_, lhs) => {
+			return gen_lval(lhs, code);
 		}
 		_ => { panic!("gen_expr NodeType error at {:?}", node.op); }
 	}
@@ -383,14 +405,17 @@ fn gen_stmt(node: &Node, code: &mut Vec<Ir>) {
 			code.push(Ir::new(IrJmp, x, 0));
 			label(y, code);
 		}
-		NodeType::VarDef(_, _, off, init) => {
+		NodeType::VarDef(ctype, _, off, init) => {
 			if let Some(rhs) = init {
 				*REGNO.lock().unwrap() += 1;
 				let r1 = *REGNO.lock().unwrap();
 				code.push(Ir::new(IrMov, r1, 0));
 				code.push(Ir::new(IrSubImm, r1, *off));
 				let r2 = gen_expr(rhs, code);
-				code.push(Ir::new(IrStore, r1, r2));
+				match ctype.ty {
+					Ty::PTR => { code.push(Ir::new(IrStore64, r1, r2)); }
+					_ => { code.push(Ir::new(IrStore32, r1, r2)); }
+				}
 				kill(r1, code);
 				kill(r2, code);
 			}
@@ -411,7 +436,17 @@ pub fn gen_ir(funcs: &Vec<Node>) -> Vec<Function> {
 		
 		match &funode.op {
 			NodeType::Func(name, args, body, stacksize) => {
-				code.push(Ir::new(IrSaveArgs, args.len(), 0));
+				for i in 0..args.len() {
+					match &args[i].op {
+						NodeType::VarDef(ctype, _, offset, _) => {
+							match ctype.ty {
+								Ty::PTR => { code.push(Ir::new(IrStoreArgs64, *offset, i)); }
+								_ => { code.push(Ir::new(IrStoreArgs32, *offset, i)); } 
+							}
+						}
+						_ => { panic!("Illegal function parameter."); }
+					}
+				}
 				gen_stmt(body, &mut code);
 				let func = Function::new(name.clone(), code, *stacksize);
 				v.push(func);

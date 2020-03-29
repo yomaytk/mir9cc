@@ -47,7 +47,7 @@ pub fn visit(reg_map: &mut Vec<i32>, used: &mut Vec<bool>, irs: &mut Vec<Ir>) {
 					_ => { panic!("alloc_regs call error"); }
 				}
 			}
-			Label | NoArg | Imm => {}
+			Label | NoArg | Imm | ImmImm => {}
 		}
 		if ir.op == IrKill {
 			assert!(used[ir.lhs]);

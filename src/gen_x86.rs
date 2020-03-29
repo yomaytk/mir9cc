@@ -1,8 +1,10 @@
 use super::gen_ir::{*, IrOp::*};
 
 pub static REG: [&str; 8] = ["rbp", "r10", "r11", "rbx", "r12", "r13", "r14", "r15"];
-pub static ARGREG: [&str; 6] = ["rdi", "rsi", "rdx", "rcx", "r8", "r9"];
 pub static REG8: [&str; 8] = ["bpl", "r10b", "r11b", "bl", "r12b", "r13b", "r14b", "r15b"];
+pub static REG32: [&str; 8] = ["ebp", "r10d", "r11d", "ebx", "r12d", "r13d", "r14d", "r15d"];
+pub static ARGREG64: [&str; 6] = ["rdi", "rsi", "rdx", "rcx", "r8", "r9"];
+pub static ARGREG32: [&str; 6] = ["edi", "esi", "edx", "ecx", "r8d", "r9d"];
 
 pub fn gen(fun: &Function, label: usize) {
 
@@ -51,10 +53,16 @@ pub fn gen(fun: &Function, label: usize) {
 				println!("\tmov rax, {}", REG[ir.lhs]);
 				println!("\tjmp {}", ret);
 			}
-			IrStore => {
+			IrStore32 => {
+				println!("\tmov [{}], {}", REG[ir.lhs], REG32[ir.rhs]);
+			}
+			IrStore64 => {
 				println!("\tmov [{}], {}", REG[ir.lhs], REG[ir.rhs]);
 			}
-			IrLoad => {
+			IrLoad32 => {
+				println!("\tmov {}, [{}]", REG32[ir.lhs], REG[ir.rhs]);
+			}
+			IrLoad64 => {
 				println!("\tmov {}, [{}]", REG[ir.lhs], REG[ir.rhs]);
 			}
 			IrUnless => {
@@ -70,7 +78,7 @@ pub fn gen(fun: &Function, label: usize) {
 			IrCall { name, len , args } => {
 
 				for i in 0..*len {
-					println!("\tmov {}, {}", ARGREG[i], REG[args[i]]);
+					println!("\tmov {}, {}", ARGREG64[i], REG[args[i]]);
 				}
 				
 				println!("\tpush r10");
@@ -82,11 +90,11 @@ pub fn gen(fun: &Function, label: usize) {
 				
 				println!("\tmov {}, rax", REG[ir.lhs]);
 			}
-			IrSaveArgs => {
-				let len = ir.lhs;
-				for i in 0..len {
-					println!("\tmov [rbp-{}], {}", (i+1)*8, ARGREG[i]);
-				}
+			IrStoreArgs32 => {
+				println!("\tmov [rbp-{}], {}", ir.lhs, ARGREG32[ir.rhs]);
+			}
+			IrStoreArgs64 => {
+				println!("\tmov [rbp-{}], {}", ir.lhs, ARGREG64[ir.rhs]);
 			}
 			IrLt => {
 				println!("\tcmp {}, {}", REG[ir.lhs], REG[ir.rhs]);

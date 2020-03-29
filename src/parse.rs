@@ -10,7 +10,7 @@ pub enum NodeType {
 	Expr(Box<Node>),
 	CompStmt(Vec<Node>),
 	Ident(String),
-	EqTree(Box<Node>, Box<Node>),
+	EqTree(Type, Box<Node>, Box<Node>),
 	IfThen(Box<Node>, Box<Node>, Option<Box<Node>>),
 	Call(String, Vec<Node>),
 	Func(String, Vec<Node>, Box<Node>, usize),
@@ -20,40 +20,54 @@ pub enum NodeType {
 	VarDef(Type, String, usize, Option<Box<Node>>),
 	Lvar(Type, usize),
 	Deref(Type, Box<Node>),
+	Addr(Type, Box<Node>),
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Ty {
 	INT,
 	PTR,
-}
-
-impl Ty {
-	pub fn size_of(self) -> usize {
-		match self {
-			Ty::INT => { return 4; }
-			Ty::PTR => { return 8; }
-		}
-	}
+	ARY,
 }
 
 #[derive(Debug, Clone)]
 pub struct Type {
 	pub ty: Ty,
 	pub ptr_of: Option<Box<Type>>,
+	pub ary_of: Option<Box<Type>>,
+	pub len: usize,
 }
 
 impl Type {
-	pub fn new(ty: Ty, ptr_of: Option<Box<Type>>) -> Self {
+	pub fn new(ty: Ty, ptr_of: Option<Box<Type>>, ary_of: Option<Box<Type>>, len: usize) -> Self {
 		Self {
 			ty,
 			ptr_of,
+			ary_of,
+			len,
+		}
+	}
+	pub fn size_of(&self) -> usize {
+		match &self.ty {
+			Ty::INT => { return 4; }
+			Ty::PTR => { return 8; }
+			Ty::ARY => { return self.len * self.ary_of.as_ref().unwrap().size_of(); }
 		}
 	}
 	pub fn ptr_of(self) -> Self {
 		Self {
 			ty: Ty::PTR,
 			ptr_of: Some(Box::new(self)),
+			ary_of: None,
+			len: 0,
+		}
+	}
+	pub fn ary_of(self, len: usize) -> Self {
+		Self {
+			ty: Ty::ARY,
+			ptr_of: None,
+			ary_of: Some(Box::new(self)),
+			len,
 		}
 	}
 }
@@ -84,8 +98,8 @@ impl NodeType {
 		NodeType::Ident(s)
 	}
 
-	fn eq_init(lhs: Node, rhs: Node) -> Self {
-		NodeType::EqTree(Box::new(lhs), Box::new(rhs))
+	fn eq_init(ctype: Type, lhs: Node, rhs: Node) -> Self {
+		NodeType::EqTree(ctype, Box::new(lhs), Box::new(rhs))
 	}
 	
 	fn if_init(cond: Node, then: Node, elthen: Option<Node>) -> Self {
@@ -142,6 +156,13 @@ pub struct Node {
 
 #[allow(dead_code)]
 impl Node {
+	
+	pub fn addr_of(self, ctype: Type) -> Node {
+		Self {
+			op: NodeType::Addr(ctype.ptr_of(), Box::new(self))
+		}
+	}
+
 	pub fn new_bit(ctype: Type, tk_ty: TokenType, lhs: Node, rhs: Node) -> Self {
 		Self {
 			op: NodeType::bit_init(ctype, tk_ty, lhs, rhs),
@@ -178,9 +199,9 @@ impl Node {
 		}
 	}
 
-	pub fn new_eq(lhs: Node, rhs: Node) -> Self {
+	pub fn new_eq(ctype: Type, lhs: Node, rhs: Node) -> Self {
 		Self {
-			op: NodeType::eq_init(lhs, rhs)
+			op: NodeType::eq_init(ctype, lhs, rhs)
 		}
 	}
 
@@ -279,7 +300,7 @@ fn term(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 
 fn unary(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 	if tokens[*pos].consume_ty(TokenStar, pos) {
-		return Node::new_deref(Type::new(Ty::INT, None), mul(tokens, pos));
+		return Node::new_deref(Type::new(Ty::INT, None, None, 0), mul(tokens, pos));
 	}
 	return term(tokens, pos);
 }
@@ -294,7 +315,7 @@ fn mul(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 		
 		let ty = tokens[*pos-1].ty.clone();
 		let rhs = unary(tokens, pos);
-		let ctype = Type::new(Ty::INT, None);
+		let ctype = Type::new(Ty::INT, None, None, 0);
 		lhs = Node::new_bit(ctype, ty, lhs, rhs);
 	}
 
@@ -309,7 +330,7 @@ fn add(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 		}
 		let ty = tokens[*pos-1].ty.clone();
 		let rhs = mul(tokens, pos);
-		let ctype = Type::new(Ty::INT, None);
+		let ctype = Type::new(Ty::INT, None, None, 0);
 		lhs = Node::new_bit(ctype, ty, lhs, rhs);
 	}
 	
@@ -320,12 +341,12 @@ fn rel(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 	
 	loop {
 		if tokens[*pos].consume_ty(TokenLt, pos) {
-			let ctype = Type::new(Ty::INT, None);
+			let ctype = Type::new(Ty::INT, None, None, 0);
 			lhs = Node::new_bit(ctype, TokenLt, lhs, add(tokens, pos));
 			continue;
 		}
 		if tokens[*pos].consume_ty(TokenRt, pos) {
-			let ctype = Type::new(Ty::INT, None);
+			let ctype = Type::new(Ty::INT, None, None, 0);
 			lhs = Node::new_bit(ctype, TokenLt, add(tokens, pos), lhs);
 			continue;
 		}
@@ -359,17 +380,18 @@ fn logor(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 
 fn assign(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 	let mut lhs = logor(tokens, pos);
+	let ty = Type::new(Ty::INT, None, None, 0);
 
 	if tokens[*pos].consume_ty(TokenEq, pos) {
 		let rhs = logor(tokens, pos);
-		lhs = Node::new_eq(lhs, rhs);
+		lhs = Node::new_eq(ty, lhs, rhs);
 	}
 	return lhs;
 }
 
 fn ctype(tokens: &Vec<Token>, pos: &mut usize) -> Type {
 	tokens[*pos].assert_ty(TokenInt, pos);
-	let mut ty = Type::new(Ty::INT, None);
+	let mut ty = Type::new(Ty::INT, None, None, 0);
 	while tokens[*pos].consume_ty(TokenStar, pos) {
 		ty = ty.ptr_of();
 	}
@@ -377,9 +399,30 @@ fn ctype(tokens: &Vec<Token>, pos: &mut usize) -> Type {
 }
 
 fn decl(tokens: &Vec<Token>, pos: &mut usize) -> Node {
-	let ty = ctype(tokens, pos);
+	// declaratoin type
+	let mut ty = ctype(tokens, pos);
+
+	// identifier
 	let name = String::from(&tokens[*pos].input[..tokens[*pos].val as usize]);
 	tokens[*pos].assert_ty(TokenIdent, pos);
+
+	let mut ary_size = vec![];
+	// array declaration
+	while tokens[*pos].consume_ty(TokenRightmiddleBrace, pos) {
+		let len = term(tokens, pos);
+		if let NodeType::Num(val) = &len.op {
+			ary_size.push(*val as usize);
+			tokens[*pos].assert_ty(TokenLeftmiddleBrace, pos);
+			continue;
+		}
+		panic!("array declaration is invalid at {}.", tokens[*pos].input);
+	}
+	if ary_size.len() > 0 {
+		for i in (0..ary_size.len()).rev() {
+			ty = ty.ary_of(ary_size[i]);
+		}
+	}
+
 	if tokens[*pos].consume_ty(TokenEq, pos) {
 		let rhs = assign(tokens, pos);
 		tokens[*pos].assert_ty(TokenSemi, pos);
