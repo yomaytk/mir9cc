@@ -147,6 +147,10 @@ impl NodeType {
 	fn deref_init(ctype: Type, lhs: Node) -> Self {
 		NodeType::Deref(ctype, Box::new(lhs))
 	}
+
+	fn addr_init(ctype: Type, lhs: Node) -> Self {
+		NodeType::Addr(ctype, Box::new(lhs))
+	}
 }
 
 #[derive(Debug)]
@@ -157,12 +161,6 @@ pub struct Node {
 #[allow(dead_code)]
 impl Node {
 	
-	pub fn addr_of(self, ctype: Type) -> Node {
-		Self {
-			op: NodeType::Addr(ctype.ptr_of(), Box::new(self))
-		}
-	}
-
 	pub fn hasctype(&self) -> bool {
 		match &self.op {
 			NodeType::Lvar(_, _) | NodeType::BinaryTree(_, _, _, _) 
@@ -274,6 +272,12 @@ impl Node {
 			op: NodeType::deref_init(ctype, lhs)
 		}
 	}
+
+	pub fn new_addr(ctype: Type, lhs: Node) -> Self {
+		Self {
+			op: NodeType::addr_init(ctype, lhs)
+		}
+	}
 }
 
 fn term(tokens: &Vec<Token>, pos: &mut usize) -> Node {
@@ -317,6 +321,9 @@ fn term(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 fn unary(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 	if tokens[*pos].consume_ty(TokenStar, pos) {
 		return Node::new_deref(Type::new(Ty::INT, None, None, 0), mul(tokens, pos));
+	}
+	if tokens[*pos].consume_ty(TokenAmpersand, pos) {
+		return Node::new_addr(Type::new(Ty::INT, None, None, 0), mul(tokens, pos));
 	}
 	return term(tokens, pos);
 }

@@ -58,7 +58,7 @@ pub fn walk(node: &Node, decay: bool) -> Node {
 		Ident(name) => {
 			if let Some(var) = VARS.lock().unwrap().get(name) {
 				if decay && var.ctype.ty == Ty::ARY {
-					return Node::addr_of(Node::new_lvar(var.ctype.clone(), var.offset), var.ctype.ary_of.as_ref().unwrap().as_ref().clone());
+					return Node::new_addr(var.ctype.ary_of.as_ref().unwrap().as_ref().clone().ptr_of(), Node::new_lvar(var.ctype.clone(), var.offset));
 				} else {
 					return Node::new_lvar(var.ctype.clone(), var.offset);
 				}
@@ -117,11 +117,17 @@ pub fn walk(node: &Node, decay: bool) -> Node {
 		}
 		Deref(_, lhs) => { 
 			let lhs2 = walk(lhs, true);
-			let lhs2cty = lhs2.nodesctype();
-			if lhs2.hasctype() && lhs2cty.ty == Ty::PTR {
-				return Node::new_deref(lhs2cty.ptr_of.as_ref().unwrap().as_ref().clone(), lhs2);
+			if lhs2.hasctype() && lhs2.nodesctype().ty == Ty::PTR {
+				return Node::new_deref(lhs2.nodesctype().ptr_of.as_ref().unwrap().as_ref().clone(), lhs2);
 			}
 			{ panic!("operand must be a pointer."); }
+		}
+		Addr(_, lhs) => {
+			let lhs2 = walk(lhs, true);
+			if lhs2.hasctype() {
+				return Node::new_addr(lhs2.nodesctype().ptr_of(), lhs2);
+			}
+			panic!("Address values ​​other than variables cannot be calculated.");
 		}
 		_ => { panic!("sema error at: {:?}", node); }
 	}
