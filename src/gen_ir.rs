@@ -34,12 +34,15 @@ lazy_static! {
 		(IrOp::IrLabel, IrInfo::new("", IrType::Label)),
 		(IrOp::IrUnless, IrInfo::new("UNLESS", IrType::RegLabel)),
 		(IrOp::IrRet, IrInfo::new("RET", IrType::Reg)),
+		(IrOp::IrLoad8, IrInfo::new("LOAD8", IrType::RegReg)),
 		(IrOp::IrLoad32, IrInfo::new("LOAD32", IrType::RegReg)),
 		(IrOp::IrLoad64, IrInfo::new("LOAD64", IrType::RegReg)),
+		(IrOp::IrStore8, IrInfo::new("STORE8", IrType::RegReg)),
 		(IrOp::IrStore32, IrInfo::new("STORE32", IrType::RegReg)),
 		(IrOp::IrStore64, IrInfo::new("STORE64", IrType::RegReg)),
 		(IrOp::IrJmp, IrInfo::new("JMP", IrType::Label)),
 		(IrOp::IrCall { name: format!(""), len: 0, args: vec![] }, IrInfo::new("CALL", IrType::Call)),
+		(IrOp::IrStoreArgs8, IrInfo::new("STOREARGS8", IrType::ImmImm)),
 		(IrOp::IrStoreArgs32, IrInfo::new("STOREARGS32", IrType::ImmImm)),
 		(IrOp::IrStoreArgs64, IrInfo::new("STOREARGS64", IrType::ImmImm)),
 		(IrOp::IrKill, IrInfo::new("KILL", IrType::Reg)),
@@ -60,14 +63,17 @@ pub enum IrOp {
 	IrDiv,
 	IrRet,
 	IrExpr,
+	IrStore8,
 	IrStore32,
 	IrStore64,
+	IrLoad8,
 	IrLoad32,
 	IrLoad64,
 	IrLabel,
 	IrUnless,
 	IrJmp,
 	IrCall { name: String, len: usize, args: Vec<usize> },
+	IrStoreArgs8,
 	IrStoreArgs32,
 	IrStoreArgs64,
 	IrLt,
@@ -307,8 +313,9 @@ fn gen_expr(node: &Node, code: &mut Vec<Ir>) -> usize {
 		NodeType::Lvar(ctype, _) => {
 			let lhi = gen_lval(node, code);
 			match ctype.ty {
-				Ty::PTR => { code.push(Ir::new(IrLoad64, lhi, lhi)); }
-				_ => { code.push(Ir::new(IrLoad32, lhi, lhi)); }
+				Ty::CHAR => { code.push(Ir::new(IrLoad8, lhi, lhi)); }
+				Ty::INT => { code.push(Ir::new(IrLoad32, lhi, lhi)); }
+				_ => { code.push(Ir::new(IrLoad64, lhi, lhi)); }
 			}
 			return lhi;
 		},
@@ -316,8 +323,9 @@ fn gen_expr(node: &Node, code: &mut Vec<Ir>) -> usize {
 			let lhi = gen_lval(lhs, code);
 			let rhi = gen_expr(rhs, code);
 			match ctype.ty {
-				Ty::PTR => { code.push(Ir::new(IrStore64, lhi, rhi)); }
-				_ => { code.push(Ir::new(IrStore32, lhi, rhi)); }
+				Ty::CHAR => { code.push(Ir::new(IrStore8, lhi, rhi)); }
+				Ty::INT => { code.push(Ir::new(IrStore32, lhi, rhi)); }
+				_ => { code.push(Ir::new(IrStore64, lhi, rhi)); }
 			}
 			kill(rhi, code);
 			return lhi;
@@ -410,8 +418,9 @@ fn gen_stmt(node: &Node, code: &mut Vec<Ir>) {
 				code.push(Ir::new(IrSubImm, r1, *off));
 				let r2 = gen_expr(rhs, code);
 				match ctype.ty {
-					Ty::PTR => { code.push(Ir::new(IrStore64, r1, r2)); }
-					_ => { code.push(Ir::new(IrStore32, r1, r2)); }
+					Ty::CHAR => { code.push(Ir::new(IrStore8, r1, r2)); }
+					Ty::INT => { code.push(Ir::new(IrStore32, r1, r2)); }
+					_ => { code.push(Ir::new(IrStore64, r1, r2)); }
 				}
 				kill(r1, code);
 				kill(r2, code);
@@ -437,8 +446,9 @@ pub fn gen_ir(funcs: &Vec<Node>) -> Vec<Function> {
 					match &args[i].op {
 						NodeType::VarDef(ctype, _, offset, _) => {
 							match ctype.ty {
-								Ty::PTR => { code.push(Ir::new(IrStoreArgs64, *offset, i)); }
-								_ => { code.push(Ir::new(IrStoreArgs32, *offset, i)); } 
+								Ty::CHAR => { code.push(Ir::new(IrStoreArgs8, *offset, i)); } 
+								Ty::INT => { code.push(Ir::new(IrStoreArgs32, *offset, i)); } 
+								_ => { code.push(Ir::new(IrStoreArgs64, *offset, i)); }
 							}
 						}
 						_ => { panic!("Illegal function parameter."); }

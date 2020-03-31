@@ -1,4 +1,21 @@
 use TokenType::*;
+use super::parse::{Type, Ty};
+
+lazy_static! {
+	pub static ref INT_TY: Type = Type {
+		ty: Ty::INT,
+		ptr_of: None,
+		ary_of: None,
+		len: 0,
+	};
+	pub static ref CHAR_TY: Type = Type {
+		ty: Ty::CHAR,
+		ptr_of: None,
+		ary_of: None,
+		len: 0,
+	};
+}
+
 
 pub static SIGNALS: [Signal; 18] = [
 	Signal::new("&&", TokenLogAnd),
@@ -49,6 +66,7 @@ pub enum TokenType {
 	TokenSizeof,
 	TokenFor,
 	TokenInt,
+	TokenChar,
 	TokenNoSignal,
 	TokenEof,
 }
@@ -61,7 +79,8 @@ impl From<String> for TokenType {
 			"else" => { TokenElse }
 			"for" => { TokenFor }
 			"int" => { TokenInt }
-			"sizeof" => { TokenSizeof}
+			"sizeof" => { TokenSizeof }
+			"char" => { TokenChar }
 			_ => { TokenIdent }
 		}
 	}
@@ -113,6 +132,12 @@ impl<'a> Token<'a> {
 			return true;
 		}
 		return false;
+	}
+	pub fn decl_type(&self, pos: &mut usize) -> Type {
+		*pos += 1;
+		if self.ty == TokenInt { return INT_TY.clone(); }
+		else if self.ty == TokenChar { return CHAR_TY.clone(); }
+		else { panic!("decralation type is invalid."); }
 	}
 }
 

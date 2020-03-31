@@ -1,6 +1,21 @@
 use super::token::*;
 use super::token::TokenType::*;
 
+lazy_static! {
+	pub static ref INT_TY: Type = Type {
+		ty: Ty::INT,
+		ptr_of: None,
+		ary_of: None,
+		len: 0,
+	};
+	pub static ref CHAR_TY: Type = Type {
+		ty: Ty::CHAR,
+		ptr_of: None,
+		ary_of: None,
+		len: 0,
+	};
+}
+
 #[allow(dead_code)]
 #[derive(Debug)]
 pub enum NodeType {
@@ -29,6 +44,7 @@ pub enum Ty {
 	INT,
 	PTR,
 	ARY,
+	CHAR
 }
 
 #[derive(Debug, Clone)]
@@ -53,6 +69,7 @@ impl Type {
 			Ty::INT => { return 4; }
 			Ty::PTR => { return 8; }
 			Ty::ARY => { return self.len * self.ary_of.as_ref().unwrap().size_of(); }
+			Ty::CHAR => { return 1; }
 		}
 	}
 	pub fn ptr_of(self) -> Self {
@@ -333,9 +350,8 @@ fn postfix(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 	let mut lhs = primary(tokens, pos);
 	while tokens[*pos].consume_ty(TokenRightmiddleBrace, pos)  {
 		let id = primary(tokens, pos);
-		let ctype = Type::new(Ty::INT, None, None, 0);
-		let lhs2 = Node::new_bit(ctype.clone(), TokenAdd, lhs, id);
-		lhs = Node::new_deref(ctype.clone(), lhs2);
+		let lhs2 = Node::new_bit(INT_TY.clone(), TokenAdd, lhs, id);
+		lhs = Node::new_deref(INT_TY.clone(), lhs2);
 		tokens[*pos].assert_ty(TokenLeftmiddleBrace, pos);
 	}
 	return lhs;
@@ -343,13 +359,13 @@ fn postfix(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 
 fn unary(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 	if tokens[*pos].consume_ty(TokenStar, pos) {
-		return Node::new_deref(Type::new(Ty::INT, None, None, 0), mul(tokens, pos));
+		return Node::new_deref(INT_TY.clone(), mul(tokens, pos));
 	}
 	if tokens[*pos].consume_ty(TokenAmpersand, pos) {
-		return Node::new_addr(Type::new(Ty::INT, None, None, 0), mul(tokens, pos));
+		return Node::new_addr(INT_TY.clone(), mul(tokens, pos));
 	}
 	if tokens[*pos].consume_ty(TokenSizeof, pos) {
-		return Node::new_sizeof(Type::new(Ty::INT, None, None, 0), 0, unary(tokens, pos));
+		return Node::new_sizeof(INT_TY.clone(), 0, unary(tokens, pos));
 	}
 	return postfix(tokens, pos);
 }
@@ -364,8 +380,7 @@ fn mul(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 		
 		let ty = tokens[*pos-1].ty.clone();
 		let rhs = unary(tokens, pos);
-		let ctype = Type::new(Ty::INT, None, None, 0);
-		lhs = Node::new_bit(ctype, ty, lhs, rhs);
+		lhs = Node::new_bit(INT_TY.clone(), ty, lhs, rhs);
 	}
 
 }
@@ -390,13 +405,11 @@ fn rel(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 	
 	loop {
 		if tokens[*pos].consume_ty(TokenLt, pos) {
-			let ctype = Type::new(Ty::INT, None, None, 0);
-			lhs = Node::new_bit(ctype, TokenLt, lhs, add(tokens, pos));
+			lhs = Node::new_bit(INT_TY.clone(), TokenLt, lhs, add(tokens, pos));
 			continue;
 		}
 		if tokens[*pos].consume_ty(TokenRt, pos) {
-			let ctype = Type::new(Ty::INT, None, None, 0);
-			lhs = Node::new_bit(ctype, TokenLt, add(tokens, pos), lhs);
+			lhs = Node::new_bit(INT_TY.clone(), TokenLt, add(tokens, pos), lhs);
 			continue;
 		}
 		return lhs;
@@ -429,18 +442,18 @@ fn logor(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 
 fn assign(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 	let mut lhs = logor(tokens, pos);
-	let ty = Type::new(Ty::INT, None, None, 0);
 
 	if tokens[*pos].consume_ty(TokenEq, pos) {
 		let rhs = logor(tokens, pos);
-		lhs = Node::new_eq(ty, lhs, rhs);
+		lhs = Node::new_eq(INT_TY.clone(), lhs, rhs);
 	}
 	return lhs;
 }
 
 fn ctype(tokens: &Vec<Token>, pos: &mut usize) -> Type {
-	tokens[*pos].assert_ty(TokenInt, pos);
-	let mut ty = Type::new(Ty::INT, None, None, 0);
+	
+	let mut ty = tokens[*pos].decl_type(pos);
+
 	while tokens[*pos].consume_ty(TokenStar, pos) {
 		ty = ty.ptr_of();
 	}
@@ -478,6 +491,7 @@ fn decl(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 	let name = String::from(&tokens[*pos].input[..tokens[*pos].val as usize]);
 	tokens[*pos].assert_ty(TokenIdent, pos);
 
+	// array decralation
 	ty = read_array(tokens, pos, ty);
 
 	if tokens[*pos].consume_ty(TokenEq, pos) {
@@ -543,7 +557,7 @@ pub fn stmt(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 			}
 			return Node::new_stmt(stmts);
 		}
-		TokenInt => {
+		TokenInt | TokenChar => {
 			return decl(tokens, pos);
 		}
 		_ => {
@@ -585,7 +599,7 @@ pub fn function(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 	
 	let mut args = vec![];
 	
-	if !tokens[*pos].consume_ty(TokenInt, pos) {
+	if !tokens[*pos].consume_ty(TokenInt, pos) && !tokens[*pos].consume_ty(TokenChar, pos) {
 		panic!("function should have type: at {}", tokens[*pos].input)
 	}
 
