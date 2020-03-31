@@ -67,6 +67,10 @@ pub fn walk(node: &Node, decay: bool) -> Node {
 		}
 		EqTree(_, lhs, rhs) => {
 			let lhs2 = walk(lhs, false);
+			match &lhs2.op {
+				NodeType::Lvar(_, _) | NodeType::Deref(_, _) => {}
+				_ => { panic!("not an lvalue"); }
+			}
 			let rhs2 = walk(rhs, true);
 			match &lhs2.op {
 				NodeType::VarDef(cty, _, _, _) | NodeType::Lvar(cty, _) | NodeType::Deref(cty, _) => {

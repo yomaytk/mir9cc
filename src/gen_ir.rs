@@ -223,15 +223,15 @@ fn label(r: usize, code: &mut Vec<Ir>) {
 fn gen_lval(node: &Node, code: &mut Vec<Ir>) -> usize {
 	
 	match &node.op {
+		NodeType::Deref(_, expr) => {
+			return gen_expr(expr, code);
+		}
 		NodeType::Lvar(_, off) => {
 			*REGNO.lock().unwrap() += 1;
 			let r1 = *REGNO.lock().unwrap();
 			code.push(Ir::new(IrMov, r1, 0)); 
 			code.push(Ir::new(IrSubImm, r1, *off));
 			return r1;
-		}
-		NodeType::Deref(_, expr) => {
-			return gen_expr(expr, code);
 		}
 		_ => { panic!("not an lvalue")}
 	}
