@@ -291,7 +291,7 @@ impl Node {
 	}
 }
 
-fn term(tokens: &Vec<Token>, pos: &mut usize) -> Node {
+fn primary(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 	
 	if tokens[*pos].consume_ty(TokenRightBrac, pos) {
 		let lhs = assign(tokens, pos);
@@ -326,7 +326,19 @@ fn term(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 		tokens[*pos].assert_ty(TokenLeftBrac, pos);
 		return Node::new_call(name, args);
 	}
-	panic!("parse.rs: term parse fail. and got {}", tokens[*pos].input);
+	panic!("parse.rs: primary parse fail. and got {}", tokens[*pos].input);
+}
+
+fn postfix(tokens: &Vec<Token>, pos: &mut usize) -> Node {
+	let mut lhs = primary(tokens, pos);
+	while tokens[*pos].consume_ty(TokenRightmiddleBrace, pos)  {
+		let id = primary(tokens, pos);
+		let ctype = Type::new(Ty::INT, None, None, 0);
+		let lhs2 = Node::new_bit(ctype.clone(), TokenAdd, lhs, id);
+		lhs = Node::new_deref(ctype.clone(), lhs2);
+		tokens[*pos].assert_ty(TokenLeftmiddleBrace, pos);
+	}
+	return lhs;
 }
 
 fn unary(tokens: &Vec<Token>, pos: &mut usize) -> Node {
@@ -339,7 +351,7 @@ fn unary(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 	if tokens[*pos].consume_ty(TokenSizeof, pos) {
 		return Node::new_sizeof(Type::new(Ty::INT, None, None, 0), 0, unary(tokens, pos));
 	}
-	return term(tokens, pos);
+	return postfix(tokens, pos);
 }
 
 fn mul(tokens: &Vec<Token>, pos: &mut usize) -> Node {
@@ -435,6 +447,29 @@ fn ctype(tokens: &Vec<Token>, pos: &mut usize) -> Type {
 	return ty;
 }
 
+fn read_array(tokens: &Vec<Token>, pos: &mut usize, ty: Type) -> Type {
+	let mut ary_size = vec![];
+	let mut ty = ty.clone();
+
+	while tokens[*pos].consume_ty(TokenRightmiddleBrace, pos) {
+		let len = primary(tokens, pos);
+		if let NodeType::Num(val) = &len.op {
+			ary_size.push(*val as usize);
+			tokens[*pos].assert_ty(TokenLeftmiddleBrace, pos);
+			continue;
+		}
+		panic!("array declaration is invalid at {}.", tokens[*pos].input);
+	}
+
+	if ary_size.len() > 0 {
+		for i in (0..ary_size.len()).rev() {
+			ty = ty.ary_of(ary_size[i]);
+		}
+	}
+
+	return ty;
+}
+
 fn decl(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 	// declaratoin type
 	let mut ty = ctype(tokens, pos);
@@ -443,22 +478,7 @@ fn decl(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 	let name = String::from(&tokens[*pos].input[..tokens[*pos].val as usize]);
 	tokens[*pos].assert_ty(TokenIdent, pos);
 
-	let mut ary_size = vec![];
-	// array declaration
-	while tokens[*pos].consume_ty(TokenRightmiddleBrace, pos) {
-		let len = term(tokens, pos);
-		if let NodeType::Num(val) = &len.op {
-			ary_size.push(*val as usize);
-			tokens[*pos].assert_ty(TokenLeftmiddleBrace, pos);
-			continue;
-		}
-		panic!("array declaration is invalid at {}.", tokens[*pos].input);
-	}
-	if ary_size.len() > 0 {
-		for i in (0..ary_size.len()).rev() {
-			ty = ty.ary_of(ary_size[i]);
-		}
-	}
+	ty = read_array(tokens, pos, ty);
 
 	if tokens[*pos].consume_ty(TokenEq, pos) {
 		let rhs = assign(tokens, pos);
