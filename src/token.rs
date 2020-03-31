@@ -46,6 +46,7 @@ pub enum TokenType {
 	TokenRightmiddleBrace,
 	TokenLeftmiddleBrace,
 	TokenAmpersand,
+	TokenSizeof,
 	TokenFor,
 	TokenInt,
 	TokenNoSignal,
@@ -60,6 +61,7 @@ impl From<String> for TokenType {
 			"else" => { TokenElse }
 			"for" => { TokenFor }
 			"int" => { TokenInt }
+			"sizeof" => { TokenSizeof}
 			_ => { TokenIdent }
 		}
 	}

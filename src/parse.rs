@@ -21,6 +21,7 @@ pub enum NodeType {
 	Lvar(Type, usize),
 	Deref(Type, Box<Node>),
 	Addr(Type, Box<Node>),
+	Sizeof(Type, usize, Box<Node>),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -151,6 +152,10 @@ impl NodeType {
 	fn addr_init(ctype: Type, lhs: Node) -> Self {
 		NodeType::Addr(ctype, Box::new(lhs))
 	}
+
+	fn sizeof_init(ctype: Type, val: usize, lhs: Node) -> Self {
+		NodeType::Sizeof(ctype, val, Box::new(lhs))
+	}
 }
 
 #[derive(Debug)]
@@ -278,6 +283,12 @@ impl Node {
 			op: NodeType::addr_init(ctype, lhs)
 		}
 	}
+
+	pub fn new_sizeof(ctype: Type, val: usize, lhs: Node) -> Self {
+		Self {
+			op: NodeType::sizeof_init(ctype, val, lhs)
+		}
+	}
 }
 
 fn term(tokens: &Vec<Token>, pos: &mut usize) -> Node {
@@ -324,6 +335,9 @@ fn unary(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 	}
 	if tokens[*pos].consume_ty(TokenAmpersand, pos) {
 		return Node::new_addr(Type::new(Ty::INT, None, None, 0), mul(tokens, pos));
+	}
+	if tokens[*pos].consume_ty(TokenSizeof, pos) {
+		return Node::new_sizeof(Type::new(Ty::INT, None, None, 0), 0, unary(tokens, pos));
 	}
 	return term(tokens, pos);
 }

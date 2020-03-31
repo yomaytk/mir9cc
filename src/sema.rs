@@ -129,6 +129,14 @@ pub fn walk(node: &Node, decay: bool) -> Node {
 			}
 			panic!("Address values ​​other than variables cannot be calculated.");
 		}
+		Sizeof(_, _, lhs) => {
+			let lhs2 = walk(lhs, false);
+			if lhs2.hasctype() {
+				let val = lhs2.nodesctype().size_of();
+				return Node::new_num(val as i32);
+			}
+			panic!("The size of an untyped value cannot be calculated.");
+		}
 		_ => { panic!("sema error at: {:?}", node); }
 	}
 }
