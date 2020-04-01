@@ -2,6 +2,7 @@ use super::token::{*, TokenType::*};
 use IrOp::*;
 use IrType::*;
 use super::parse::*;
+use super::sema::Var;
 
 use std::sync::Mutex;
 use std::collections::HashMap;
@@ -210,16 +211,16 @@ impl IrInfo {
 pub struct Function {
 	pub name: String,
 	pub irs: Vec<Ir>,
-	pub gvar: Vec<Node>,
+	pub gvars: Vec<Var>,
 	pub stacksize: usize,
 }
 
 impl Function {
-	fn new(name: String, irs: Vec<Ir>, gvar: Vec<Node>, stacksize: usize) -> Self {
+	fn new(name: String, irs: Vec<Ir>, gvars: Vec<Var>, stacksize: usize) -> Self {
 		Self {
 			name,
 			irs,
-			gvar,
+			gvars,
 			stacksize,
 		}
 	}

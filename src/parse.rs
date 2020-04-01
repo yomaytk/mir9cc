@@ -1,5 +1,6 @@
 use super::token::*;
 use super::token::TokenType::*;
+use super::sema::Var;
 
 lazy_static! {
 	pub static ref INT_TY: Type = Type {
@@ -28,7 +29,7 @@ pub enum NodeType {
 	EqTree(Type, Box<Node>, Box<Node>),
 	IfThen(Box<Node>, Box<Node>, Option<Box<Node>>),
 	Call(String, Vec<Node>),
-	Func(String, Vec<Node>, Vec<Node>, Box<Node>, usize),
+	Func(String, Vec<Var>, Vec<Node>, Box<Node>, usize),
 	LogAnd(Box<Node>, Box<Node>),
 	LogOr(Box<Node>, Box<Node>),
 	For(Box<Node>, Box<Node>, Box<Node>, Box<Node>),
@@ -137,8 +138,8 @@ impl NodeType {
 		NodeType::Call(ident, args)
 	}
 
-	fn func_init(ident: String, gvar: Vec<Node>, args: Vec<Node>, body: Node, stacksize: usize) -> Self {
-		NodeType::Func(ident, gvar, args, Box::new(body), stacksize)
+	fn func_init(ident: String, gvars: Vec<Var>, args: Vec<Node>, body: Node, stacksize: usize) -> Self {
+		NodeType::Func(ident, gvars, args, Box::new(body), stacksize)
 	}
 
 	fn logand_init(lhs: Node, rhs: Node) -> Self {
@@ -267,9 +268,9 @@ impl Node {
 		}
 	}
 
-	pub fn new_func(ident: String, gvar: Vec<Node>, args: Vec<Node>, body: Node, stacksize: usize) -> Self {
+	pub fn new_func(ident: String, gvars: Vec<Var>, args: Vec<Node>, body: Node, stacksize: usize) -> Self {
 		Self {
-			op: NodeType::func_init(ident, gvar, args, body, stacksize)
+			op: NodeType::func_init(ident, gvars, args, body, stacksize)
 		}
 	}
 

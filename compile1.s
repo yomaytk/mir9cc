@@ -1,7 +1,7 @@
 .intel_syntax noprefix
 .data
 .L.str1:
-  .asciz "abc"
+  .ascii "abc\000"
 .text
 .global main
 main:

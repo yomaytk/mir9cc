@@ -1,5 +1,4 @@
 use super::gen_ir::{*, IrOp::*};
-use super::parse::*;
 
 pub static REG8: [&str; 8] = ["bpl", "r10b", "r11b", "bl", "r12b", "r13b", "r14b", "r15b"];
 pub static REG32: [&str; 8] = ["ebp", "r10d", "r11d", "ebx", "r12d", "r13d", "r14d", "r15d"];
@@ -8,18 +7,33 @@ pub static ARGREG8: [&str; 6] = ["dil", "sil", "dl", "cl", "r8b", "r9b"];
 pub static ARGREG32: [&str; 6] = ["edi", "esi", "edx", "ecx", "r8d", "r9d"];
 pub static ARGREG64: [&str; 6] = ["rdi", "rsi", "rdx", "rcx", "r8", "r9"];
 
+fn escape(strname: String) -> String {
+	let mut p = strname.chars();
+	let mut name = String::new();
+
+	while let Some(c) = p.next() {
+		if c == '\\' {
+			name.push('\\');
+			name.push('\\');
+		} else if c.is_ascii_graphic() || c == ' ' {
+			name.push(c);
+		} else {
+			name.push_str(&format!("\\{:o}", c as i8));
+		}
+	}
+	name.push_str("\\000");
+
+	return name;
+}
+
 pub fn gen(fun: &Function, label: usize) {
 
 	// global variable
 	println!(".data");
-	for gvar in &fun.gvar {
-		match &gvar.op {
-			NodeType::Str(_, strname, label) => {
-				println!(".L.str{}:", label);
-				println!("  .asciz \"{}\"", strname);
-			}
-			_ => { panic!("gvar should be NodeType::Gvar."); }
-		}
+	for gvar in &fun.gvars {
+		println!(".L.str{}:", gvar.label);
+		println!("  .ascii \"{}\"", escape(gvar.strname.clone()));
+		// println!("  .ascii \"{}\"", gvar.strname);
 	}
 
 	// program

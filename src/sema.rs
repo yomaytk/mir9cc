@@ -7,20 +7,27 @@ use std::sync::Mutex;
 lazy_static! {
 	pub static ref LVARS: Mutex<HashMap<String, Var>> = Mutex::new(HashMap::new());
 	pub static ref STACKSIZE: Mutex<usize> = Mutex::new(0);
-	pub static ref STRING: Mutex<Vec<Node>> = Mutex::new(vec![]);
+	pub static ref GVARS: Mutex<Vec<Var>> = Mutex::new(vec![]);
 	pub static ref STRLABEL: Mutex<usize> = Mutex::new(0);
 }
 
+#[derive(Debug, Clone)]
 pub struct Var {
-	ctype: Type,
-	offset: usize,
+	pub ctype: Type,
+	pub offset: usize,
+	pub is_local: bool,
+	pub label: usize,
+	pub strname: String,
 }
 
 impl Var {
-	pub fn new(ctype: Type, offset: usize) -> Self {
+	pub fn new(ctype: Type, offset: usize, is_local: bool, label: usize, strname: String) -> Self {
 		Self {
 			ctype,
 			offset,
+			is_local,
+			label,
+			strname,
 		}
 	}
 }
@@ -102,7 +109,7 @@ pub fn walk(node: &Node, decay: bool) -> Node {
 				argv.push(walk(arg, true));
 			}
 			let body = walk(body, true);
-			return Node::new_func(name.clone(), STRING.lock().unwrap().clone(), argv, body, 0);
+			return Node::new_func(name.clone(), GVARS.lock().unwrap().clone(), argv, body, 0);
 		}
 		LogAnd(lhs, rhs) => { return Node::new_and(walk(lhs, true), walk(rhs, true)); }
 		LogOr(lhs, rhs) => { return Node::new_or(walk(lhs, true), walk(rhs, true)); }
@@ -118,7 +125,7 @@ pub fn walk(node: &Node, decay: bool) -> Node {
 			let offset = *STACKSIZE.lock().unwrap();
 			LVARS.lock().unwrap().insert(
 				name.clone(),
-				Var::new(ctype.clone(), offset),
+				Var::new(ctype.clone(), offset, true, 0, String::from("dummy")),
 			);
 			return Node::new_vardef(ctype.clone(), name.clone(), offset, rexpr)
 		}
@@ -147,7 +154,13 @@ pub fn walk(node: &Node, decay: bool) -> Node {
 		Str(ctype, strname, _) => {
 			*STRLABEL.lock().unwrap() += 1;
 			let label = *STRLABEL.lock().unwrap();
-			STRING.lock().unwrap().push(Node::new_string(ctype.clone(), strname.clone(), label));
+			GVARS.lock().unwrap().push(Var::new(
+				ctype.clone(), 
+				0, 
+				false, 
+				label, 
+				strname.clone()
+			));
 			let lhs = Node::new_gvar(ctype.clone(), label);
 			return walk(&lhs, decay);
 		}
@@ -167,7 +180,7 @@ pub fn sema(nodes: &Vec<Node>) -> Vec<Node> {
 	
 	for funode in nodes {
 		let node;
-		(*STRING.lock().unwrap()).clear();
+		(*GVARS.lock().unwrap()).clear();
 		match walk(funode, true).op {
 			Func(name, strgvar, args, body, _) => { node = Node::new_func(name.clone(), strgvar, args, *body, *STACKSIZE.lock().unwrap()); }
 			_ => { panic!("funode should be NodeType::Func. "); }
