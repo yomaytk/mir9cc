@@ -196,7 +196,9 @@ impl Node {
 	pub fn hasctype(&self) -> bool {
 		match &self.op {
 			NodeType::Lvar(_, _) | NodeType::BinaryTree(_, _, _, _) 
-			| NodeType::Deref(_, _) | NodeType::Addr(_, _) => { return true; }
+			| NodeType::Deref(_, _) | NodeType::Addr(_, _)
+			| NodeType::Sizeof(_, _, _) | NodeType::Str(_, _, _)
+			| NodeType::Gvar(_, _) => { return true; }
 			_ => { return false; }
 		}
 	}
@@ -204,7 +206,9 @@ impl Node {
 	pub fn nodesctype(&self) -> Type {
 		match &self.op {
 			NodeType::Lvar(ctype, _) | NodeType::BinaryTree(ctype, _, _, _) 
-			| NodeType::Deref(ctype, _) | NodeType::Addr(ctype, _) => { return ctype.clone(); }
+			| NodeType::Deref(ctype, _) | NodeType::Addr(ctype, _) 
+			| NodeType::Sizeof(ctype, _, _) | NodeType::Str(ctype, _, _)
+			| NodeType::Gvar(ctype, _) => { return ctype.clone(); }
 			_ => { panic!("nodesctype fun error."); }
 		} 
 	}
