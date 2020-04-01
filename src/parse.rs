@@ -378,7 +378,7 @@ fn primary(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 fn postfix(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 	let mut lhs = primary(tokens, pos);
 	while tokens[*pos].consume_ty(TokenRightmiddleBrace, pos)  {
-		let id = primary(tokens, pos);
+		let id = assign(tokens, pos);
 		let lhs2 = Node::new_bit(INT_TY.clone(), TokenAdd, lhs, id);
 		lhs = Node::new_deref(INT_TY.clone(), lhs2);
 		tokens[*pos].assert_ty(TokenLeftmiddleBrace, pos);
