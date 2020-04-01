@@ -1,4 +1,5 @@
 use super::gen_ir::{*, IrOp::*};
+use super::parse::*;
 
 pub static REG8: [&str; 8] = ["bpl", "r10b", "r11b", "bl", "r12b", "r13b", "r14b", "r15b"];
 pub static REG32: [&str; 8] = ["ebp", "r10d", "r11d", "ebx", "r12d", "r13d", "r14d", "r15d"];
@@ -9,6 +10,20 @@ pub static ARGREG64: [&str; 6] = ["rdi", "rsi", "rdx", "rcx", "r8", "r9"];
 
 pub fn gen(fun: &Function, label: usize) {
 
+	// global variable
+	println!(".data");
+	for gvar in &fun.gvar {
+		match &gvar.op {
+			NodeType::Str(_, strname, label) => {
+				println!(".L.str{}:", label);
+				println!("  .asciz \"{}\"", strname);
+			}
+			_ => { panic!("gvar should be NodeType::Gvar."); }
+		}
+	}
+
+	// program
+	println!(".text");
 	println!(".global {}", fun.name);
 	println!("{}:", fun.name);
 	println!("\tpush rbp");
@@ -65,6 +80,7 @@ pub fn gen(fun: &Function, label: usize) {
 			}
 			IrLoad8 => {
 				println!("\tmov {}, [{}]", REG8[ir.lhs], REG64[ir.rhs]);
+				println!("\tmovzb {}, {}", REG64[ir.lhs], REG8[ir.rhs]);
 			}
 			IrLoad32 => {
 				println!("\tmov {}, [{}]", REG32[ir.lhs], REG64[ir.rhs]);
@@ -110,6 +126,9 @@ pub fn gen(fun: &Function, label: usize) {
 				println!("\tcmp {}, {}", REG64[ir.lhs], REG64[ir.rhs]);
 				println!("\tsetl {}", REG8[ir.lhs]);
 				println!("\tmovzb {}, {}", REG64[ir.lhs], REG8[ir.lhs]);
+			}
+			IrLabelAddr => {
+				println!("\tlea {}, .L.str{}", REG64[ir.lhs], ir.rhs);
 			}
 			IrNop => {},
 			_ => { panic!("unexpected IrOp in gen_x86"); }

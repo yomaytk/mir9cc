@@ -28,7 +28,7 @@ pub fn visit(reg_map: &mut Vec<i32>, used: &mut Vec<bool>, irs: &mut Vec<Ir>) {
 	for ir in irs {
 		let info = ir.get_irinfo();
 		match info.ty {
-			Reg | RegImm | RegLabel => {
+			Reg | RegImm | RegLabel | LabelAddr => {
 				ir.lhs = alloc(reg_map, used, ir.lhs);
 			},
 			RegReg => {

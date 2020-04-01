@@ -67,6 +67,8 @@ pub enum TokenType {
 	TokenFor,
 	TokenInt,
 	TokenChar,
+	TokenDoubleQuo,
+	TokenString,
 	TokenNoSignal,
 	TokenEof,
 }
@@ -185,6 +187,26 @@ pub fn tokenize(input: &String) -> Vec<Token> {
 		// space
 		if c.is_whitespace() {
 			pos += 1;
+			continue;
+		}
+
+		// string literal
+		if c == '"' {
+			tokens.push(Token::new(TokenDoubleQuo, 1, &input[pos..]));
+			pos += 1;
+			let mut strname = String::from("");
+			let mut len: usize = 0;
+			while let Some(c) = p.next() {
+				if c == '"' { 
+					break;
+				}
+				let mut buf = [0u8; 4];
+				strname.push_str(c.encode_utf8(&mut buf));
+				len += 1;
+			}
+			tokens.push(Token::new(TokenString, len as i32, &input[pos..]));
+			tokens.push(Token::new(TokenDoubleQuo, 1, &input[pos+len as usize..]));
+			pos += len+1;
 			continue;
 		}
 		

@@ -5,8 +5,10 @@ use std::collections::HashMap;
 use std::sync::Mutex;
 
 lazy_static! {
-	pub static ref VARS: Mutex<HashMap<String, Var>> = Mutex::new(HashMap::new());
+	pub static ref LVARS: Mutex<HashMap<String, Var>> = Mutex::new(HashMap::new());
 	pub static ref STACKSIZE: Mutex<usize> = Mutex::new(0);
+	pub static ref STRING: Mutex<Vec<Node>> = Mutex::new(vec![]);
+	pub static ref STRLABEL: Mutex<usize> = Mutex::new(0);
 }
 
 pub struct Var {
@@ -56,7 +58,7 @@ pub fn walk(node: &Node, decay: bool) -> Node {
 			return Node::new_stmt(v);
 		}
 		Ident(name) => {
-			if let Some(var) = VARS.lock().unwrap().get(name) {
+			if let Some(var) = LVARS.lock().unwrap().get(name) {
 				if decay && var.ctype.ty == Ty::ARY {
 					return Node::new_addr(var.ctype.ary_of.as_ref().unwrap().as_ref().clone().ptr_of(), Node::new_lvar(var.ctype.clone(), var.offset));
 				} else {
@@ -94,12 +96,13 @@ pub fn walk(node: &Node, decay: bool) -> Node {
 			}
 			return Node::new_call(name.clone(), v);
 		}
-		Func(name, args, body, _) => {
+		Func(name, _, args, body, _) => {
 			let mut argv = vec![];
 			for arg in args {
 				argv.push(walk(arg, true));
 			}
-			return Node::new_func(name.clone(), argv, walk(body, true), 0);
+			let body = walk(body, true);
+			return Node::new_func(name.clone(), STRING.lock().unwrap().clone(), argv, body, 0);
 		}
 		LogAnd(lhs, rhs) => { return Node::new_and(walk(lhs, true), walk(rhs, true)); }
 		LogOr(lhs, rhs) => { return Node::new_or(walk(lhs, true), walk(rhs, true)); }
@@ -113,7 +116,7 @@ pub fn walk(node: &Node, decay: bool) -> Node {
 			}
 			*STACKSIZE.lock().unwrap() += ctype.size_of();
 			let offset = *STACKSIZE.lock().unwrap();
-			VARS.lock().unwrap().insert(
+			LVARS.lock().unwrap().insert(
 				name.clone(),
 				Var::new(ctype.clone(), offset),
 			);
@@ -141,6 +144,19 @@ pub fn walk(node: &Node, decay: bool) -> Node {
 			}
 			panic!("The size of an untyped value cannot be calculated.");
 		}
+		Str(ctype, strname, _) => {
+			*STRLABEL.lock().unwrap() += 1;
+			let label = *STRLABEL.lock().unwrap();
+			STRING.lock().unwrap().push(Node::new_string(ctype.clone(), strname.clone(), label));
+			let lhs = Node::new_gvar(ctype.clone(), label);
+			return walk(&lhs, decay);
+		}
+		Gvar(ctype, labelname) => {
+			if decay && ctype.ty == Ty::ARY {
+				return Node::new_addr(ctype.ary_of.as_ref().unwrap().as_ref().clone().ptr_of(), Node::new_gvar(ctype.clone(), *labelname));
+			}
+			return Node::new_gvar(ctype.clone(), *labelname);
+		}
 		_ => { panic!("sema error at: {:?}", node); }
 	}
 }
@@ -148,10 +164,12 @@ pub fn walk(node: &Node, decay: bool) -> Node {
 pub fn sema(nodes: &Vec<Node>) -> Vec<Node> {
 	
 	let mut funcv = vec![];
+	
 	for funode in nodes {
 		let node;
+		(*STRING.lock().unwrap()).clear();
 		match walk(funode, true).op {
-			Func(name, args, body, _) => { node = Node::new_func(name.clone(), args, *body, *STACKSIZE.lock().unwrap()); }
+			Func(name, strgvar, args, body, _) => { node = Node::new_func(name.clone(), strgvar, args, *body, *STACKSIZE.lock().unwrap()); }
 			_ => { panic!("funode should be NodeType::Func. "); }
 		}
 		funcv.push(node);

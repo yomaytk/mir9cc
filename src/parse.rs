@@ -17,7 +17,7 @@ lazy_static! {
 }
 
 #[allow(dead_code)]
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum NodeType {
 	Num(i32),
 	BinaryTree(Type, TokenType, Option<Box<Node>>, Option<Box<Node>>),
@@ -28,7 +28,7 @@ pub enum NodeType {
 	EqTree(Type, Box<Node>, Box<Node>),
 	IfThen(Box<Node>, Box<Node>, Option<Box<Node>>),
 	Call(String, Vec<Node>),
-	Func(String, Vec<Node>, Box<Node>, usize),
+	Func(String, Vec<Node>, Vec<Node>, Box<Node>, usize),
 	LogAnd(Box<Node>, Box<Node>),
 	LogOr(Box<Node>, Box<Node>),
 	For(Box<Node>, Box<Node>, Box<Node>, Box<Node>),
@@ -37,6 +37,8 @@ pub enum NodeType {
 	Deref(Type, Box<Node>),
 	Addr(Type, Box<Node>),
 	Sizeof(Type, usize, Box<Node>),
+	Str(Type, String, usize),
+	Gvar(Type, usize)
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -135,8 +137,8 @@ impl NodeType {
 		NodeType::Call(ident, args)
 	}
 
-	fn func_init(ident: String, args: Vec<Node>, body: Node, stacksize: usize) -> Self {
-		NodeType::Func(ident, args, Box::new(body), stacksize)
+	fn func_init(ident: String, gvar: Vec<Node>, args: Vec<Node>, body: Node, stacksize: usize) -> Self {
+		NodeType::Func(ident, gvar, args, Box::new(body), stacksize)
 	}
 
 	fn logand_init(lhs: Node, rhs: Node) -> Self {
@@ -173,9 +175,17 @@ impl NodeType {
 	fn sizeof_init(ctype: Type, val: usize, lhs: Node) -> Self {
 		NodeType::Sizeof(ctype, val, Box::new(lhs))
 	}
+
+	fn string_init(ctype: Type, strname: String, label: usize) -> Self {
+		NodeType::Str(ctype, strname, label)
+	}
+
+	fn gvar_init(ctype: Type, label: usize) -> Self {
+		NodeType::Gvar(ctype, label)
+	}
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Node {
 	pub op: NodeType,
 }
@@ -253,9 +263,9 @@ impl Node {
 		}
 	}
 
-	pub fn new_func(ident: String, args: Vec<Node>, body: Node, stacksize: usize) -> Self {
+	pub fn new_func(ident: String, gvar: Vec<Node>, args: Vec<Node>, body: Node, stacksize: usize) -> Self {
 		Self {
-			op: NodeType::func_init(ident, args, body, stacksize)
+			op: NodeType::func_init(ident, gvar, args, body, stacksize)
 		}
 	}
 
@@ -306,6 +316,18 @@ impl Node {
 			op: NodeType::sizeof_init(ctype, val, lhs)
 		}
 	}
+
+	pub fn new_string(ctype: Type, strname: String, label: usize) -> Self {
+		Self {
+			op: NodeType::string_init(ctype, strname, label)
+		}
+	}
+
+	pub fn new_gvar(ctype: Type, label: usize) -> Self {
+		Self {
+			op: NodeType::gvar_init(ctype, label)
+		}
+	}
 }
 
 fn primary(tokens: &Vec<Token>, pos: &mut usize) -> Node {
@@ -342,6 +364,13 @@ fn primary(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 		}
 		tokens[*pos].assert_ty(TokenLeftBrac, pos);
 		return Node::new_call(name, args);
+	}
+	if tokens[*pos].consume_ty(TokenDoubleQuo, pos) {
+		let strname = String::from(&tokens[*pos].input[..tokens[*pos].val as usize]);
+		let cty = CHAR_TY.clone().ary_of(tokens[*pos].val as usize);
+		tokens[*pos].assert_ty(TokenString, pos);
+		tokens[*pos].assert_ty(TokenDoubleQuo, pos);
+		return Node::new_string(cty, strname, 0);
 	}
 	panic!("parse.rs: primary parse fail. and got {}", tokens[*pos].input);
 }
@@ -621,7 +650,7 @@ pub fn function(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 	// body
 	let body = compound_stmt(tokens, pos);
 
-	return Node::new_func(name, args, body, 0);
+	return Node::new_func(name, vec![], args, body, 0);
 }
 
 pub fn parse(tokens: &Vec<Token>, pos: &mut usize) -> Vec<Node> {
