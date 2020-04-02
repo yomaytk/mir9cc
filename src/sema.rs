@@ -72,6 +72,18 @@ impl Env {
 	}
 }
 
+pub fn maybe_decay(node: Node, decay: bool) -> Node {
+	match &node.op {
+		Lvar(ctype, _) | Gvar(ctype, _) => {
+			if decay && ctype.ty == Ty::ARY {
+				return Node::new_addr(ctype.ary_of.as_ref().unwrap().as_ref().clone().ptr_of(), node);
+			}
+			return node;
+		}
+		_ => { panic!("maybe_decay type error"); }
+	}
+}
+
 pub fn walk(env: &mut Env, node: &Node, decay: bool) -> Node {
 	match &node.op {
 		Num(val) => { return Node::new_num(*val); }
@@ -107,11 +119,8 @@ pub fn walk(env: &mut Env, node: &Node, decay: bool) -> Node {
 		}
 		Ident(name) => {
 			if let Some(var) = env.find(name.clone()) {
-				if decay && var.ctype.ty == Ty::ARY {
-					return Node::new_addr(var.ctype.ary_of.as_ref().unwrap().as_ref().clone().ptr_of(), Node::new_lvar(var.ctype.clone(), var.offset));
-				} else {
-					return Node::new_lvar(var.ctype.clone(), var.offset);
-				}
+				let lvar = Node::new_lvar(var.ctype.clone(), var.offset);
+				return maybe_decay(lvar, decay);
 			}
 			panic!("\"{}\" is not defined.", name);
 		}
@@ -170,7 +179,7 @@ pub fn walk(env: &mut Env, node: &Node, decay: bool) -> Node {
 			);
 			return Node::new_vardef(ctype.clone(), name.clone(), offset, rexpr)
 		}
-		Deref(_, lhs) => { 
+		Deref(_, lhs) => {
 			let lhs2 = walk(env, lhs, true);
 			if lhs2.hasctype() && lhs2.nodesctype().ty == Ty::PTR {
 				return Node::new_deref(lhs2.nodesctype().ptr_of.as_ref().unwrap().as_ref().clone(), lhs2);
@@ -203,13 +212,7 @@ pub fn walk(env: &mut Env, node: &Node, decay: bool) -> Node {
 				strname.clone()
 			));
 			let lhs = Node::new_gvar(ctype.clone(), label);
-			return walk(env, &lhs, decay);
-		}
-		Gvar(ctype, labelname) => {
-			if decay && ctype.ty == Ty::ARY {
-				return Node::new_addr(ctype.ary_of.as_ref().unwrap().as_ref().clone().ptr_of(), Node::new_gvar(ctype.clone(), *labelname));
-			}
-			return Node::new_gvar(ctype.clone(), *labelname);
+			return maybe_decay(lhs, decay);
 		}
 		_ => { panic!("sema error at: {:?}", node); }
 	}
