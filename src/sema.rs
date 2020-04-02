@@ -5,7 +5,6 @@ use std::collections::HashMap;
 use std::sync::Mutex;
 
 lazy_static! {
-	pub static ref LVARS: Mutex<HashMap<String, Var>> = Mutex::new(HashMap::new());
 	pub static ref STACKSIZE: Mutex<usize> = Mutex::new(0);
 	pub static ref GVARS: Mutex<Vec<Var>> = Mutex::new(vec![]);
 	pub static ref STRLABEL: Mutex<usize> = Mutex::new(0);
@@ -32,12 +31,53 @@ impl Var {
 	}
 }
 
-pub fn walk(node: &Node, decay: bool) -> Node {
+#[derive(Debug, Clone)]
+pub struct Env {
+	pub vars: HashMap<String, Var>,
+	pub next: Option<Box<Env>>,
+}
+
+impl Env {
+	pub fn new(next: Option<Env>) -> Self {
+		match next {
+			Some(nextenv) => {
+				Self {
+					vars: HashMap::new(),
+					next: Some(Box::new(nextenv)),
+				}
+			}
+			_ => { 
+				Self {
+					vars: HashMap::new(),
+					next: None,
+				}
+			}
+		}
+	}
+	pub fn find(&self, name: String) -> Option<&Var> {
+
+		if let Some(var) = self.vars.get(&name) {
+			return Some(var);
+		}
+
+		let mut env = &self.next;
+
+		while let Some(e) = env {
+			if let Some(var) = e.vars.get(&name) {
+				return Some(var);
+			}
+			env = &e.next;
+		}
+		return None;
+	}
+}
+
+pub fn walk(env: &mut Env, node: &Node, decay: bool) -> Node {
 	match &node.op {
 		Num(val) => { return Node::new_num(*val); }
 		BinaryTree(_ctype, op, lhs, rhs)  => {
-			let lhs2 = walk(lhs.as_ref().unwrap(), true);
-			let rhs2 = walk(rhs.as_ref().unwrap(), true);
+			let lhs2 = walk(env, lhs.as_ref().unwrap(), true);
+			let rhs2 = walk(env, rhs.as_ref().unwrap(), true);
 			let mut ctype = Type::new(Ty::INT, None, None, 0);
 			if lhs2.hasctype(){
 				ctype = lhs2.nodesctype();
@@ -55,17 +95,18 @@ pub fn walk(node: &Node, decay: bool) -> Node {
 			}
 			return Node::new_bit(ctype, op.clone(), lhs2, rhs2);
 		}
-		Ret(lhs) => { return Node::new_ret(walk(lhs, true)); }
-		Expr(lhs) => { return Node::new_expr(walk(lhs, true)); }
+		Ret(lhs) => { return Node::new_ret(walk(env, lhs, true)); }
+		Expr(lhs) => { return Node::new_expr(walk(env, lhs, true)); }
 		CompStmt(lhsv) => {
 			let mut v = vec![];
+			let mut newenv = Env::new(Some(env.clone()));
 			for lhs in lhsv {
-				v.push(walk(lhs, true));
+				v.push(walk(&mut newenv, lhs, true));
 			}
 			return Node::new_stmt(v);
 		}
 		Ident(name) => {
-			if let Some(var) = LVARS.lock().unwrap().get(name) {
+			if let Some(var) = env.find(name.clone()) {
 				if decay && var.ctype.ty == Ty::ARY {
 					return Node::new_addr(var.ctype.ary_of.as_ref().unwrap().as_ref().clone().ptr_of(), Node::new_lvar(var.ctype.clone(), var.offset));
 				} else {
@@ -75,12 +116,12 @@ pub fn walk(node: &Node, decay: bool) -> Node {
 			panic!("\"{}\" is not defined.", name);
 		}
 		EqTree(_, lhs, rhs) => {
-			let lhs2 = walk(lhs, false);
+			let lhs2 = walk(env, lhs, false);
 			match &lhs2.op {
 				NodeType::Lvar(_, _) | NodeType::Deref(_, _) => {}
 				_ => { panic!("not an lvalue"); }
 			}
-			let rhs2 = walk(rhs, true);
+			let rhs2 = walk(env, rhs, true);
 			match &lhs2.op {
 				NodeType::VarDef(cty, _, _, _) | NodeType::Lvar(cty, _) | NodeType::Deref(cty, _) => {
 					return Node::new_eq(cty.clone(), lhs2, rhs2);
@@ -91,60 +132,60 @@ pub fn walk(node: &Node, decay: bool) -> Node {
 		IfThen(cond, then, elthen) => {
 			match elthen {
 				Some(elth) => { 
-					return Node::new_if(walk(cond, true), walk(then, true), Some(walk(elth, true)));
+					return Node::new_if(walk(env, cond, true), walk(env, then, true), Some(walk(env, elth, true)));
 				}
-				_ => { return Node::new_if(walk(cond, true), walk(then, true), None); }
+				_ => { return Node::new_if(walk(env, cond, true), walk(env, then, true), None); }
 			}
 		}
 		Call(name, args) => {
 			let mut v = vec![];
 			for arg in args {
-				v.push(walk(arg, true));
+				v.push(walk(env, arg, true));
 			}
 			return Node::new_call(name.clone(), v);
 		}
 		Func(name, _, args, body, _) => {
 			let mut argv = vec![];
 			for arg in args {
-				argv.push(walk(arg, true));
+				argv.push(walk(env, arg, true));
 			}
-			let body = walk(body, true);
+			let body = walk(env, body, true);
 			return Node::new_func(name.clone(), GVARS.lock().unwrap().clone(), argv, body, 0);
 		}
-		LogAnd(lhs, rhs) => { return Node::new_and(walk(lhs, true), walk(rhs, true)); }
-		LogOr(lhs, rhs) => { return Node::new_or(walk(lhs, true), walk(rhs, true)); }
+		LogAnd(lhs, rhs) => { return Node::new_and(walk(env, lhs, true), walk(env, rhs, true)); }
+		LogOr(lhs, rhs) => { return Node::new_or(walk(env, lhs, true), walk(env, rhs, true)); }
 		For(init, cond, inc, body) => {
-			return Node::new_for(walk(init, true), walk(cond, true), walk(inc, true), walk(body, true));
+			return Node::new_for(walk(env, init, true), walk(env, cond, true), walk(env, inc, true), walk(env, body, true));
 		}
 		VarDef(ctype, name, _, init) => {
 			let mut rexpr = None;
 			if let Some(rhs) = init {
-				rexpr = Some(walk(rhs, true));
+				rexpr = Some(walk(env, rhs, true));
 			}
 			*STACKSIZE.lock().unwrap() += ctype.size_of();
 			let offset = *STACKSIZE.lock().unwrap();
-			LVARS.lock().unwrap().insert(
+			env.vars.insert(
 				name.clone(),
 				Var::new(ctype.clone(), offset, true, 0, String::from("dummy")),
 			);
 			return Node::new_vardef(ctype.clone(), name.clone(), offset, rexpr)
 		}
 		Deref(_, lhs) => { 
-			let lhs2 = walk(lhs, true);
+			let lhs2 = walk(env, lhs, true);
 			if lhs2.hasctype() && lhs2.nodesctype().ty == Ty::PTR {
 				return Node::new_deref(lhs2.nodesctype().ptr_of.as_ref().unwrap().as_ref().clone(), lhs2);
 			}
 			{ panic!("operand must be a pointer."); }
 		}
 		Addr(_, lhs) => {
-			let lhs2 = walk(lhs, true);
+			let lhs2 = walk(env, lhs, true);
 			if lhs2.hasctype() {
 				return Node::new_addr(lhs2.nodesctype().ptr_of(), lhs2);
 			}
 			panic!("Address values ​​other than variables cannot be calculated.");
 		}
 		Sizeof(_, _, lhs) => {
-			let lhs2 = walk(lhs, false);
+			let lhs2 = walk(env, lhs, false);
 			if lhs2.hasctype() {
 				let val = lhs2.nodesctype().size_of();
 				return Node::new_num(val as i32);
@@ -162,7 +203,7 @@ pub fn walk(node: &Node, decay: bool) -> Node {
 				strname.clone()
 			));
 			let lhs = Node::new_gvar(ctype.clone(), label);
-			return walk(&lhs, decay);
+			return walk(env, &lhs, decay);
 		}
 		Gvar(ctype, labelname) => {
 			if decay && ctype.ty == Ty::ARY {
@@ -181,7 +222,9 @@ pub fn sema(nodes: &Vec<Node>) -> Vec<Node> {
 	for funode in nodes {
 		let node;
 		(*GVARS.lock().unwrap()).clear();
-		match walk(funode, true).op {
+		let mut env = Env::new(None);
+
+		match walk(&mut env, funode, true).op {
 			Func(name, strgvar, args, body, _) => { node = Node::new_func(name.clone(), strgvar, args, *body, *STACKSIZE.lock().unwrap()); }
 			_ => { panic!("funode should be NodeType::Func. "); }
 		}
