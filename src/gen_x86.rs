@@ -1,4 +1,5 @@
 use super::gen_ir::{*, IrOp::*};
+use super::sema::Var;
 
 pub static REG8: [&str; 8] = ["bpl", "r10b", "r11b", "bl", "r12b", "r13b", "r14b", "r15b"];
 pub static REG32: [&str; 8] = ["ebp", "r10d", "r11d", "ebx", "r12d", "r13d", "r14d", "r15d"];
@@ -27,14 +28,6 @@ fn escape(strname: String) -> String {
 }
 
 pub fn gen(fun: &Function, label: usize) {
-
-	// global variable
-	println!(".data");
-	for gvar in &fun.gvars {
-		println!(".L.str{}:", gvar.label);
-		println!("  .ascii \"{}\"", escape(gvar.strname.clone()));
-		// println!("  .ascii \"{}\"", gvar.strname);
-	}
 
 	// program
 	println!(".text");
@@ -159,9 +152,16 @@ pub fn gen(fun: &Function, label: usize) {
 	println!("\tret");
 }
 
-pub fn gen_x86(funcs: &Vec<Function>) {
+pub fn gen_x86(globals: Vec<Var>, funcs: Vec<Function>) {
 	
-    println!(".intel_syntax noprefix");
+	println!(".intel_syntax noprefix");
+	
+	// global variable
+	println!(".data");
+	for gvar in &globals {
+		println!(".L.str{}:", gvar.label);
+		println!("  .ascii \"{}\"", escape(gvar.strname.clone()));
+	}
 
 	for i in 0..funcs.len() {
 		gen(&funcs[i], i);

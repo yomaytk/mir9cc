@@ -29,7 +29,7 @@ pub enum NodeType {
 	EqTree(Type, Box<Node>, Box<Node>),
 	IfThen(Box<Node>, Box<Node>, Option<Box<Node>>),
 	Call(String, Vec<Node>),
-	Func(String, Vec<Var>, Vec<Node>, Box<Node>, usize),
+	Func(String, Vec<Node>, Box<Node>, usize),
 	LogAnd(Box<Node>, Box<Node>),
 	LogOr(Box<Node>, Box<Node>),
 	For(Box<Node>, Box<Node>, Box<Node>, Box<Node>),
@@ -138,8 +138,8 @@ impl NodeType {
 		NodeType::Call(ident, args)
 	}
 
-	fn func_init(ident: String, gvars: Vec<Var>, args: Vec<Node>, body: Node, stacksize: usize) -> Self {
-		NodeType::Func(ident, gvars, args, Box::new(body), stacksize)
+	fn func_init(ident: String, args: Vec<Node>, body: Node, stacksize: usize) -> Self {
+		NodeType::Func(ident, args, Box::new(body), stacksize)
 	}
 
 	fn logand_init(lhs: Node, rhs: Node) -> Self {
@@ -214,6 +214,13 @@ impl Node {
 		} 
 	}
 
+	pub fn checklval(&self) {
+		match &self.op {
+			NodeType::Lvar(_, _) | NodeType::Gvar(_, _) | NodeType::Deref(_, _) => {}
+			_ => { panic!("not an lvalue"); }
+		}
+	}
+
 	pub fn new_bit(ctype: Type, tk_ty: TokenType, lhs: Node, rhs: Node) -> Self {
 		Self {
 			op: NodeType::bit_init(ctype, tk_ty, lhs, rhs),
@@ -268,9 +275,9 @@ impl Node {
 		}
 	}
 
-	pub fn new_func(ident: String, gvars: Vec<Var>, args: Vec<Node>, body: Node, stacksize: usize) -> Self {
+	pub fn new_func(ident: String, args: Vec<Node>, body: Node, stacksize: usize) -> Self {
 		Self {
-			op: NodeType::func_init(ident, gvars, args, body, stacksize)
+			op: NodeType::func_init(ident, args, body, stacksize)
 		}
 	}
 
@@ -629,33 +636,39 @@ pub fn param(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 	return Node::new_vardef(ty, name, 0, None);
 }
 
-pub fn function(tokens: &Vec<Token>, pos: &mut usize) -> Node {
+pub fn toplevel(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 	
 	let mut args = vec![];
 	
-	if !tokens[*pos].consume_ty(TokenInt, pos) && !tokens[*pos].consume_ty(TokenChar, pos) {
-		panic!("function should have type: at {}", tokens[*pos].input)
-	}
+	// Ctype
+	let mut ctype = ctype(tokens, pos);
 
+	// identifier
 	let name = String::from(&tokens[*pos].input[..tokens[*pos].val as usize]);
 	if !tokens[*pos].consume_ty(TokenIdent, pos) {
 		panic!("function should start from ident : at {}", tokens[*pos].input)
 	}
-
-	// argument
-	tokens[*pos].assert_ty(TokenRightBrac, pos);
-	if !tokens[*pos].consume_ty(TokenLeftBrac, pos) {
-		loop {
-			args.push(param(tokens, pos));
-			if tokens[*pos].consume_ty(TokenLeftBrac, pos){ break; }
-			tokens[*pos].assert_ty(TokenComma, pos);
+	
+	// function
+	if tokens[*pos].consume_ty(TokenRightBrac, pos){
+		// argument
+		if !tokens[*pos].consume_ty(TokenLeftBrac, pos) {
+			loop {
+				args.push(param(tokens, pos));
+				if tokens[*pos].consume_ty(TokenLeftBrac, pos){ break; }
+				tokens[*pos].assert_ty(TokenComma, pos);
+			}
 		}
+		// body
+		let body = compound_stmt(tokens, pos);
+		return Node::new_func(name, args, body, 0);
 	}
 	
-	// body
-	let body = compound_stmt(tokens, pos);
+	// global variable
+	ctype = read_array(tokens, pos, ctype);
+	tokens[*pos].assert_ty(TokenSemi, pos);
+	return Node::new_vardef(ctype, name, 0, None);
 
-	return Node::new_func(name, vec![], args, body, 0);
 }
 
 pub fn parse(tokens: &Vec<Token>, pos: &mut usize) -> Vec<Node> {
@@ -665,7 +678,7 @@ pub fn parse(tokens: &Vec<Token>, pos: &mut usize) -> Vec<Node> {
 	loop {
 		match tokens[*pos].consume_ty(TokenEof, pos) {
 			true => { break; }
-			false => { program.push(function(tokens, pos)); }
+			false => { program.push(toplevel(tokens, pos)); }
 		}
 	}
 

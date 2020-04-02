@@ -211,16 +211,14 @@ impl IrInfo {
 pub struct Function {
 	pub name: String,
 	pub irs: Vec<Ir>,
-	pub gvars: Vec<Var>,
 	pub stacksize: usize,
 }
 
 impl Function {
-	fn new(name: String, irs: Vec<Ir>, gvars: Vec<Var>, stacksize: usize) -> Self {
+	fn new(name: String, irs: Vec<Ir>, stacksize: usize) -> Self {
 		Self {
 			name,
 			irs,
-			gvars,
 			stacksize,
 		}
 	}
@@ -461,7 +459,7 @@ pub fn gen_ir(funcs: &Vec<Node>) -> Vec<Function> {
 		*REGNO.lock().unwrap() = 1;
 		
 		match &funode.op {
-			NodeType::Func(name, gvar, args, body, stacksize) => {
+			NodeType::Func(name, args, body, stacksize) => {
 				for i in 0..args.len() {
 					match &args[i].op {
 						NodeType::VarDef(ctype, _, offset, _) => {
@@ -475,9 +473,10 @@ pub fn gen_ir(funcs: &Vec<Node>) -> Vec<Function> {
 					}
 				}
 				gen_stmt(body, &mut code);
-				let func = Function::new(name.clone(), code, gvar.clone(), *stacksize);
+				let func = Function::new(name.clone(), code, *stacksize);
 				v.push(func);
 			}
+			NodeType::VarDef(_, _, _, _) => {}
 			_ => { panic!(" should be func node at gen_ir: {:?}", funode); }
 		}
 	}

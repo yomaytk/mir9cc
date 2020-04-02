@@ -84,6 +84,19 @@ pub fn maybe_decay(node: Node, decay: bool) -> Node {
 	}
 }
 
+pub fn new_global(ctype: &Type, strname: &String) -> Var {
+	*STRLABEL.lock().unwrap() += 1;
+	let label = *STRLABEL.lock().unwrap();
+	let var = Var::new(
+		ctype.clone(), 
+		0, 
+		false, 
+		label, 
+		strname.clone()
+	);
+	return var;
+}
+
 pub fn walk(env: &mut Env, node: &Node, decay: bool) -> Node {
 	match &node.op {
 		Num(val) => { return Node::new_num(*val); }
@@ -119,17 +132,18 @@ pub fn walk(env: &mut Env, node: &Node, decay: bool) -> Node {
 		}
 		Ident(name) => {
 			if let Some(var) = env.find(name.clone()) {
-				let lvar = Node::new_lvar(var.ctype.clone(), var.offset);
-				return maybe_decay(lvar, decay);
+				if var.is_local {
+					let lvar = Node::new_lvar(var.ctype.clone(), var.offset);
+					return maybe_decay(lvar, decay);
+				}
+				let gvar = Node::new_gvar(var.ctype.clone(), var.label);
+				return maybe_decay(gvar, decay);
 			}
 			panic!("\"{}\" is not defined.", name);
 		}
 		EqTree(_, lhs, rhs) => {
 			let lhs2 = walk(env, lhs, false);
-			match &lhs2.op {
-				NodeType::Lvar(_, _) | NodeType::Deref(_, _) => {}
-				_ => { panic!("not an lvalue"); }
-			}
+			lhs2.checklval();
 			let rhs2 = walk(env, rhs, true);
 			match &lhs2.op {
 				NodeType::VarDef(cty, _, _, _) | NodeType::Lvar(cty, _) | NodeType::Deref(cty, _) => {
@@ -153,13 +167,13 @@ pub fn walk(env: &mut Env, node: &Node, decay: bool) -> Node {
 			}
 			return Node::new_call(name.clone(), v);
 		}
-		Func(name, _, args, body, _) => {
+		Func(name, args, body, _) => {
 			let mut argv = vec![];
 			for arg in args {
 				argv.push(walk(env, arg, true));
 			}
 			let body = walk(env, body, true);
-			return Node::new_func(name.clone(), GVARS.lock().unwrap().clone(), argv, body, 0);
+			return Node::new_func(name.clone(), argv, body, 0);
 		}
 		LogAnd(lhs, rhs) => { return Node::new_and(walk(env, lhs, true), walk(env, rhs, true)); }
 		LogOr(lhs, rhs) => { return Node::new_or(walk(env, lhs, true), walk(env, rhs, true)); }
@@ -175,7 +189,13 @@ pub fn walk(env: &mut Env, node: &Node, decay: bool) -> Node {
 			let offset = *STACKSIZE.lock().unwrap();
 			env.vars.insert(
 				name.clone(),
-				Var::new(ctype.clone(), offset, true, 0, String::from("dummy")),
+				Var::new(
+					ctype.clone(), 
+					offset, 
+					true, 
+					0, 
+					String::from("dummy")
+				),
 			);
 			return Node::new_vardef(ctype.clone(), name.clone(), offset, rexpr)
 		}
@@ -188,10 +208,8 @@ pub fn walk(env: &mut Env, node: &Node, decay: bool) -> Node {
 		}
 		Addr(_, lhs) => {
 			let lhs2 = walk(env, lhs, true);
-			if lhs2.hasctype() {
-				return Node::new_addr(lhs2.nodesctype().ptr_of(), lhs2);
-			}
-			panic!("Address values ​​other than variables cannot be calculated.");
+			lhs2.checklval();
+			return Node::new_addr(lhs2.nodesctype().ptr_of(), lhs2);
 		}
 		Sizeof(_, _, lhs) => {
 			let lhs2 = walk(env, lhs, false);
@@ -202,37 +220,35 @@ pub fn walk(env: &mut Env, node: &Node, decay: bool) -> Node {
 			panic!("The size of an untyped value cannot be calculated.");
 		}
 		Str(ctype, strname, _) => {
-			*STRLABEL.lock().unwrap() += 1;
-			let label = *STRLABEL.lock().unwrap();
-			GVARS.lock().unwrap().push(Var::new(
-				ctype.clone(), 
-				0, 
-				false, 
-				label, 
-				strname.clone()
-			));
-			let lhs = Node::new_gvar(ctype.clone(), label);
+			GVARS.lock().unwrap().push(new_global(&ctype, &strname));
+			let lhs = Node::new_gvar(ctype.clone(), *STRLABEL.lock().unwrap());
 			return maybe_decay(lhs, decay);
 		}
 		_ => { panic!("sema error at: {:?}", node); }
 	}
 }
 
-pub fn sema(nodes: &Vec<Node>) -> Vec<Node> {
+pub fn sema(nodes: &Vec<Node>) -> (Vec<Node>, Vec<Var>) {
 	
 	let mut funcv = vec![];
 	
-	for funode in nodes {
+	for topnode in nodes {
 		let node;
-		(*GVARS.lock().unwrap()).clear();
 		let mut env = Env::new(None);
 
-		match walk(&mut env, funode, true).op {
-			Func(name, strgvar, args, body, _) => { node = Node::new_func(name.clone(), strgvar, args, *body, *STACKSIZE.lock().unwrap()); }
+		if let VarDef(ctype, strname, _, _) = &topnode.op {
+			GVARS.lock().unwrap().push(new_global(&ctype, &strname));
+			continue;
+		}
+
+		match walk(&mut env, topnode, true).op {
+			Func(name, args, body, _) => { 
+				node = Node::new_func(name.clone(), args, *body, *STACKSIZE.lock().unwrap());
+			}
 			_ => { panic!("funode should be NodeType::Func. "); }
 		}
 		funcv.push(node);
 	}
 
-	return funcv;
+	return (funcv, GVARS.lock().unwrap().clone());
 }

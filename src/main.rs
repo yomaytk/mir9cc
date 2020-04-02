@@ -52,7 +52,7 @@ fn main() {
 	// parsing analysis
 	let nodes = parse(&tokens, &mut 0);
 	// println!("{:#?}", &node);
-	let nodes = sema(&nodes);
+	let (nodes, globals) = sema(&nodes);
 	
 	// alloc index for register
 	let mut funcs = gen_ir(&nodes);
@@ -75,5 +75,5 @@ fn main() {
 	// }
 	
 	// code generator
-	gen_x86(&funcs);
+	gen_x86(globals, funcs);
 }
