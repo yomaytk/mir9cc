@@ -2,7 +2,6 @@ use super::token::{*, TokenType::*};
 use IrOp::*;
 use IrType::*;
 use super::parse::*;
-use super::sema::Var;
 
 use std::sync::Mutex;
 use std::collections::HashMap;

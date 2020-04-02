@@ -1,6 +1,5 @@
 use super::token::*;
 use super::token::TokenType::*;
-use super::sema::Var;
 
 lazy_static! {
 	pub static ref INT_TY: Type = Type {
