@@ -75,6 +75,7 @@ pub enum TokenType {
 	TokenNe,
 	TokenDo,
 	TokenWhile,
+	TokenExtern,
 	TokenNoSignal,
 	TokenEof,
 }
@@ -91,6 +92,7 @@ impl From<String> for TokenType {
 			"char" => { TokenChar }
 			"do" => { TokenDo }
 			"while" => { TokenWhile }
+			"extern" => { TokenExtern }
 			_ => { TokenIdent }
 		}
 	}

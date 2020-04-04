@@ -148,8 +148,8 @@ pub fn gen(fun: &Function, label: usize) {
 				println!("\tcmp {}, 0", REG64[ir.lhs]);
 				println!("\tjne .L{}", ir.rhs);
 			}
-			IrLabelAddr => {
-				println!("\tlea {}, .L.str{}", REG64[ir.lhs], ir.rhs);
+			IrLabelAddr(label) => {
+				println!("\tlea {}, {}", REG64[ir.lhs], label);
 			}
 			IrNop => {},
 			_ => { panic!("unexpected IrOp in gen_x86"); }
@@ -173,7 +173,14 @@ pub fn gen_x86(globals: Vec<Var>, funcs: Vec<Function>) {
 	// global variable
 	println!(".data");
 	for gvar in &globals {
-		println!(".L.str{}:", gvar.label);
+		if gvar.is_extern {
+			continue;
+		}
+		if gvar.is_string_decl {
+			println!(".L.str{}:", gvar.label);
+		} else {
+			println!("{}:", gvar.ident.clone());
+		}
 		println!("  .ascii \"{}\"", escape(gvar.strname.clone()));
 	}
 

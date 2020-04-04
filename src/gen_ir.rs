@@ -45,7 +45,7 @@ lazy_static! {
 		(IrOp::IrStoreArgs8, IrInfo::new("STOREARGS8", IrType::ImmImm)),
 		(IrOp::IrStoreArgs32, IrInfo::new("STOREARGS32", IrType::ImmImm)),
 		(IrOp::IrStoreArgs64, IrInfo::new("STOREARGS64", IrType::ImmImm)),
-		(IrOp::IrLabelAddr, IrInfo::new("LABELADDR", IrType::LabelAddr)),
+		(IrOp::IrLabelAddr(String::new()), IrInfo::new("LABELADDR", IrType::LabelAddr)),
 		(IrOp::IrEqEq, IrInfo::new("EqEq", IrType::RegReg)),
 		(IrOp::IrNe, IrInfo::new("Neq", IrType::RegReg)),
 		(IrOp::IrIf, IrInfo::new("If", IrType::Reg)),
@@ -84,7 +84,7 @@ pub enum IrOp {
 	IrEqEq, 
 	IrNe,
 	IrIf,
-	IrLabelAddr,
+	IrLabelAddr(String),
 	IrKill,
 	IrNop,
 }
@@ -123,6 +123,9 @@ impl Ir {
 				let _args = args;
 				return IRINFO.lock().unwrap().get(&IrOp::IrCall { name: format!(""), len: 0, args: vec![] }).unwrap().clone();
 			},
+			IrLabelAddr(_) => {
+				return IRINFO.lock().unwrap().get(&IrOp::IrLabelAddr(String::new())).unwrap().clone();
+			}
 			_ => {
 				return IRINFO.lock().unwrap().get(&self.op).unwrap().clone();
 			}
@@ -253,7 +256,7 @@ fn gen_lval(node: &Node, code: &mut Vec<Ir>) -> usize {
 		NodeType::Gvar(_, label) => {
 			*REGNO.lock().unwrap() += 1;
 			let r = *REGNO.lock().unwrap();
-			code.push(Ir::new(IrLabelAddr, r, *label));
+			code.push(Ir::new(IrLabelAddr(label.clone()), r, 0));
 			return r;
 		}
 		_ => { panic!("not an lvalue")}
@@ -456,7 +459,7 @@ fn gen_stmt(node: &Node, code: &mut Vec<Ir>) {
 			code.push(Ir::new(IrIf, r, x));
 			kill(r, code);
 		}
-		NodeType::VarDef(ctype, _, off, init) => {
+		NodeType::VarDef(ctype, _, _, off, init) => {
 			if let Some(rhs) = init {
 				*REGNO.lock().unwrap() += 1;
 				let r1 = *REGNO.lock().unwrap();
@@ -487,10 +490,13 @@ pub fn gen_ir(funcs: &Vec<Node>) -> Vec<Function> {
 		*REGNO.lock().unwrap() = 1;
 		
 		match &funode.op {
-			NodeType::Func(name, args, body, stacksize) => {
+			NodeType::Func(name, is_extern, args, body, stacksize) => {
+				if *is_extern {
+					continue;
+				}
 				for i in 0..args.len() {
 					match &args[i].op {
-						NodeType::VarDef(ctype, _, offset, _) => {
+						NodeType::VarDef(ctype, _, _, offset, _) => {
 							match ctype.ty {
 								Ty::CHAR => { code.push(Ir::new(IrStoreArgs8, *offset, i)); } 
 								Ty::INT => { code.push(Ir::new(IrStoreArgs32, *offset, i)); } 
@@ -504,7 +510,7 @@ pub fn gen_ir(funcs: &Vec<Node>) -> Vec<Function> {
 				let func = Function::new(name.clone(), code, *stacksize);
 				v.push(func);
 			}
-			NodeType::VarDef(_, _, _, _) => {}
+			NodeType::VarDef(_, _, _, _, _) => {}
 			_ => { panic!(" should be func node at gen_ir: {:?}", funode); }
 		}
 	}

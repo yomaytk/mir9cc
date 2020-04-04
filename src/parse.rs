@@ -28,17 +28,17 @@ pub enum NodeType {
 	EqTree(Type, Box<Node>, Box<Node>),
 	IfThen(Box<Node>, Box<Node>, Option<Box<Node>>),
 	Call(String, Vec<Node>),
-	Func(String, Vec<Node>, Box<Node>, usize),
+	Func(String, bool, Vec<Node>, Box<Node>, usize),
 	LogAnd(Box<Node>, Box<Node>),
 	LogOr(Box<Node>, Box<Node>),
 	For(Box<Node>, Box<Node>, Box<Node>, Box<Node>),
-	VarDef(Type, String, usize, Option<Box<Node>>),
+	VarDef(Type, bool, String, usize, Option<Box<Node>>),
 	Lvar(Type, usize),
 	Deref(Type, Box<Node>),
 	Addr(Type, Box<Node>),
 	Sizeof(Type, usize, Box<Node>),
 	Str(Type, String, usize),
-	Gvar(Type, usize),
+	Gvar(Type, String),
 	EqEq(Box<Node>, Box<Node>),
 	Ne(Box<Node>, Box<Node>),
 	DoWhile(Box<Node>, Box<Node>),
@@ -140,8 +140,8 @@ impl NodeType {
 		NodeType::Call(ident, args)
 	}
 
-	fn func_init(ident: String, args: Vec<Node>, body: Node, stacksize: usize) -> Self {
-		NodeType::Func(ident, args, Box::new(body), stacksize)
+	fn func_init(ident: String, is_extern: bool, args: Vec<Node>, body: Node, stacksize: usize) -> Self {
+		NodeType::Func(ident, is_extern, args, Box::new(body), stacksize)
 	}
 
 	fn logand_init(lhs: Node, rhs: Node) -> Self {
@@ -156,10 +156,10 @@ impl NodeType {
 		NodeType::For(Box::new(init), Box::new(cond), Box::new(inc), Box::new(body))
 	}
 
-	fn vardef_init(ty: Type, name: String, off: usize, rhs: Option<Node>) -> Self {
+	fn vardef_init(ty: Type, is_extern: bool, name: String, off: usize, rhs: Option<Node>) -> Self {
 		match rhs {
-			Some(node) => { NodeType::VarDef(ty, name, off, Some(Box::new(node))) }
-			_ => { NodeType::VarDef(ty, name, off, None)}
+			Some(node) => { NodeType::VarDef(ty, is_extern, name, off, Some(Box::new(node))) }
+			_ => { NodeType::VarDef(ty, is_extern, name, off, None)}
 		}
 	}
 
@@ -183,7 +183,7 @@ impl NodeType {
 		NodeType::Str(ctype, strname, label)
 	}
 
-	fn gvar_init(ctype: Type, label: usize) -> Self {
+	fn gvar_init(ctype: Type, label: String) -> Self {
 		NodeType::Gvar(ctype, label)
 	}
 
@@ -289,9 +289,9 @@ impl Node {
 		}
 	}
 
-	pub fn new_func(ident: String, args: Vec<Node>, body: Node, stacksize: usize) -> Self {
+	pub fn new_func(ident: String, is_extern: bool, args: Vec<Node>, body: Node, stacksize: usize) -> Self {
 		Self {
-			op: NodeType::func_init(ident, args, body, stacksize)
+			op: NodeType::func_init(ident, is_extern, args, body, stacksize)
 		}
 	}
 
@@ -313,9 +313,9 @@ impl Node {
 		}
 	}
 
-	pub fn new_vardef(ty: Type, name: String, off: usize, rhs: Option<Node>) -> Self {
+	pub fn new_vardef(ty: Type, is_extern: bool, name: String, off: usize, rhs: Option<Node>) -> Self {
 		Self {
-			op: NodeType::vardef_init(ty, name, off, rhs)
+			op: NodeType::vardef_init(ty, is_extern, name, off, rhs)
 		}
 	}
 
@@ -349,7 +349,7 @@ impl Node {
 		}
 	}
 
-	pub fn new_gvar(ctype: Type, label: usize) -> Self {
+	pub fn new_gvar(ctype: Type, label: String) -> Self {
 		Self {
 			op: NodeType::gvar_init(ctype, label)
 		}
@@ -585,10 +585,10 @@ fn decl(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 	if tokens[*pos].consume_ty(TokenEq, pos) {
 		let rhs = assign(tokens, pos);
 		tokens[*pos].assert_ty(TokenSemi, pos);
-		return Node::new_vardef(ty, name, 0, Some(rhs));
+		return Node::new_vardef(ty, false, name, 0, Some(rhs));
 	} else {
 		tokens[*pos].assert_ty(TokenSemi, pos);
-		return Node::new_vardef(ty, name, 0, None);
+		return Node::new_vardef(ty, false, name, 0, None);
 	}
 }
 
@@ -690,12 +690,14 @@ pub fn param(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 	// identifier
 	let name = String::from(&tokens[*pos].input[..tokens[*pos].val as usize]);
 	tokens[*pos].assert_ty(TokenIdent, pos);
-	return Node::new_vardef(ty, name, 0, None);
+	return Node::new_vardef(ty, false, name, 0, None);
 }
 
 pub fn toplevel(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 	
 	let mut args = vec![];
+
+	let is_extern = tokens[*pos].consume_ty(TokenExtern, pos);
 	
 	// Ctype
 	let mut ctype = ctype(tokens, pos);
@@ -718,13 +720,13 @@ pub fn toplevel(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 		}
 		// body
 		let body = compound_stmt(tokens, pos);
-		return Node::new_func(name, args, body, 0);
+		return Node::new_func(name, is_extern, args, body, 0);
 	}
 	
 	// global variable
 	ctype = read_array(tokens, pos, ctype);
 	tokens[*pos].assert_ty(TokenSemi, pos);
-	return Node::new_vardef(ctype, name, 0, None);
+	return Node::new_vardef(ctype, is_extern, name, 0, None);
 
 }
 
