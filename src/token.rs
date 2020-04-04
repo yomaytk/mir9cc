@@ -68,7 +68,7 @@ pub enum TokenType {
 	TokenInt,
 	TokenChar,
 	TokenDoubleQuo,
-	TokenString,
+	TokenString(String),
 	TokenNoSignal,
 	TokenEof,
 }
@@ -122,11 +122,16 @@ impl<'a> Token<'a> {
 		}
 	}
 	pub fn consume_ty(&self, ty: TokenType, pos: &mut usize) -> bool {
-		if self.ty == ty {
-			*pos += 1;
-			return true;
+		if self.ty == ty { 
+			*pos += 1; 
+			return true; 
 		}
-		return false;
+		else { 
+			match ty {
+				TokenString(_) => { return true;}
+				_ => { return false; }
+			}
+		}
 	}
 	pub fn is_typename(&self, pos: &mut usize) -> bool {
 		if self.ty == TokenInt {
@@ -140,6 +145,12 @@ impl<'a> Token<'a> {
 		if self.ty == TokenInt { return INT_TY.clone(); }
 		else if self.ty == TokenChar { return CHAR_TY.clone(); }
 		else { panic!("decralation type is invalid."); }
+	}
+	pub fn getstring(&self) -> String {
+		match &self.ty {
+			TokenString(sb) => { return sb.clone(); }
+			_ => { panic!("getstring error."); }
+		}
 	}
 }
 
@@ -176,6 +187,40 @@ fn strtol(p: &mut core::str::Chars, pos: &mut usize, c: char) -> i32 {
 	num_str.parse::<i32>().unwrap()
 }
 
+fn read_string<'a> (p: &mut core::str::Chars, pos: &mut usize, input: &'a String) -> Token<'a> {
+
+	let mut len = 0;
+	let start = *pos;
+	let mut sb = String::new();
+
+	while let Some(c) = p.next() {
+		if c == '"'	{
+			*pos += 1;
+			break;
+		}
+		if c != '\\' {
+			sb.push(c);
+			*pos += 1;
+			len += 1;
+			continue;
+		}
+		match c {
+			'a' => { sb.push_str("\\a"); }
+			'b' => { sb.push_str("\\b"); }
+			'f' => { sb.push_str("\\f"); }
+			'n' => { sb.push_str("\\n"); }
+			'r' => { sb.push_str("\\r"); }
+			'v' => { sb.push_str("\\v"); }
+			't' => { sb.push_str("\\t"); }
+			'\0' => { panic!("PREMATURE of input."); }
+			_ => { sb.push(c); }
+		}
+		*pos += 1;
+		len += 1;
+	}
+	return Token::new(TokenString(sb), len, &input[start..]);
+}
+
 pub fn tokenize(input: &String) -> Vec<Token> {
 	
 	let mut tokens: Vec<Token> = vec![];
@@ -192,21 +237,8 @@ pub fn tokenize(input: &String) -> Vec<Token> {
 
 		// string literal
 		if c == '"' {
-			tokens.push(Token::new(TokenDoubleQuo, 1, &input[pos..]));
 			pos += 1;
-			let mut strname = String::from("");
-			let mut len: usize = 0;
-			while let Some(c) = p.next() {
-				if c == '"' { 
-					break;
-				}
-				let mut buf = [0u8; 4];
-				strname.push_str(c.encode_utf8(&mut buf));
-				len += 1;
-			}
-			tokens.push(Token::new(TokenString, len as i32, &input[pos..]));
-			tokens.push(Token::new(TokenDoubleQuo, 1, &input[pos+len as usize..]));
-			pos += len+1;
+			tokens.push(read_string(&mut p, &mut pos, &input));
 			continue;
 		}
 		

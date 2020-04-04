@@ -19,7 +19,7 @@ fn escape(strname: String) -> String {
 		} else if c.is_ascii_graphic() || c == ' ' {
 			name.push(c);
 		} else {
-			name.push_str(&format!("\\{:03o}", c as i8));
+			name.push_str(&format!("\\{:o}", c as i8));
 		}
 	}
 	name.push_str("\\000");

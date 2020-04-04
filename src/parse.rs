@@ -376,11 +376,10 @@ fn primary(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 		tokens[*pos].assert_ty(TokenLeftBrac, pos);
 		return Node::new_call(name, args);
 	}
-	if tokens[*pos].consume_ty(TokenDoubleQuo, pos) {
-		let strname = String::from(&tokens[*pos].input[..tokens[*pos].val as usize]);
+	if tokens[*pos].consume_ty(TokenString(String::new()), pos) {
+		let strname = tokens[*pos].getstring();
 		let cty = CHAR_TY.clone().ary_of(tokens[*pos].val as usize);
-		tokens[*pos].assert_ty(TokenString, pos);
-		tokens[*pos].assert_ty(TokenDoubleQuo, pos);
+		*pos += 1;
 		return Node::new_string(cty, strname, 0);
 	}
 	panic!("parse.rs: primary parse fail. and got {}", tokens[*pos].input);
@@ -398,6 +397,7 @@ fn postfix(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 }
 
 fn unary(tokens: &Vec<Token>, pos: &mut usize) -> Node {
+	
 	if tokens[*pos].consume_ty(TokenStar, pos) {
 		return Node::new_deref(INT_TY.clone(), mul(tokens, pos));
 	}
@@ -482,7 +482,6 @@ fn logor(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 
 fn assign(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 	let mut lhs = logor(tokens, pos);
-
 	if tokens[*pos].consume_ty(TokenEq, pos) {
 		let rhs = logor(tokens, pos);
 		lhs = Node::new_eq(INT_TY.clone(), lhs, rhs);
