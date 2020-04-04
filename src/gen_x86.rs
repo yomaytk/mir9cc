@@ -27,6 +27,12 @@ fn escape(strname: String) -> String {
 	return name;
 }
 
+fn emit_cmp(ir: &Ir, insn: String) {
+	println!("\tcmp {}, {}", REG64[ir.lhs], REG64[ir.rhs]);
+	println!("\t{} {}", insn, REG8[ir.lhs]);
+	println!("\tmovzb {}, {}", REG64[ir.lhs], REG8[ir.lhs]);
+}
+
 pub fn gen(fun: &Function, label: usize) {
 
 	// program
@@ -130,9 +136,13 @@ pub fn gen(fun: &Function, label: usize) {
 				println!("\tmov [rbp-{}], {}", ir.lhs, ARGREG64[ir.rhs]);
 			}
 			IrLt => {
-				println!("\tcmp {}, {}", REG64[ir.lhs], REG64[ir.rhs]);
-				println!("\tsetl {}", REG8[ir.lhs]);
-				println!("\tmovzb {}, {}", REG64[ir.lhs], REG8[ir.lhs]);
+				emit_cmp(ir, String::from("setl"));
+			}
+			IrEqEq => {
+				emit_cmp(ir, String::from("sete"));
+			}
+			IrNe => {
+				emit_cmp(ir, String::from("setne"));
 			}
 			IrLabelAddr => {
 				println!("\tlea {}, .L.str{}", REG64[ir.lhs], ir.rhs);

@@ -38,7 +38,9 @@ pub enum NodeType {
 	Addr(Type, Box<Node>),
 	Sizeof(Type, usize, Box<Node>),
 	Str(Type, String, usize),
-	Gvar(Type, usize)
+	Gvar(Type, usize),
+	EqEq(Box<Node>, Box<Node>),
+	Ne(Box<Node>, Box<Node>),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -182,6 +184,14 @@ impl NodeType {
 
 	fn gvar_init(ctype: Type, label: usize) -> Self {
 		NodeType::Gvar(ctype, label)
+	}
+
+	fn eqeq_init(lhs: Node, rhs: Node) -> Self {
+		NodeType::EqEq(Box::new(lhs), Box::new(rhs))
+	}
+
+	fn neq_init(lhs: Node, rhs: Node) -> Self {
+		NodeType::Ne(Box::new(lhs), Box::new(rhs))
 	}
 }
 
@@ -339,6 +349,18 @@ impl Node {
 			op: NodeType::gvar_init(ctype, label)
 		}
 	}
+
+	pub fn new_eqeq(lhs: Node, rhs: Node) -> Self {
+		Self {
+			op: NodeType::eqeq_init(lhs, rhs)
+		}
+	}
+
+	pub fn new_neq(lhs: Node, rhs: Node) -> Self {
+		Self {
+			op: NodeType::neq_init(lhs, rhs)
+		}
+	}
 }
 
 fn primary(tokens: &Vec<Token>, pos: &mut usize) -> Node {
@@ -456,8 +478,24 @@ fn rel(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 	}
 }
 
-fn logand(tokens: &Vec<Token>, pos: &mut usize) -> Node {
+fn equarity(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 	let mut lhs = rel(tokens, pos);
+	
+	loop {
+		if tokens[*pos].consume_ty(TokenEqEq, pos) {
+			lhs = Node::new_eqeq(lhs, rel(tokens, pos));
+			continue;
+		}
+		if tokens[*pos].consume_ty(TokenNe, pos) {
+			lhs = Node::new_neq(lhs, rel(tokens, pos));
+			continue;
+		}
+		return lhs;
+	}
+}
+
+fn logand(tokens: &Vec<Token>, pos: &mut usize) -> Node {
+	let mut lhs = equarity(tokens, pos);
 
 	loop {
 		if !tokens[*pos].consume_ty(TokenLogAnd, pos) {

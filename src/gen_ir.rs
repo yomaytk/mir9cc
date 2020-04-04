@@ -46,6 +46,8 @@ lazy_static! {
 		(IrOp::IrStoreArgs32, IrInfo::new("STOREARGS32", IrType::ImmImm)),
 		(IrOp::IrStoreArgs64, IrInfo::new("STOREARGS64", IrType::ImmImm)),
 		(IrOp::IrLabelAddr, IrInfo::new("LABELADDR", IrType::LabelAddr)),
+		(IrOp::IrEqEq, IrInfo::new("EqEq", IrType::RegReg)),
+		(IrOp::IrNe, IrInfo::new("Neq", IrType::RegReg)),
 		(IrOp::IrKill, IrInfo::new("KILL", IrType::Reg)),
 		(IrOp::IrNop, IrInfo::new("NOP", IrType::NoArg))
 	]);
@@ -78,6 +80,8 @@ pub enum IrOp {
 	IrStoreArgs32,
 	IrStoreArgs64,
 	IrLt,
+	IrEqEq, 
+	IrNe,
 	IrLabelAddr,
 	IrKill,
 	IrNop,
@@ -371,6 +375,20 @@ fn gen_expr(node: &Node, code: &mut Vec<Ir>) -> usize {
 		}
 		NodeType::Addr(_, lhs) => {
 			return gen_lval(lhs, code);
+		}
+		NodeType::EqEq(lhs, rhs) => {
+			let r1 = gen_expr(lhs, code);
+			let r2 = gen_expr(rhs, code);
+			code.push(Ir::new(IrEqEq, r1, r2));
+			kill(r2, code);
+			return r1;
+		}
+		NodeType::Ne(lhs, rhs) => {
+			let r1 = gen_expr(lhs, code);
+			let r2 = gen_expr(rhs, code);
+			code.push(Ir::new(IrNe, r1, r2));
+			kill(r2, code);
+			return r1;
 		}
 		_ => { panic!("gen_expr NodeType error at {:?}", node.op); }
 	}

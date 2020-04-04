@@ -223,6 +223,12 @@ pub fn walk(env: &mut Env, node: &Node, decay: bool) -> Node {
 			let lhs = Node::new_gvar(ctype.clone(), *STRLABEL.lock().unwrap());
 			return maybe_decay(lhs, decay);
 		}
+		EqEq(lhs, rhs) => {
+			return Node::new_eqeq(walk(env, lhs, true), walk(env, rhs, true));
+		}
+		Ne(lhs, rhs) => {
+			return Node::new_neq(walk(env, lhs, true), walk(env, rhs, true));
+		}
 		_ => { panic!("sema error at: {:?}", node); }
 	}
 }
