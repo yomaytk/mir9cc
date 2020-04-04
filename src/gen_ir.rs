@@ -48,6 +48,7 @@ lazy_static! {
 		(IrOp::IrLabelAddr, IrInfo::new("LABELADDR", IrType::LabelAddr)),
 		(IrOp::IrEqEq, IrInfo::new("EqEq", IrType::RegReg)),
 		(IrOp::IrNe, IrInfo::new("Neq", IrType::RegReg)),
+		(IrOp::IrIf, IrInfo::new("If", IrType::Reg)),
 		(IrOp::IrKill, IrInfo::new("KILL", IrType::Reg)),
 		(IrOp::IrNop, IrInfo::new("NOP", IrType::NoArg))
 	]);
@@ -82,6 +83,7 @@ pub enum IrOp {
 	IrLt,
 	IrEqEq, 
 	IrNe,
+	IrIf,
 	IrLabelAddr,
 	IrKill,
 	IrNop,
@@ -444,6 +446,15 @@ fn gen_stmt(node: &Node, code: &mut Vec<Ir>) {
 			gen_expr(inc, code);
 			code.push(Ir::new(IrJmp, x, 0));
 			label(y, code);
+		}
+		NodeType::DoWhile(body, cond) => {
+			*LABEL.lock().unwrap() += 1;
+			let x = *LABEL.lock().unwrap();
+			label(x, code);
+			gen_stmt(body, code);
+			let r = gen_expr(cond, code);
+			code.push(Ir::new(IrIf, r, x));
+			kill(r, code);
 		}
 		NodeType::VarDef(ctype, _, off, init) => {
 			if let Some(rhs) = init {

@@ -147,6 +147,8 @@ try 1 'int main() { return 5 == 5; }'
 try 1 'int main() { return 4 != 5; }'
 try 0 'int main() { return 5 != 5; }'
 
+try 45 'int main() { int x=0; int y=0; do { y=y+x; x=x+1; } while (x < 10); return y; }'
+
 echo -e "\n\e[32m*** SUCCESS! ***\e[m\n"
 
 # echo -e "\e[32m=== compile_err test start ===\e[m\n"

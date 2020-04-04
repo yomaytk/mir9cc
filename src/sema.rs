@@ -229,6 +229,9 @@ pub fn walk(env: &mut Env, node: &Node, decay: bool) -> Node {
 		Ne(lhs, rhs) => {
 			return Node::new_neq(walk(env, lhs, true), walk(env, rhs, true));
 		}
+		DoWhile(body, cond) => {
+			return Node::new_dowhile(walk(env, body, true), walk(env, cond, true));
+		}
 		_ => { panic!("sema error at: {:?}", node); }
 	}
 }

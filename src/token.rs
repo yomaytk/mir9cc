@@ -73,6 +73,8 @@ pub enum TokenType {
 	TokenString(String),
 	TokenEqEq,
 	TokenNe,
+	TokenDo,
+	TokenWhile,
 	TokenNoSignal,
 	TokenEof,
 }
@@ -87,6 +89,8 @@ impl From<String> for TokenType {
 			"int" => { TokenInt }
 			"sizeof" => { TokenSizeof }
 			"char" => { TokenChar }
+			"do" => { TokenDo }
+			"while" => { TokenWhile }
 			_ => { TokenIdent }
 		}
 	}

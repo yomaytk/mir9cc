@@ -144,6 +144,10 @@ pub fn gen(fun: &Function, label: usize) {
 			IrNe => {
 				emit_cmp(ir, String::from("setne"));
 			}
+			IrIf => {
+				println!("\tcmp {}, 0", REG64[ir.lhs]);
+				println!("\tjne .L{}", ir.rhs);
+			}
 			IrLabelAddr => {
 				println!("\tlea {}, .L.str{}", REG64[ir.lhs], ir.rhs);
 			}

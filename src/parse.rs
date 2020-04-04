@@ -41,6 +41,7 @@ pub enum NodeType {
 	Gvar(Type, usize),
 	EqEq(Box<Node>, Box<Node>),
 	Ne(Box<Node>, Box<Node>),
+	DoWhile(Box<Node>, Box<Node>),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -192,6 +193,10 @@ impl NodeType {
 
 	fn neq_init(lhs: Node, rhs: Node) -> Self {
 		NodeType::Ne(Box::new(lhs), Box::new(rhs))
+	}
+
+	fn dowhile_init(body: Node, cond: Node) -> Self {
+		NodeType::DoWhile(Box::new(body), Box::new(cond))
 	}
 }
 
@@ -359,6 +364,12 @@ impl Node {
 	pub fn new_neq(lhs: Node, rhs: Node) -> Self {
 		Self {
 			op: NodeType::neq_init(lhs, rhs)
+		}
+	}
+
+	pub fn new_dowhile(body: Node, cond: Node) -> Self {
+		Self {
+			op: NodeType::dowhile_init(body, cond)
 		}
 	}
 }
@@ -625,6 +636,16 @@ pub fn stmt(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 			tokens[*pos].assert_ty(TokenLeftBrac, pos);
 			let body = stmt(tokens, pos);
 			return Node::new_for(init, cond, inc, body);
+		}
+		TokenDo => {
+			*pos += 1;
+			let body = stmt(tokens, pos);
+			tokens[*pos].assert_ty(TokenWhile, pos);
+			tokens[*pos].assert_ty(TokenRightBrac, pos);
+			let cond = assign(tokens, pos);
+			tokens[*pos].assert_ty(TokenLeftBrac, pos);
+			tokens[*pos].assert_ty(TokenSemi, pos);
+			return Node::new_dowhile(body, cond);
 		}
 		TokenRightCurlyBrace => {
 			*pos += 1;
