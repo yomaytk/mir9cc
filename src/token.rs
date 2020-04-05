@@ -214,7 +214,8 @@ fn read_string<'a> (p: &mut core::str::Chars, pos: &mut usize, input: &'a String
 			len += 1;
 			continue;
 		}
-		match c {
+		let c2 = p.next().unwrap();
+		match c2 {
 			'a' => { sb.push_str("\\a"); }
 			'b' => { sb.push_str("\\b"); }
 			'f' => { sb.push_str("\\f"); }
@@ -225,8 +226,8 @@ fn read_string<'a> (p: &mut core::str::Chars, pos: &mut usize, input: &'a String
 			'\0' => { panic!("PREMATURE of input."); }
 			_ => { sb.push(c); }
 		}
-		*pos += 1;
-		len += 1;
+		*pos += 2;
+		len += 2;
 	}
 	return Token::new(TokenString(sb), len, &input[start..]);
 }

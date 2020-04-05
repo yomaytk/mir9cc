@@ -424,7 +424,7 @@ fn gen_stmt(node: &Node, code: &mut Vec<Ir>) {
 	match &node.op {
 		NodeType::Ret(lhs) => {
 			
-			let lhi= gen_expr(lhs.as_ref(), code);
+			let lhi = gen_expr(lhs.as_ref(), code);
 			
 			if *RETURN_LABEL.lock().unwrap() > 0 {
 				code.push(Ir::new(IrMov, *RETURN_REG.lock().unwrap(), lhi));
@@ -437,22 +437,23 @@ fn gen_stmt(node: &Node, code: &mut Vec<Ir>) {
 			kill(lhi, code);
 		}
 		NodeType::Expr(lhs) => {
-			let r = gen_expr(lhs.as_ref(), code);
-			kill(r, code);
+			kill(gen_expr(lhs.as_ref(), code), code);
 		}
 		NodeType::IfThen(cond, then, elthen) => {
 			let lhi = gen_expr(cond, code);
-			*LABEL.lock().unwrap() += 1;
-			code.push(Ir::new(IrUnless, lhi, *LABEL.lock().unwrap()));
+			*LABEL.lock().unwrap() += 2;
+			let x1 = *LABEL.lock().unwrap();
+			let x2 = x1-1;
+			code.push(Ir::new(IrUnless, lhi, x1));
 			kill(lhi, code);
 			gen_stmt(then, code);
 			match elthen {
 				Some(elnode) => {
-					code.push(Ir::new(IrJmp, *LABEL.lock().unwrap(), 0));
-					label(*LABEL.lock().unwrap(), code);
+					code.push(Ir::new(IrJmp, x2, 0));
+					label(x1, code);
 					gen_stmt(elnode, code);
 					*LABEL.lock().unwrap() += 1;
-					label(*LABEL.lock().unwrap(), code);
+					label(x2, code);
 				},
 				None => {
 					label(*LABEL.lock().unwrap(), code);
@@ -474,7 +475,7 @@ fn gen_stmt(node: &Node, code: &mut Vec<Ir>) {
 			code.push(Ir::new(IrUnless, r2, y));
 			kill(r2, code);
 			gen_stmt(body, code);
-			gen_expr(inc, code);
+			kill(gen_expr(inc, code), code);
 			code.push(Ir::new(IrJmp, x, 0));
 			label(y, code);
 		}
@@ -489,11 +490,11 @@ fn gen_stmt(node: &Node, code: &mut Vec<Ir>) {
 		}
 		NodeType::VarDef(ctype, _, _, off, init) => {
 			if let Some(rhs) = init {
+				let r2 = gen_expr(rhs, code);
 				*REGNO.lock().unwrap() += 1;
 				let r1 = *REGNO.lock().unwrap();
 				code.push(Ir::new(IrMov, r1, 0));
 				code.push(Ir::new(IrSubImm, r1, *off));
-				let r2 = gen_expr(rhs, code);
 				match ctype.ty {
 					Ty::CHAR => { code.push(Ir::new(IrStore8, r1, r2)); }
 					Ty::INT => { code.push(Ir::new(IrStore32, r1, r2)); }

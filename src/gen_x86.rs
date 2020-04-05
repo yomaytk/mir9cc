@@ -13,9 +13,9 @@ fn escape(strname: String) -> String {
 	let mut name = String::new();
 
 	while let Some(c) = p.next() {
-		if c == '\\' {
+		if c == '\\' || c == '"'{
 			name.push('\\');
-			name.push('\\');
+			name.push(c);
 		} else if c.is_ascii_graphic() || c == ' ' {
 			name.push(c);
 		} else {

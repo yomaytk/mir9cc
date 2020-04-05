@@ -41,8 +41,9 @@ fn main() {
 		panic!("Usage: mir9cc [-dump-ir1] [-dump-ir2] <code>");
 	}
 
+	// input program
 	let p:String = (&args[args.len()-1][..]).chars().collect();
-	
+
 	// lexical analysis
 	let tokens = tokenize(&p);
 	// for token in &tokens {
