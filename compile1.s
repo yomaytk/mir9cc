@@ -10,14 +10,12 @@ main:
 	push r13
 	push r14
 	push r15
-	lea r10, global_arr
-	mov r11, 0
-	mov rbx, 4
-	mov rax, rbx
-	mul r11
-	mov r11, rax
-	add r10, r11
-	mov r10d, [r10]
+	mov r10, 3
+	mov r11, 5
+	mov rbx, r11
+	jmp .L2
+.L2:
+	add r10, rbx
 	mov rax, r10
 	jmp .Lend0
 .Lend0:

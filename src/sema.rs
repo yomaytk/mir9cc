@@ -143,6 +143,9 @@ pub fn walk(env: &mut Env, node: &Node, decay: bool) -> Node {
 			}
 			return Node::new_stmt(v);
 		}
+		StmtExpr(ctype, body) => {
+			return Node::new_stmtexpr(ctype.clone(), walk(env, body, true));
+		}
 		Ident(name) => {
 			if let Some(var) = env.find(name.clone()) {
 				if var.is_local {

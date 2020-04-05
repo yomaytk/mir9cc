@@ -24,6 +24,7 @@ pub enum NodeType {
 	Ret(Box<Node>),
 	Expr(Box<Node>),
 	CompStmt(Vec<Node>),
+	StmtExpr(Type, Box<Node>),
 	Ident(String),
 	EqTree(Type, Box<Node>, Box<Node>),
 	IfThen(Box<Node>, Box<Node>, Option<Box<Node>>),
@@ -197,6 +198,10 @@ impl NodeType {
 
 	fn dowhile_init(body: Node, cond: Node) -> Self {
 		NodeType::DoWhile(Box::new(body), Box::new(cond))
+	}
+
+	fn stmtexpr_init(ctype: Type, body: Node) -> Self {
+		NodeType::StmtExpr(ctype, Box::new(body))
 	}
 }
 
@@ -372,11 +377,23 @@ impl Node {
 			op: NodeType::dowhile_init(body, cond)
 		}
 	}
+
+	pub fn new_stmtexpr(ctype: Type, body: Node) -> Self {
+		Self {
+			op: NodeType::stmtexpr_init(ctype, body)
+		}
+	}
 }
 
 fn primary(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 	
 	if tokens[*pos].consume_ty(TokenRightBrac, pos) {
+		if tokens[*pos].consume_ty(TokenRightCurlyBrace, pos) {
+			*pos -= 1;
+			let body = Node::new_stmtexpr(INT_TY.clone(), compound_stmt(tokens, pos));
+			tokens[*pos].assert_ty(TokenLeftBrac, pos);
+			return body;
+		}
 		let lhs = assign(tokens, pos);
 		tokens[*pos].assert_ty(TokenLeftBrac, pos);
 		return lhs;

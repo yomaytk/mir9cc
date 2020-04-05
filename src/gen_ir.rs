@@ -52,7 +52,9 @@ lazy_static! {
 		(IrOp::IrKill, IrInfo::new("KILL", IrType::Reg)),
 		(IrOp::IrNop, IrInfo::new("NOP", IrType::NoArg))
 	]);
-	pub static ref LABEL: Mutex<usize> = Mutex::new(0);
+	pub static ref LABEL: Mutex<usize> = Mutex::new(1);
+	pub static ref RETURN_LABEL: Mutex<usize> = Mutex::new(0);
+	pub static ref RETURN_REG: Mutex<usize> = Mutex::new(0);
 }
 
 #[allow(dead_code)]
@@ -395,6 +397,23 @@ fn gen_expr(node: &Node, code: &mut Vec<Ir>) -> usize {
 			kill(r2, code);
 			return r1;
 		}
+		NodeType::StmtExpr(_, body) => {
+			let orig_label = *RETURN_LABEL.lock().unwrap();
+			let orig_reg = *RETURN_REG.lock().unwrap();
+			*LABEL.lock().unwrap() += 1;
+			*REGNO.lock().unwrap() += 1;
+			*RETURN_LABEL.lock().unwrap() = *LABEL.lock().unwrap();
+			*RETURN_REG.lock().unwrap() = *REGNO.lock().unwrap();
+			let r = *RETURN_REG.lock().unwrap();
+
+			gen_stmt(body, code);
+			label(*RETURN_LABEL.lock().unwrap(), code);
+
+			*RETURN_LABEL.lock().unwrap() = orig_label;
+			*RETURN_REG.lock().unwrap() = orig_reg;
+
+			return r;
+		}
 		_ => { panic!("gen_expr NodeType error at {:?}", node.op); }
 	}
 
@@ -404,7 +423,16 @@ fn gen_expr(node: &Node, code: &mut Vec<Ir>) -> usize {
 fn gen_stmt(node: &Node, code: &mut Vec<Ir>) {
 	match &node.op {
 		NodeType::Ret(lhs) => {
+			
 			let lhi= gen_expr(lhs.as_ref(), code);
+			
+			if *RETURN_LABEL.lock().unwrap() > 0 {
+				code.push(Ir::new(IrMov, *RETURN_REG.lock().unwrap(), lhi));
+				kill(lhi, code);
+				code.push(Ir::new(IrJmp, *RETURN_LABEL.lock().unwrap(), 0));
+				return;
+			}
+
 			code.push(Ir::new(IrRet, lhi, 0));
 			kill(lhi, code);
 		}

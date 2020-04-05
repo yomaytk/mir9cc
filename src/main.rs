@@ -51,7 +51,7 @@ fn main() {
 
 	// parsing analysis
 	let nodes = parse(&tokens, &mut 0);
-	// println!("{:#?}", &node);
+	// println!("{:#?}", &nodes);
 	let (nodes, globals) = sema(&nodes);
 	
 	// alloc index for register

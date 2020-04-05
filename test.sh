@@ -154,6 +154,8 @@ try 45 'int main() { int x=0; int y=0; do { y=y+x; x=x+1; } while (x < 10); retu
 
 try 5 'extern int global_arr[1]; int main() { return global_arr[0]; }'
 
+try 8 'int main() { return 3 + ({ return 5; }); }'
+
 echo -e "\n\e[32m*** SUCCESS! ***\e[m\n"
 
 # echo -e "\e[32m=== compile_err test start ===\e[m\n"
