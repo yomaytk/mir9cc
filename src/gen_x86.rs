@@ -12,7 +12,7 @@ fn escape(strname: String, len: usize) -> String {
 	let mut p = strname.chars();
 	let mut name = String::new();
 
-	for i in 0..len {
+	for _ in 0..len {
 		if let Some(c) = p.next(){
 			if c == '\\' || c == '"'{
 				name.push('\\');

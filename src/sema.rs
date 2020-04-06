@@ -240,6 +240,9 @@ pub fn walk(env: &mut Env, node: &Node, decay: bool) -> Node {
 		DoWhile(body, cond) => {
 			return Node::new_dowhile(walk(env, body, true), walk(env, cond, true));
 		}
+		NULL => {
+			return Node::new_null();
+		}
 		_ => { panic!("sema error at: {:?}", node); }
 	}
 }

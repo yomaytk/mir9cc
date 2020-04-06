@@ -422,6 +422,9 @@ fn gen_expr(node: &Node, code: &mut Vec<Ir>) -> usize {
 
 fn gen_stmt(node: &Node, code: &mut Vec<Ir>) {
 	match &node.op {
+		NodeType::NULL => { 
+			return; 
+		}
 		NodeType::Ret(lhs) => {
 			
 			let lhi = gen_expr(lhs.as_ref(), code);
@@ -475,7 +478,7 @@ fn gen_stmt(node: &Node, code: &mut Vec<Ir>) {
 			code.push(Ir::new(IrUnless, r2, y));
 			kill(r2, code);
 			gen_stmt(body, code);
-			kill(gen_expr(inc, code), code);
+			gen_stmt(inc, code);
 			code.push(Ir::new(IrJmp, x, 0));
 			label(y, code);
 		}

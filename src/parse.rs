@@ -43,6 +43,7 @@ pub enum NodeType {
 	EqEq(Box<Node>, Box<Node>),
 	Ne(Box<Node>, Box<Node>),
 	DoWhile(Box<Node>, Box<Node>),
+	NULL,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -202,6 +203,10 @@ impl NodeType {
 
 	fn stmtexpr_init(ctype: Type, body: Node) -> Self {
 		NodeType::StmtExpr(ctype, Box::new(body))
+	}
+
+	fn null_init() -> Self {
+		NodeType::NULL
 	}
 }
 
@@ -381,6 +386,12 @@ impl Node {
 	pub fn new_stmtexpr(ctype: Type, body: Node) -> Self {
 		Self {
 			op: NodeType::stmtexpr_init(ctype, body)
+		}
+	}
+
+	pub fn new_null() -> Self {
+		Self {
+			op: NodeType::null_init()
 		}
 	}
 }
@@ -649,7 +660,17 @@ pub fn stmt(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 			}
 			let cond = assign(tokens, pos);
 			tokens[*pos].assert_ty(TokenSemi, pos);
-			let inc = assign(tokens, pos);
+			let inc = stmt(tokens, pos);
+			tokens[*pos].assert_ty(TokenLeftBrac, pos);
+			let body = stmt(tokens, pos);
+			return Node::new_for(init, cond, inc, body);
+		}
+		TokenWhile => {
+			*pos += 1;
+			let init = Node::new_null();
+			let inc = Node::new_null();
+			tokens[*pos].assert_ty(TokenRightBrac, pos);
+			let cond = assign(tokens, pos);
 			tokens[*pos].assert_ty(TokenLeftBrac, pos);
 			let body = stmt(tokens, pos);
 			return Node::new_for(init, cond, inc, body);
