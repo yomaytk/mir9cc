@@ -106,6 +106,5 @@ int main() {
 	EXPECT(8, ({ return 3 + ({ return 5; }); }));
 	EXPECT(1, ({; return 1; }));
 
-	printf("OK\n");
 return 0;
 }
