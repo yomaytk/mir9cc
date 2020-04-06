@@ -696,6 +696,10 @@ pub fn stmt(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 		TokenInt | TokenChar => {
 			return decl(tokens, pos);
 		}
+		TokenSemi => {
+			*pos += 1;
+			return Node::new_null();
+		}
 		_ => {
 			return expr(tokens, pos);
 		}
