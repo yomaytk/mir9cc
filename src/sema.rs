@@ -15,24 +15,20 @@ pub struct Var {
 	pub ctype: Type,
 	pub offset: usize,
 	pub is_local: bool,
-	pub label: usize,
 	pub ident: String,
 	pub strname: String,
 	pub is_extern: bool,
-	pub is_string_decl: bool,
 }
 
 impl Var {
-	pub fn new(ctype: Type, offset: usize, is_local: bool, label: usize, ident: String, strname: String, is_extern: bool, is_string_decl: bool) -> Self {
+	pub fn new(ctype: Type, offset: usize, is_local: bool, ident: String, strname: String, is_extern: bool) -> Self {
 		Self {
 			ctype,
 			offset,
 			is_local,
-			label,
 			ident,
 			strname,
 			is_extern,
-			is_string_decl,
 		}
 	}
 }
@@ -90,9 +86,7 @@ pub fn maybe_decay(node: Node, decay: bool) -> Node {
 	}
 }
 
-pub fn new_global(ctype: &Type, ident: String, strname: Option<String>, is_extern: bool, is_string_decl: bool) -> Var {
-	*STRLABEL.lock().unwrap() += 1;
-	let label = *STRLABEL.lock().unwrap();
+pub fn new_global(ctype: &Type, ident: String, strname: Option<String>, is_extern: bool) -> Var {
 	let mut strdata = String::new();
 	if let Some(data) = strname {
 		strdata = data.clone()
@@ -101,11 +95,9 @@ pub fn new_global(ctype: &Type, ident: String, strname: Option<String>, is_exter
 		ctype.clone(), 
 		0, 
 		false, 
-		label, 
 		ident,
 		strdata,
 		is_extern,
-		is_string_decl,
 	);
 	return var;
 }
@@ -151,9 +143,6 @@ pub fn walk(env: &mut Env, node: &Node, decay: bool) -> Node {
 				if var.is_local {
 					let lvar = Node::new_lvar(var.ctype.clone(), var.offset);
 					return maybe_decay(lvar, decay);
-				} else if var.is_string_decl {
-					let gvar = Node::new_gvar(var.ctype.clone(), format!(".L.str{}", var.label));
-					return maybe_decay(gvar, decay);
 				} else {
 					let gvar = Node::new_gvar(var.ctype.clone(), var.ident.clone());
 					return maybe_decay(gvar, decay);
@@ -208,11 +197,9 @@ pub fn walk(env: &mut Env, node: &Node, decay: bool) -> Node {
 					ctype.clone(), 
 					offset, 
 					true, 
-					0, 
 					ident.clone(),
 					String::from("dummy"),
 					*is_extern,
-					false,
 				),
 			);
 			return Node::new_vardef(ctype.clone(), *is_extern, ident.clone(), offset, rexpr)
@@ -238,8 +225,10 @@ pub fn walk(env: &mut Env, node: &Node, decay: bool) -> Node {
 			panic!("The size of an untyped value cannot be calculated.");
 		}
 		Str(ctype, strname, _) => {
-			GVARS.lock().unwrap().push(new_global(&ctype, String::new(), Some(strname.clone()), false, true));
-			let lhs = Node::new_gvar(ctype.clone(), format!(".L.str{}", *STRLABEL.lock().unwrap()));
+			*STRLABEL.lock().unwrap() += 1;
+			let labelname = format!(".L.str{}", *STRLABEL.lock().unwrap());
+			GVARS.lock().unwrap().push(new_global(&ctype, labelname.clone(), Some(strname.clone()), false));
+			let lhs = Node::new_gvar(ctype.clone(), labelname);
 			return maybe_decay(lhs, decay);
 		}
 		EqEq(lhs, rhs) => {
@@ -264,7 +253,7 @@ pub fn sema(nodes: &Vec<Node>) -> (Vec<Node>, Vec<Var>) {
 		let node;
 
 		if let VarDef(ctype, is_extern, ident, _, _) = &topnode.op {
-			let var = new_global(&ctype, ident.clone(), None, *is_extern, false);
+			let var = new_global(&ctype, ident.clone(), None, *is_extern);
 			GVARS.lock().unwrap().push(var.clone());
 			topenv.vars.insert(ident.clone(), var);
 			continue;

@@ -8,22 +8,25 @@ pub static ARGREG8: [&str; 6] = ["dil", "sil", "dl", "cl", "r8b", "r9b"];
 pub static ARGREG32: [&str; 6] = ["edi", "esi", "edx", "ecx", "r8d", "r9d"];
 pub static ARGREG64: [&str; 6] = ["rdi", "rsi", "rdx", "rcx", "r8", "r9"];
 
-fn escape(strname: String) -> String {
+fn escape(strname: String, len: usize) -> String {
 	let mut p = strname.chars();
 	let mut name = String::new();
 
-	while let Some(c) = p.next() {
-		if c == '\\' || c == '"'{
-			name.push('\\');
-			name.push(c);
-		} else if c.is_ascii_graphic() || c == ' ' {
-			name.push(c);
+	for i in 0..len {
+		if let Some(c) = p.next(){
+			if c == '\\' || c == '"'{
+				name.push('\\');
+				name.push(p.next().unwrap());
+			} else if c.is_ascii_graphic() || c == ' ' {
+				name.push(c);
+			} else {
+				name.push_str(&format!("\\{:o}", c as i8));
+			}
 		} else {
-			name.push_str(&format!("\\{:o}", c as i8));
+			name.push_str("\\000");
 		}
 	}
 	name.push_str("\\000");
-
 	return name;
 }
 
@@ -176,12 +179,8 @@ pub fn gen_x86(globals: Vec<Var>, funcs: Vec<Function>) {
 		if gvar.is_extern {
 			continue;
 		}
-		if gvar.is_string_decl {
-			println!(".L.str{}:", gvar.label);
-		} else {
-			println!("{}:", gvar.ident.clone());
-		}
-		println!("  .ascii \"{}\"", escape(gvar.strname.clone()));
+		println!("{}:", gvar.ident.clone());
+		println!("  .ascii \"{}\"", escape(gvar.strname.clone(), gvar.ctype.size_of()));
 	}
 
 	for i in 0..funcs.len() {
