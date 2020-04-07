@@ -1,5 +1,20 @@
 use TokenType::*;
 use super::parse::{Type, Ty};
+use std::collections::HashMap;
+use std::sync::Mutex;
+
+macro_rules! hash {
+	( $( $t:expr),* ) => {
+		{
+			let mut temp_hash = HashMap::new();
+			$(
+				temp_hash.insert($t.0, $t.1);
+			)*
+			temp_hash
+		}
+	};
+}
+
 
 lazy_static! {
 	pub static ref INT_TY: Type = Type {
@@ -14,6 +29,11 @@ lazy_static! {
 		ary_of: None,
 		len: 0,
 	};
+	pub static ref ESCAPED: Mutex<HashMap<char, char>> = Mutex::new(hash![
+		// ('a', "\\a"), ('b', "\\b"), ('f', "\\f"),
+		('n', '\n'), ('r', '\r'), // ('v', "\\v"),
+		('t', '\t') // ('e', '\033'), ('E', '\033')
+	]); 
 }
 
 
@@ -215,21 +235,46 @@ fn read_string<'a> (p: &mut core::str::Chars, pos: &mut usize, input: &'a String
 			continue;
 		}
 		let c2 = p.next().unwrap();
-		match c2 {
-			'a' => { sb.push_str("\\a"); }
-			'b' => { sb.push_str("\\b"); }
-			'f' => { sb.push_str("\\f"); }
-			'n' => { sb.push_str("\\n"); }
-			'r' => { sb.push_str("\\r"); }
-			'v' => { sb.push_str("\\v"); }
-			't' => { sb.push_str("\\t"); }
-			'\0' => { panic!("PREMATURE of input."); }
-			_ => { sb.push(c); }
+		if c2 == '\0' {
+			panic!("PREMATURE of input.");
+		} else if let Some(c3) = ESCAPED.lock().unwrap().get(&c2) {
+			sb.push(*c3);
+		} else {
+			sb.push(c2.clone());
 		}
 		*pos += 2;
 		len += 2;
 	}
 	return Token::new(TokenString(sb), len, &input[start..]);
+}
+
+fn read_char<'a> (p: &mut core::str::Chars, pos: &mut usize, input: &'a String) -> Token<'a> {
+	
+	let val;
+	let start = *pos;
+
+	if let Some(c) = p.next() {
+		*pos += 1;
+		if c != '\\' {
+			val = c as i32;
+		} else {
+			if let Some(c2) = p.next() {
+				*pos += 1;
+				if let Some(c3) = ESCAPED.lock().unwrap().get(&c2) {
+					val = *c3 as i32;
+				} else {
+					val = c2 as i32;
+				}
+			} else {
+				panic!("premature of input.");
+			}
+		}
+	} else {
+		panic!("unclosed char literal.");
+	}
+	assert!(p.next().unwrap() == '\'');
+	*pos += 1;
+	return Token::new(TokenNum, val, &input[start..]);
 }
 
 pub fn tokenize(input: &String) -> Vec<Token> {
@@ -243,6 +288,13 @@ pub fn tokenize(input: &String) -> Vec<Token> {
 		// space
 		if c.is_whitespace() {
 			pos += 1;
+			continue;
+		}
+
+		// char literal
+		if c == '\'' {
+			pos += 1;
+			tokens.push(read_char(&mut p, &mut pos, &input));
 			continue;
 		}
 
