@@ -1,4 +1,5 @@
 use std::env;
+use std::fs;
 
 pub mod token;
 pub mod parse;
@@ -25,6 +26,11 @@ fn print_typename<T>(_: T) {
     println!("{}", std::any::type_name::<T>());
 }
 
+fn read_file(filename: &str) -> Result<String, Box<dyn std::error::Error>>{
+	let content = fs::read_to_string(filename)?;
+	return Ok(content);
+}
+
 fn main() {
 	let args: Vec<String> = env::args().collect();
 	
@@ -40,12 +46,20 @@ fn main() {
 		dump_ir2 = true;
 	} else if args.len() == 2 {
 	} else {
-		panic!("Usage: mir9cc [-dump-ir1] [-dump-ir2] <code>");
+		println!("Usage: mir9cc [-dump-ir1] [-dump-ir2] <file>");
+		std::process::exit(1);
 	}
 
 	// input program
-	let p:String = (&args[args.len()-1][..]).chars().collect();
-
+	let p;
+	match read_file(&args[args.len()-1][..]) {
+		Ok(content) => { p = content; }
+		Err(_) => { 
+			println!("failed to read file.");
+			std::process::exit(1);
+		}
+	}
+	
 	// lexical analysis
 	let tokens = tokenize(&p);
 	// for token in &tokens {
