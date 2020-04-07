@@ -20,7 +20,7 @@ use std::fmt;
 
 lazy_static! {
 	pub static ref REGNO: Mutex<usize> = Mutex::new(1);
-	pub static ref LABEL: Mutex<usize> = Mutex::new(1);
+	pub static ref LABEL: Mutex<usize> = Mutex::new(0);
 	pub static ref RETURN_LABEL: Mutex<usize> = Mutex::new(0);
 	pub static ref RETURN_REG: Mutex<usize> = Mutex::new(0);
 }

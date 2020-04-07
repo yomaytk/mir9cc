@@ -12,7 +12,7 @@ use super::gen_ir::{*, IrOp::*, IrType::*};
 // practically we don't have to think about the case in which
 // registers are exhausted and need to be spilled to memory.
 
-static REG_SIZE: usize = 8;
+static REG_SIZE: usize = 7;
 
 // allocate the register can be used
 fn alloc(reg_map: &mut [i32], used: &mut [bool], ir_reg: usize) -> usize {
@@ -74,8 +74,6 @@ pub fn alloc_regs(funcs: &mut Vec<Function>) {
 	for fun in funcs {
 		let mut reg_map: Vec<i32> = vec![-1; 10000];
 		let mut used: Vec<bool> = vec![false; 8];
-		reg_map[0] = 0;
-		used[0] = true;
 		visit(&mut reg_map, &mut used, &mut fun.irs);
 	}
 }
