@@ -102,12 +102,12 @@ pub fn new_global(ctype: &Type, ident: String, strname: Option<String>, is_exter
 	return var;
 }
 
-pub fn walk(env: &mut Env, node: &Node, decay: bool) -> Node {
+pub fn walk(node: &Node, env: &mut Env, decay: bool) -> Node {
 	match &node.op {
 		Num(val) => { return Node::new_num(*val); }
 		BinaryTree(_ctype, op, lhs, rhs)  => {
-			let lhs2 = walk(env, lhs.as_ref().unwrap(), true);
-			let rhs2 = walk(env, rhs.as_ref().unwrap(), true);
+			let lhs2 = walk(lhs.as_ref().unwrap(), env, true);
+			let rhs2 = walk(rhs.as_ref().unwrap(), env, true);
 			let mut ctype = Type::new(Ty::INT, None, None, 0);
 			if lhs2.hasctype(){
 				ctype = lhs2.nodesctype();
@@ -125,18 +125,18 @@ pub fn walk(env: &mut Env, node: &Node, decay: bool) -> Node {
 			}
 			return Node::new_bit(ctype, op.clone(), lhs2, rhs2);
 		}
-		Ret(lhs) => { return Node::new_ret(walk(env, lhs, true)); }
-		Expr(lhs) => { return Node::new_expr(walk(env, lhs, true)); }
+		Ret(lhs) => { return Node::new_ret(walk(lhs, env, true)); }
+		Expr(lhs) => { return Node::new_expr(walk(lhs, env, true)); }
 		CompStmt(lhsv) => {
 			let mut v = vec![];
 			let mut newenv = Env::new(Some(env.clone()));
 			for lhs in lhsv {
-				v.push(walk(&mut newenv, lhs, true));
+				v.push(walk(lhs, &mut newenv, true));
 			}
 			return Node::new_stmt(v);
 		}
 		StmtExpr(ctype, body) => {
-			return Node::new_stmtexpr(ctype.clone(), walk(env, body, true));
+			return Node::new_stmtexpr(ctype.clone(), walk(body, env, true));
 		}
 		Ident(name) => {
 			if let Some(var) = env.find(name.clone()) {
@@ -151,43 +151,43 @@ pub fn walk(env: &mut Env, node: &Node, decay: bool) -> Node {
 			panic!("\"{}\" is not defined.", name);
 		}
 		EqTree(_, lhs, rhs) => {
-			let lhs2 = walk(env, lhs, false);
+			let lhs2 = walk(lhs, env, false);
 			lhs2.checklval();
-			let rhs2 = walk(env, rhs, true);
+			let rhs2 = walk(rhs, env, true);
 			return Node::new_eq(lhs2.nodesctype().clone(), lhs2, rhs2);
 		}
 		IfThen(cond, then, elthen) => {
 			match elthen {
 				Some(elth) => { 
-					return Node::new_if(walk(env, cond, true), walk(env, then, true), Some(walk(env, elth, true)));
+					return Node::new_if(walk(cond, env, true), walk(then, env, true), Some(walk(elth, env, true)));
 				}
-				_ => { return Node::new_if(walk(env, cond, true), walk(env, then, true), None); }
+				_ => { return Node::new_if(walk(cond, env, true), walk(then, env, true), None); }
 			}
 		}
 		Call(name, args) => {
 			let mut v = vec![];
 			for arg in args {
-				v.push(walk(env, arg, true));
+				v.push(walk(arg, env, true));
 			}
 			return Node::new_call(name.clone(), v);
 		}
 		Func(name, is_extern, args, body, _) => {
 			let mut argv = vec![];
 			for arg in args {
-				argv.push(walk(env, arg, true));
+				argv.push(walk(arg, env, true));
 			}
-			let body = walk(env, body, true);
+			let body = walk(body, env, true);
 			return Node::new_func(name.clone(), *is_extern, argv, body, 0);
 		}
-		LogAnd(lhs, rhs) => { return Node::new_and(walk(env, lhs, true), walk(env, rhs, true)); }
-		LogOr(lhs, rhs) => { return Node::new_or(walk(env, lhs, true), walk(env, rhs, true)); }
+		LogAnd(lhs, rhs) => { return Node::new_and(walk(lhs, env, true), walk(rhs, env, true)); }
+		LogOr(lhs, rhs) => { return Node::new_or(walk(lhs, env, true), walk(rhs, env, true)); }
 		For(init, cond, inc, body) => {
-			return Node::new_for(walk(env, init, true), walk(env, cond, true), walk(env, inc, true), walk(env, body, true));
+			return Node::new_for(walk(init, env,  true), walk(cond, env, true), walk(inc, env, true), walk(body, env, true));
 		}
 		VarDef(ctype, is_extern, ident, _, init) => {
 			let mut rexpr = None;
 			if let Some(rhs) = init {
-				rexpr = Some(walk(env, rhs, true));
+				rexpr = Some(walk(rhs, env, true));
 			}
 			*STACKSIZE.lock().unwrap() += ctype.size_of();
 			let offset = *STACKSIZE.lock().unwrap();
@@ -205,19 +205,19 @@ pub fn walk(env: &mut Env, node: &Node, decay: bool) -> Node {
 			return Node::new_vardef(ctype.clone(), *is_extern, ident.clone(), offset, rexpr)
 		}
 		Deref(_, lhs) => {
-			let lhs2 = walk(env, lhs, true);
+			let lhs2 = walk(lhs, env, true);
 			if lhs2.hasctype() && lhs2.nodesctype().ty == Ty::PTR {
 				return Node::new_deref(lhs2.nodesctype().ptr_of.as_ref().unwrap().as_ref().clone(), lhs2);
 			}
 			{ panic!("operand must be a pointer."); }
 		}
 		Addr(_, lhs) => {
-			let lhs2 = walk(env, lhs, true);
+			let lhs2 = walk(lhs, env, true);
 			lhs2.checklval();
 			return Node::new_addr(lhs2.nodesctype().ptr_of(), lhs2);
 		}
 		Sizeof(_, _, lhs) => {
-			let lhs2 = walk(env, lhs, false);
+			let lhs2 = walk(lhs, env, false);
 			if lhs2.hasctype() {
 				let val = lhs2.nodesctype().size_of();
 				return Node::new_num(val as i32);
@@ -232,13 +232,13 @@ pub fn walk(env: &mut Env, node: &Node, decay: bool) -> Node {
 			return maybe_decay(lhs, decay);
 		}
 		EqEq(lhs, rhs) => {
-			return Node::new_eqeq(walk(env, lhs, true), walk(env, rhs, true));
+			return Node::new_eqeq(walk(lhs, env, true), walk(rhs, env, true));
 		}
 		Ne(lhs, rhs) => {
-			return Node::new_neq(walk(env, lhs, true), walk(env, rhs, true));
+			return Node::new_neq(walk(lhs, env, true), walk(rhs, env, true));
 		}
 		DoWhile(body, cond) => {
-			return Node::new_dowhile(walk(env, body, true), walk(env, cond, true));
+			return Node::new_dowhile(walk(body, env, true), walk(cond, env, true));
 		}
 		NULL => {
 			return Node::new_null();
@@ -262,7 +262,7 @@ pub fn sema(nodes: &Vec<Node>) -> (Vec<Node>, Vec<Var>) {
 			continue;
 		}
 
-		match walk(&mut topenv, topnode, true).op {
+		match walk(topnode, &mut topenv, true).op {
 			Func(name, is_extern, args, body, _) => { 
 				node = Node::new_func(name.clone(), is_extern, args, *body, *STACKSIZE.lock().unwrap());
 			}
