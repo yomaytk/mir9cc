@@ -236,7 +236,7 @@ fn read_string<'a> (p: &mut core::str::Chars, pos: &mut usize, input: &'a String
 		}
 		let c2 = p.next().unwrap();
 		if c2 == '\0' {
-			panic!("PREMATURE of input.");
+			panic!("PREMATURE end of input.");
 		} else if let Some(c3) = ESCAPED.lock().unwrap().get(&c2) {
 			sb.push(*c3);
 		} else {
@@ -266,7 +266,7 @@ fn read_char<'a> (p: &mut core::str::Chars, pos: &mut usize, input: &'a String) 
 					val = c2 as i32;
 				}
 			} else {
-				panic!("premature of input.");
+				panic!("premature end of input.");
 			}
 		}
 	} else {
@@ -288,6 +288,45 @@ pub fn tokenize(input: &String) -> Vec<Token> {
 		// space
 		if c.is_whitespace() {
 			pos += 1;
+			continue;
+		}
+
+		// Line Comment
+		if c == '/' && &input[pos+1..pos+2] == "/" {
+			pos += 2;
+			let mut pp = p.clone();
+			let start = pos;
+			while let Some(c) = pp.next() {
+				pos += 1;
+				if c == '\n' {
+					break;
+				}
+			}
+			for _ in 0..(pos - start)-1 {
+				p.next();
+			}
+			continue;
+		}
+
+		// Block Comment
+		if c == '*' && &input[pos+1..pos+2] == "/" {
+			pos += 2;
+			let mut pp = p.clone();
+			let start = 0;
+			loop {
+				if let Some(c) = pp.next() {
+					pos += 1;
+					if c == '*' && &input[pos..pos+1] == "/" {
+						pos += 1;
+						break;
+					}
+				} else {
+					panic!("premature end of input.");
+				}
+			}
+			for _ in 0..(pos - start)-1 {
+				p.next();
+			}
 			continue;
 		}
 
