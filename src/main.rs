@@ -6,6 +6,7 @@ pub mod gen_ir;
 pub mod regalloc;
 pub mod gen_x86;
 pub mod sema;
+pub mod ir_dump;
 pub mod lib;
 
 use token::*;
@@ -14,6 +15,7 @@ use gen_ir::*;
 use regalloc::*;
 use gen_x86::*;
 use sema::*;
+use ir_dump::*;
 
 #[macro_use]
 extern crate lazy_static;
