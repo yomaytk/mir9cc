@@ -344,7 +344,7 @@ fn gen_expr(node: &Node, code: &mut Vec<Ir>) -> usize {
 						match &lhs2.op {
 							NodeType::Lvar(ctype, _) | NodeType::BinaryTree(ctype, _, _, _) 
 							| NodeType::Deref(ctype, _) | NodeType::Addr(ctype, _) => {
-								let size_of = ctype.ptr_of.as_ref().unwrap().size_of();
+								let size_of = ctype.ptr_to.as_ref().unwrap().size_of();
 								*REGNO.lock().unwrap() += 1;
 								let r1 = *REGNO.lock().unwrap();
 								code.push(Ir::new(IrImm, r1, size_of));
@@ -401,7 +401,7 @@ fn gen_expr(node: &Node, code: &mut Vec<Ir>) -> usize {
 		NodeType::Deref(_, lhs) => {
 			let r = gen_expr(lhs, code);
 			if lhs.hasctype() {
-				match lhs.nodesctype().ptr_of.unwrap().ty{
+				match lhs.nodesctype().ptr_to.unwrap().ty{
 					Ty::CHAR => { code.push(Ir::new(IrLoad8, r, r)); }
 					Ty::INT => { code.push(Ir::new(IrLoad32, r, r)); }
 					_ => { code.push(Ir::new(IrLoad64, r, r)); }

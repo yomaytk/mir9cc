@@ -12,14 +12,14 @@ use super::token::TokenType::*;
 lazy_static! {
 	pub static ref INT_TY: Type = Type {
 		ty: Ty::INT,
-		ptr_of: None,
-		ary_of: None,
+		ptr_to: None,
+		ary_to: None,
 		len: 0,
 	};
 	pub static ref CHAR_TY: Type = Type {
 		ty: Ty::CHAR,
-		ptr_of: None,
-		ary_of: None,
+		ptr_to: None,
+		ary_to: None,
 		len: 0,
 	};
 }
@@ -65,17 +65,17 @@ pub enum Ty {
 #[derive(Debug, Clone)]
 pub struct Type {
 	pub ty: Ty,
-	pub ptr_of: Option<Box<Type>>,
-	pub ary_of: Option<Box<Type>>,
+	pub ptr_to: Option<Box<Type>>,
+	pub ary_to: Option<Box<Type>>,
 	pub len: usize,
 }
 
 impl Type {
-	pub fn new(ty: Ty, ptr_of: Option<Box<Type>>, ary_of: Option<Box<Type>>, len: usize) -> Self {
+	pub fn new(ty: Ty, ptr_to: Option<Box<Type>>, ary_to: Option<Box<Type>>, len: usize) -> Self {
 		Self {
 			ty,
-			ptr_of,
-			ary_of,
+			ptr_to,
+			ary_to,
 			len,
 		}
 	}
@@ -83,23 +83,23 @@ impl Type {
 		match &self.ty {
 			Ty::INT => { return 4; }
 			Ty::PTR => { return 8; }
-			Ty::ARY => { return self.len * self.ary_of.as_ref().unwrap().size_of(); }
+			Ty::ARY => { return self.len * self.ary_to.as_ref().unwrap().size_of(); }
 			Ty::CHAR => { return 1; }
 		}
 	}
-	pub fn ptr_of(self) -> Self {
+	pub fn ptr_to(self) -> Self {
 		Self {
 			ty: Ty::PTR,
-			ptr_of: Some(Box::new(self)),
-			ary_of: None,
+			ptr_to: Some(Box::new(self)),
+			ary_to: None,
 			len: 0,
 		}
 	}
-	pub fn ary_of(self, len: usize) -> Self {
+	pub fn ary_to(self, len: usize) -> Self {
 		Self {
 			ty: Ty::ARY,
-			ptr_of: None,
-			ary_of: Some(Box::new(self)),
+			ptr_to: None,
+			ary_to: Some(Box::new(self)),
 			len,
 		}
 	}
@@ -447,7 +447,7 @@ fn primary(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 	}
 	if tokens[*pos].consume_ty(TokenString(String::new()), pos) {
 		let strname = tokens[*pos].getstring();
-		let cty = CHAR_TY.clone().ary_of(tokens[*pos].val as usize);
+		let cty = CHAR_TY.clone().ary_to(tokens[*pos].val as usize);
 		*pos += 1;
 		return Node::new_string(cty, strname, 0);
 	}
@@ -579,7 +579,7 @@ fn ctype(tokens: &Vec<Token>, pos: &mut usize) -> Type {
 	let mut ty = tokens[*pos].decl_type(pos);
 
 	while tokens[*pos].consume_ty(TokenStar, pos) {
-		ty = ty.ptr_of();
+		ty = ty.ptr_to();
 	}
 	return ty;
 }
@@ -600,7 +600,7 @@ fn read_array(tokens: &Vec<Token>, pos: &mut usize, ty: Type) -> Type {
 
 	if ary_size.len() > 0 {
 		for i in (0..ary_size.len()).rev() {
-			ty = ty.ary_of(ary_size[i]);
+			ty = ty.ary_to(ary_size[i]);
 		}
 	}
 

@@ -94,7 +94,7 @@ pub fn maybe_decay(node: Node, decay: bool) -> Node {
 	match &node.op {
 		Lvar(ctype, _) | Gvar(ctype, _) => {
 			if decay && ctype.ty == Ty::ARY {
-				return Node::new_addr(ctype.ary_of.as_ref().unwrap().as_ref().clone().ptr_of(), node);
+				return Node::new_addr(ctype.ary_to.as_ref().unwrap().as_ref().clone().ptr_to(), node);
 			}
 			return node;
 		}
@@ -223,14 +223,14 @@ pub fn walk(node: &Node, env: &mut Env, decay: bool) -> Node {
 		Deref(_, lhs) => {
 			let lhs2 = walk(lhs, env, true);
 			if lhs2.hasctype() && lhs2.nodesctype().ty == Ty::PTR {
-				return Node::new_deref(lhs2.nodesctype().ptr_of.as_ref().unwrap().as_ref().clone(), lhs2);
+				return Node::new_deref(lhs2.nodesctype().ptr_to.as_ref().unwrap().as_ref().clone(), lhs2);
 			}
 			{ panic!("operand must be a pointer."); }
 		}
 		Addr(_, lhs) => {
 			let lhs2 = walk(lhs, env, true);
 			lhs2.checklval();
-			return Node::new_addr(lhs2.nodesctype().ptr_of(), lhs2);
+			return Node::new_addr(lhs2.nodesctype().ptr_to(), lhs2);
 		}
 		Sizeof(_, _, lhs) => {
 			let lhs2 = walk(lhs, env, false);

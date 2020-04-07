@@ -24,14 +24,14 @@ macro_rules! hash {
 lazy_static! {
 	pub static ref INT_TY: Type = Type {
 		ty: Ty::INT,
-		ptr_of: None,
-		ary_of: None,
+		ptr_to: None,
+		ary_to: None,
 		len: 0,
 	};
 	pub static ref CHAR_TY: Type = Type {
 		ty: Ty::CHAR,
-		ptr_of: None,
-		ary_of: None,
+		ptr_to: None,
+		ary_to: None,
 		len: 0,
 	};
 	pub static ref ESCAPED: Mutex<HashMap<char, char>> = Mutex::new(hash![
