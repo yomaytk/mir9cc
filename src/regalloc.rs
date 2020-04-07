@@ -1,5 +1,17 @@
 use super::gen_ir::{*, IrOp::*, IrType::*};
 
+// Register allocator.
+//
+// Before this pass, it is assumed that we have infinite number of
+// registers. This pass maps them to a finite number of registers.
+// We actually have only 7 registers.
+//
+// We allocate registers only within a single expression. In other
+// words, there are no registers that live beyond semicolons.
+// This design choice simplifies the implementation a lot, since
+// practically we don't have to think about the case in which
+// registers are exhausted and need to be spilled to memory.
+
 static REG_SIZE: usize = 8;
 
 // allocate the register can be used

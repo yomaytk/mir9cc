@@ -3,6 +3,11 @@ use super::parse::{Type, Ty};
 use std::collections::HashMap;
 use std::sync::Mutex;
 
+// Atomic unit in the grammar is called "token".
+// For example, `123`, `"abc"` and `while` are tokens.
+// The tokenizer splits an input string into tokens.
+// Spaces and comments are removed by the tokenizer.
+
 macro_rules! hash {
 	( $( $t:expr),* ) => {
 		{

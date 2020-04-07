@@ -7,6 +7,17 @@ use std::sync::Mutex;
 use std::collections::HashMap;
 use std::fmt;
 
+// mir9cc's code generation is two-pass. In the first pass, abstract
+// syntax trees are compiled to IR (intermediate representation).
+//
+// IR resembles the real x86-64 instruction set, but it has infinite
+// number of registers. We don't try too hard to reuse registers in
+// this pass. Instead, we "kill" registers to mark them as dead when
+// we are done with them and use new registers.
+//
+// Such infinite number of registers are mapped to a finite registers
+// in a later pass.
+
 macro_rules! hash {
 	( $( $t:expr),* ) => {
 		{
@@ -241,6 +252,24 @@ fn kill(r: usize, code: &mut Vec<Ir>) {
 fn label(r: usize, code: &mut Vec<Ir>) {
 	code.push(Ir::new(IrLabel, r, 0));
 }
+
+// In C, all expressions that can be written on the left-hand side of
+// the '=' operator must have an address in memory. In other words, if
+// you can apply the '&' operator to take an address of some
+// expression E, you can assign E to a new value.
+//
+// Other expressions, such as `1+2`, cannot be written on the lhs of
+// '=', since they are just temporary values that don't have an address.
+//
+// The stuff that can be written on the lhs of '=' is called lvalue.
+// Other values are called rvalue. An lvalue is essentially an address.
+//
+// When lvalues appear on the rvalue context, they are converted to
+// rvalues by loading their values from their addresses. You can think
+// '&' as an operator that suppresses such automatic lvalue-to-rvalue
+// conversion.
+//
+// This function evaluates a given node as an lvalue.
 
 fn gen_lval(node: &Node, code: &mut Vec<Ir>) -> usize {
 	

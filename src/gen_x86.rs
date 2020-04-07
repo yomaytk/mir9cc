@@ -3,6 +3,8 @@ use super::sema::Var;
 use std::collections::HashMap;
 use std::sync::Mutex;
 
+// This pass generates x86-64 assembly from IR.
+
 macro_rules! hash {
 	( $( $t:expr),* ) => {
 		{
