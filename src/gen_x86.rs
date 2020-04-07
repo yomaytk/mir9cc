@@ -1,5 +1,5 @@
 use super::gen_ir::{*, IrOp::*};
-use super::sema::Var;
+use super::sema::{Var, roundup};
 use std::collections::HashMap;
 use std::sync::Mutex;
 
@@ -67,7 +67,7 @@ pub fn gen(fun: &Function, label: usize) {
 	println!("{}:", fun.name);
 	println!("\tpush rbp");
 	println!("\tmov rbp, rsp");
-	println!("\tsub rsp, {}", fun.stacksize);
+	println!("\tsub rsp, {}", roundup(fun.stacksize, 16));
 	println!("\tpush r12");
 	println!("\tpush r13");
 	println!("\tpush r14");

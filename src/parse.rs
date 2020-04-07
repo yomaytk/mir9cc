@@ -103,6 +103,15 @@ impl Type {
 			len,
 		}
 	}
+	pub fn align_of(&self) -> usize {
+		match &self.ty {
+			Ty::CHAR => { return 1; }
+			Ty::INT => { return 4; }
+			Ty::PTR => { return 8; }
+			Ty::ARY => { return self.ary_to.as_ref().unwrap().align_of(); }
+			// _ => { panic!("align_of error."); }
+		}
+	}
 }
 
 #[allow(dead_code)]

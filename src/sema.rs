@@ -118,6 +118,10 @@ pub fn new_global(ctype: &Type, ident: String, strname: Option<String>, is_exter
 	return var;
 }
 
+pub fn roundup(x: usize, align: usize) -> usize {
+	return (x + align - 1) & !(align - 1);
+}
+
 pub fn walk(node: &Node, env: &mut Env, decay: bool) -> Node {
 	match &node.op {
 		Num(val) => { return Node::new_num(*val); }
@@ -205,6 +209,8 @@ pub fn walk(node: &Node, env: &mut Env, decay: bool) -> Node {
 			if let Some(rhs) = init {
 				rexpr = Some(walk(rhs, env, true));
 			}
+			let stacksize = *STACKSIZE.lock().unwrap();
+			*STACKSIZE.lock().unwrap() = roundup(stacksize, ctype.align_of());
 			*STACKSIZE.lock().unwrap() += ctype.size_of();
 			let offset = *STACKSIZE.lock().unwrap();
 			env.vars.insert(
