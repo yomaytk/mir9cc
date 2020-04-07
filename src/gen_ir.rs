@@ -40,7 +40,7 @@ lazy_static! {
 		(IrOp::IrDiv, IrInfo::new("DIV", IrType::RegReg)),
 		(IrOp::IrLt, IrInfo::new("LT", IrType::RegReg)),
 		(IrOp::IrImm, IrInfo::new("MOV", IrType::RegImm)),
-		(IrOp::IrSubImm, IrInfo::new("SUB", IrType::RegImm)),
+		(IrOp::IrBpRel, IrInfo::new("BPREL", IrType::RegImm)),
 		(IrOp::IrMov, IrInfo::new("MOV", IrType::RegReg)),
 		(IrOp::IrLabel, IrInfo::new("", IrType::Label)),
 		(IrOp::IrUnless, IrInfo::new("UNLESS", IrType::RegLabel)),
@@ -74,7 +74,7 @@ pub enum IrOp {
 	IrImm,
 	IrMov,
 	IrAdd,
-	IrSubImm,
+	IrBpRel,
 	IrSub,
 	IrMul,
 	IrDiv,
@@ -280,8 +280,7 @@ fn gen_lval(node: &Node, code: &mut Vec<Ir>) -> usize {
 		NodeType::Lvar(_, off) => {
 			*REGNO.lock().unwrap() += 1;
 			let r1 = *REGNO.lock().unwrap();
-			code.push(Ir::new(IrMov, r1, 0)); 
-			code.push(Ir::new(IrSubImm, r1, *off));
+			code.push(Ir::new(IrBpRel, r1, *off));
 			return r1;
 		}
 		NodeType::Gvar(_, label) => {
@@ -517,8 +516,7 @@ fn gen_stmt(node: &Node, code: &mut Vec<Ir>) {
 				let r2 = gen_expr(rhs, code);
 				*REGNO.lock().unwrap() += 1;
 				let r1 = *REGNO.lock().unwrap();
-				code.push(Ir::new(IrMov, r1, 0));
-				code.push(Ir::new(IrSubImm, r1, *off));
+				code.push(Ir::new(IrBpRel, r1, *off));
 				match ctype.ty {
 					Ty::CHAR => { code.push(Ir::new(IrStore8, r1, r2)); }
 					Ty::INT => { code.push(Ir::new(IrStore32, r1, r2)); }
