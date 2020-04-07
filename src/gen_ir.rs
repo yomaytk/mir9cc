@@ -287,21 +287,13 @@ fn gen_expr(node: &Node, code: &mut Vec<Ir>) -> usize {
 		},
 		NodeType::Lvar(ctype, _) | NodeType::Gvar(ctype, _) => {
 			let lhi = gen_lval(node, code);
-			match ctype.ty {
-				Ty::CHAR => { code.push(Ir::new(IrLoad8, lhi, lhi)); }
-				Ty::INT => { code.push(Ir::new(IrLoad32, lhi, lhi)); }
-				_ => { code.push(Ir::new(IrLoad64, lhi, lhi)); }
-			}
+			code.push(Ir::new(ctype.load_insn(), lhi, lhi));
 			return lhi;
 		},
 		NodeType::EqTree(ctype, lhs, rhs) => {
 			let lhi = gen_lval(lhs, code);
 			let rhi = gen_expr(rhs, code);
-			match ctype.ty {
-				Ty::CHAR => { code.push(Ir::new(IrStore8, lhi, rhi)); }
-				Ty::INT => { code.push(Ir::new(IrStore32, lhi, rhi)); }
-				_ => { code.push(Ir::new(IrStore64, lhi, rhi)); }
-			}
+			code.push(Ir::new(ctype.store_insn(), lhi, rhi));
 			kill(rhi, code);
 			return lhi;
 		},
@@ -324,13 +316,7 @@ fn gen_expr(node: &Node, code: &mut Vec<Ir>) -> usize {
 		}
 		NodeType::Deref(_, lhs) => {
 			let r = gen_expr(lhs, code);
-			if lhs.hasctype() {
-				match lhs.nodesctype().ptr_to.unwrap().ty{
-					Ty::CHAR => { code.push(Ir::new(IrLoad8, r, r)); }
-					Ty::INT => { code.push(Ir::new(IrLoad32, r, r)); }
-					_ => { code.push(Ir::new(IrLoad64, r, r)); }
-				}
-			}
+			code.push(Ir::new(lhs.nodesctype().ptr_to.unwrap().load_insn(), r, r));
 			return r;
 		}
 		NodeType::Addr(_, lhs) => {
@@ -450,11 +436,7 @@ fn gen_stmt(node: &Node, code: &mut Vec<Ir>) {
 				*REGNO.lock().unwrap() += 1;
 				let r1 = *REGNO.lock().unwrap();
 				code.push(Ir::new(IrBpRel, r1, *off));
-				match ctype.ty {
-					Ty::CHAR => { code.push(Ir::new(IrStore8, r1, r2)); }
-					Ty::INT => { code.push(Ir::new(IrStore32, r1, r2)); }
-					_ => { code.push(Ir::new(IrStore64, r1, r2)); }
-				}
+				code.push(Ir::new(ctype.store_insn(), r1, r2));
 				kill(r1, code);
 				kill(r2, code);
 			}
@@ -481,11 +463,7 @@ pub fn gen_ir(funcs: &Vec<Node>) -> Vec<Function> {
 				for i in 0..args.len() {
 					match &args[i].op {
 						NodeType::VarDef(ctype, _, _, offset, _) => {
-							match ctype.ty {
-								Ty::CHAR => { code.push(Ir::new(IrStoreArgs8, *offset, i)); } 
-								Ty::INT => { code.push(Ir::new(IrStoreArgs32, *offset, i)); } 
-								_ => { code.push(Ir::new(IrStoreArgs64, *offset, i)); }
-							}
+							code.push(Ir::new(ctype.store_arg_insn(), *offset, i));
 						}
 						_ => { panic!("Illegal function parameter."); }
 					}
