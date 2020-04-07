@@ -51,6 +51,7 @@ pub enum NodeType {
 	EqEq(Box<Node>, Box<Node>),
 	Ne(Box<Node>, Box<Node>),
 	DoWhile(Box<Node>, Box<Node>),
+	Alignof(Box<Node>),
 	NULL,
 }
 
@@ -224,6 +225,10 @@ impl NodeType {
 
 	fn null_init() -> Self {
 		NodeType::NULL
+	}
+
+	fn alignof_init(expr: Node) -> Self {
+		NodeType::Alignof(Box::new(expr))
 	}
 }
 
@@ -411,6 +416,12 @@ impl Node {
 			op: NodeType::null_init()
 		}
 	}
+
+	pub fn new_alignof(expr: Node) -> Self {
+		Self {
+			op: NodeType::alignof_init(expr)
+		}
+	}
 }
 
 fn primary(tokens: &Vec<Token>, pos: &mut usize) -> Node {
@@ -485,6 +496,9 @@ fn unary(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 	if tokens[*pos].consume_ty(TokenSizeof, pos) {
 		return Node::new_sizeof(INT_TY.clone(), 0, unary(tokens, pos));
 	}
+	if tokens[*pos].consume_ty(TokenAlignof, pos) {
+		return Node::new_alignof(unary(tokens, pos));
+	}
 	return postfix(tokens, pos);
 }
 
@@ -495,7 +509,6 @@ fn mul(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 		if !tokens[*pos].consume_ty(TokenStar, pos) && !tokens[*pos].consume_ty(TokenDiv, pos) {
 			return lhs;
 		}
-		
 		let ty = tokens[*pos-1].ty.clone();
 		let rhs = unary(tokens, pos);
 		lhs = Node::new_bit(INT_TY.clone(), ty, lhs, rhs);

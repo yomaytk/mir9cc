@@ -262,6 +262,14 @@ pub fn walk(node: &Node, env: &mut Env, decay: bool) -> Node {
 		DoWhile(body, cond) => {
 			return Node::new_dowhile(walk(body, env, true), walk(cond, env, true));
 		}
+		Alignof(expr) => {
+			let expr2 = walk(expr, env, false);
+			if expr2.hasctype() {
+				return Node::new_num(expr2.nodesctype().align_of() as i32);
+			} else {
+				panic!("_Alignof should be used for Node has Ctype.");
+			}
+		}
 		NULL => {
 			return Node::new_null();
 		}
