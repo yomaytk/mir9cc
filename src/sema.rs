@@ -122,8 +122,8 @@ pub fn walk(node: &Node, env: &mut Env, decay: bool) -> Node {
 	match &node.op {
 		Num(val) => { return Node::new_num(*val); }
 		BinaryTree(_ctype, op, lhs, rhs)  => {
-			let lhs2 = walk(lhs.as_ref().unwrap(), env, true);
-			let rhs2 = walk(rhs.as_ref().unwrap(), env, true);
+			let lhs2 = walk(lhs, env, true);
+			let rhs2 = walk(rhs, env, true);
 			let mut ctype = Type::new(Ty::INT, None, None, 0);
 			if lhs2.hasctype(){
 				ctype = lhs2.nodesctype();

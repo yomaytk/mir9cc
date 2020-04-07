@@ -28,7 +28,7 @@ lazy_static! {
 #[derive(Debug, Clone)]
 pub enum NodeType {
 	Num(i32),
-	BinaryTree(Type, TokenType, Option<Box<Node>>, Option<Box<Node>>),
+	BinaryTree(Type, TokenType, Box<Node>, Box<Node>),
 	Ret(Box<Node>),
 	Expr(Box<Node>),
 	CompStmt(Vec<Node>),
@@ -112,7 +112,7 @@ impl NodeType {
 	}
 
 	fn bit_init(ctype: Type, tk_ty: TokenType, lhs: Node, rhs: Node) -> Self {
-		NodeType::BinaryTree(ctype, tk_ty, Some(Box::new(lhs)), Some(Box::new(rhs)))
+		NodeType::BinaryTree(ctype, tk_ty, Box::new(lhs), Box::new(rhs))
 	}
 
 	fn ret_init(lhs: Node) -> Self {
