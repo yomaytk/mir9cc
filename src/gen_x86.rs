@@ -1,5 +1,19 @@
 use super::gen_ir::{*, IrOp::*};
 use super::sema::Var;
+use std::collections::HashMap;
+use std::sync::Mutex;
+
+macro_rules! hash {
+	( $( $t:expr),* ) => {
+		{
+			let mut temp_hash = HashMap::new();
+			$(
+				temp_hash.insert($t.0, $t.1);
+			)*
+			temp_hash
+		}
+	};
+}
 
 pub static REG8: [&str; 8] = ["bpl", "r10b", "r11b", "bl", "r12b", "r13b", "r14b", "r15b"];
 pub static REG32: [&str; 8] = ["ebp", "r10d", "r11d", "ebx", "r12d", "r13d", "r14d", "r15d"];
@@ -8,15 +22,22 @@ pub static ARGREG8: [&str; 6] = ["dil", "sil", "dl", "cl", "r8b", "r9b"];
 pub static ARGREG32: [&str; 6] = ["edi", "esi", "edx", "ecx", "r8d", "r9d"];
 pub static ARGREG64: [&str; 6] = ["rdi", "rsi", "rdx", "rcx", "r8", "r9"];
 
+lazy_static! {
+	pub static ref ESCAPED: Mutex<HashMap<char, char>> = Mutex::new(hash![
+		/*('b', '\b'), ('f', '\f'),*/ ('\n', 'n'), ('\r', 'r'),
+		('\t', 't'), ('\\', '\\'), ('\'', '\''), ('\"', '\"')
+	]);
+}
+
 fn escape(strname: String, len: usize) -> String {
 	let mut p = strname.chars();
 	let mut name = String::new();
 
 	for _ in 0..len {
 		if let Some(c) = p.next(){
-			if c == '\\' || c == '"'{
+			if let Some(c2) = ESCAPED.lock().unwrap().get(&c) {
 				name.push('\\');
-				name.push(p.next().unwrap());
+				name.push(*c2);
 			} else if c.is_ascii_graphic() || c == ' ' {
 				name.push(c);
 			} else {
