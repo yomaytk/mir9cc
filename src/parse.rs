@@ -113,12 +113,17 @@ impl Type {
 	pub fn store_arg_insn(&self) -> IrOp {
 		return self.choose_insn(IrOp::IrStoreArgs8, IrOp::IrStoreArgs32, IrOp::IrStoreArgs64);
 	}
-	pub fn read_type(&self, pos: &mut usize) -> Self {
-		match self.ty {
-			Ty::CHAR => { return CHAR_TY.clone(); }
-			Ty::INT => { return INT_TY.clone(); }
-			Ty::
-		}
+}
+
+pub fn read_type(tokens: &Vec<Token>,  pos: &mut usize) -> Type {
+	if tokens[*pos].consume_ty(TokenInt, pos){
+		return INT_TY.clone();
+	}
+	if tokens[*pos].consume_ty(TokenChar, pos){
+		return CHAR_TY.clone();
+	}
+	if tokens[*pos].consume_ty(TokenStruct, pos){
+		
 	}
 }
 
