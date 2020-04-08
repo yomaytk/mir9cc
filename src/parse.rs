@@ -61,7 +61,7 @@ pub enum Ty {
 	INT,
 	PTR,
 	ARY,
-	CHAR
+	CHAR,
 }
 
 #[derive(Debug, Clone)]
@@ -81,14 +81,6 @@ impl Type {
 			len,
 		}
 	}
-	pub fn size_of(&self) -> usize {
-		match &self.ty {
-			Ty::INT => { return 4; }
-			Ty::PTR => { return 8; }
-			Ty::ARY => { return self.len * self.ary_to.as_ref().unwrap().size_of(); }
-			Ty::CHAR => { return 1; }
-		}
-	}
 	pub fn ptr_to(self) -> Self {
 		Self {
 			ty: Ty::PTR,
@@ -97,21 +89,12 @@ impl Type {
 			len: 0,
 		}
 	}
-	pub fn ary_to(self, len: usize) -> Self {
+	pub fn ary_of(self, len: usize) -> Self {
 		Self {
 			ty: Ty::ARY,
 			ptr_to: None,
 			ary_to: Some(Box::new(self)),
 			len,
-		}
-	}
-	pub fn align_of(&self) -> usize {
-		match &self.ty {
-			Ty::CHAR => { return 1; }
-			Ty::INT => { return 4; }
-			Ty::PTR => { return 8; }
-			Ty::ARY => { return self.ary_to.as_ref().unwrap().align_of(); }
-			// _ => { panic!("align_of error."); }
 		}
 	}
 	pub fn choose_insn(&self, op8: IrOp, op32: IrOp, op64: IrOp) -> IrOp {
@@ -129,6 +112,13 @@ impl Type {
 	}
 	pub fn store_arg_insn(&self) -> IrOp {
 		return self.choose_insn(IrOp::IrStoreArgs8, IrOp::IrStoreArgs32, IrOp::IrStoreArgs64);
+	}
+	pub fn read_type(&self, pos: &mut usize) -> Self {
+		match self.ty {
+			Ty::CHAR => { return CHAR_TY.clone(); }
+			Ty::INT => { return INT_TY.clone(); }
+			Ty::
+		}
 	}
 }
 
@@ -484,7 +474,7 @@ fn primary(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 	}
 	if tokens[*pos].consume_ty(TokenString(String::new()), pos) {
 		let strname = tokens[*pos].getstring();
-		let cty = CHAR_TY.clone().ary_to(tokens[*pos].val as usize);
+		let cty = CHAR_TY.clone().ary_of(tokens[*pos].val as usize);
 		*pos += 1;
 		return Node::new_string(cty, strname, 0);
 	}
@@ -639,7 +629,7 @@ fn read_array(tokens: &Vec<Token>, pos: &mut usize, ty: Type) -> Type {
 
 	if ary_size.len() > 0 {
 		for i in (0..ary_size.len()).rev() {
-			ty = ty.ary_to(ary_size[i]);
+			ty = ty.ary_of(ary_size[i]);
 		}
 	}
 

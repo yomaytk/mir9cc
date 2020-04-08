@@ -102,6 +102,7 @@ pub enum TokenType {
 	TokenWhile,
 	TokenExtern,
 	TokenAlignof,
+	TokenStruct,
 	TokenNoSignal,
 	TokenEof,
 }
@@ -120,6 +121,7 @@ impl From<String> for TokenType {
 			"while" => { TokenWhile }
 			"extern" => { TokenExtern }
 			"_Alignof" => { TokenAlignof }
+			"struct" => { TokenStruct }
 			_ => { TokenIdent }
 		}
 	}
