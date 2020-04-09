@@ -22,6 +22,7 @@ int add(int a, int b, int c, int d, int e, int f) { return a+b+c+d+e+f; }
 int var1;
 int var2[5];
 extern int global_arr[1];
+int *aaa;
 
 // Single-line comment test
 
@@ -92,6 +93,7 @@ int main() {
 	EXPECT(4, ({ int x; return sizeof(x); }));
 	EXPECT(8, ({ int *x; return sizeof x; }));
 	EXPECT(16, ({ int x[4]; return sizeof x; }));
+	EXPECT(10, ({ int x = 10; aaa = &x; return *aaa; }));
 
 	EXPECT(1, ({ char x; return _Alignof x; }));
 	EXPECT(4, ({ int x; return _Alignof(x); }));
