@@ -131,8 +131,8 @@ pub fn walk(node: &Node, env: &mut Env, decay: bool) -> Node {
 			match op {
 				TokenAdd | TokenSub => {
 					match (lhs2.nodesctype(None).ty, rhs2.nodesctype(None).ty) {
+						(Ty::NULL, Ty::PTR) => { ctype = rhs2.nodesctype(None); }
 						(Ty::PTR, Ty::PTR) => { panic!("pointer +- pointer is not defined."); }
-						(_, Ty::PTR) => { ctype = rhs2.nodesctype(None); }
 						_ => {}
 					}
 				}
@@ -223,11 +223,11 @@ pub fn walk(node: &Node, env: &mut Env, decay: bool) -> Node {
 		}
 		Deref(_, lhs) => {
 			let lhs2 = walk(lhs, env, true);
-			match lhs2.nodesctype(None).ty {
-				Ty::PTR => { return Node::new_deref(lhs2.nodesctype(None).ptr_to.as_ref().unwrap().as_ref().clone(), lhs2); }
-				_ => {}
+			let ctype = lhs2.nodesctype(None);
+			match ctype.ty {
+				Ty::PTR => { return Node::new_deref(ctype.ptr_to.as_ref().unwrap().as_ref().clone(), lhs2); }
+				_ => { panic!("operand must be a pointer."); }
 			}
-			{ panic!("operand must be a pointer."); }
 		}
 		Addr(_, lhs) => {
 			let lhs2 = walk(lhs, env, true);
