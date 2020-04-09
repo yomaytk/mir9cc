@@ -1,4 +1,9 @@
 int main() {
-	struct { int a; } x;
-	return sizeof(x);
+	// ffwefwefwe
+	// Single-line comment test
+
+/***************************
+ * Multi-line comment test *
+ ***************************/
+	return 1;
 }

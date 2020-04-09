@@ -283,9 +283,9 @@ pub fn tokenize(input: &String) -> Vec<Token> {
 
 		// Line Comment
 		if c == '/' && &input[pos+1..pos+2] == "/" {
+			let start = pos;
 			pos += 2;
 			let mut pp = p.clone();
-			let start = pos;
 			while let Some(c) = pp.next() {
 				pos += 1;
 				if c == '\n' {
@@ -299,10 +299,10 @@ pub fn tokenize(input: &String) -> Vec<Token> {
 		}
 
 		// Block Comment
-		if c == '*' && &input[pos+1..pos+2] == "/" {
+		if c == '/' && &input[pos+1..pos+2] == "*" {
+			let start = pos;
 			pos += 2;
 			let mut pp = p.clone();
-			let start = 0;
 			loop {
 				if let Some(c) = pp.next() {
 					pos += 1;
