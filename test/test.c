@@ -118,5 +118,9 @@ int main() {
 	EXPECT(8, ({ return 3 + ({ return 5; }); }));
 	EXPECT(1, ({; return 1; }));
 
+	EXPECT(4, ({ struct { int a; } x; return sizeof(x); }));
+	EXPECT(8, ({ struct { char a; int b; } x; return sizeof(x); }));
+	EXPECT(12, ({ struct { char a; char b; int c; char d; } x; return sizeof(x); }));
+
 return 0;
 }

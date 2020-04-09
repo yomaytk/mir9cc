@@ -1,5 +1,4 @@
 use TokenType::*;
-use super::parse::{Type, Ty};
 use std::collections::HashMap;
 use std::sync::Mutex;
 
@@ -22,18 +21,6 @@ macro_rules! hash {
 
 
 lazy_static! {
-	pub static ref INT_TY: Type = Type {
-		ty: Ty::INT,
-		ptr_to: None,
-		ary_to: None,
-		len: 0,
-	};
-	pub static ref CHAR_TY: Type = Type {
-		ty: Ty::CHAR,
-		ptr_to: None,
-		ary_to: None,
-		len: 0,
-	};
 	pub static ref ESCAPED: Mutex<HashMap<char, char>> = Mutex::new(hash![
 		// ('a', "\\a"), ('b', "\\b"), ('f', "\\f"),
 		('n', '\n'), ('r', '\r'), // ('v', "\\v"),
@@ -178,12 +165,6 @@ impl<'a> Token<'a> {
 			return true;
 		}
 		return false;
-	}
-	pub fn decl_type(&self, pos: &mut usize) -> Type {
-		*pos += 1;
-		if self.ty == TokenInt { return INT_TY.clone(); }
-		else if self.ty == TokenChar { return CHAR_TY.clone(); }
-		else { panic!("decralation type is invalid."); }
 	}
 	pub fn getstring(&self) -> String {
 		match &self.ty {

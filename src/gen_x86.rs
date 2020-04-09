@@ -1,5 +1,6 @@
 use super::gen_ir::{*, IrOp::*};
-use super::sema::{Var, roundup};
+use super::sema::Var;
+use super::parse::roundup;
 use std::collections::HashMap;
 use std::sync::Mutex;
 
@@ -203,7 +204,7 @@ pub fn gen_x86(globals: Vec<Var>, funcs: Vec<Function>) {
 			continue;
 		}
 		println!("{}:", gvar.ident.clone());
-		println!("  .ascii \"{}\"", escape(gvar.strname.clone(), gvar.ctype.size_of()));
+		println!("  .ascii \"{}\"", escape(gvar.strname.clone(), gvar.ctype.size));
 	}
 
 	for i in 0..funcs.len() {

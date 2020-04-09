@@ -15,12 +15,27 @@ lazy_static! {
 		ty: Ty::INT,
 		ptr_to: None,
 		ary_to: None,
+		size: 4,
+		align: 4,
+		offset: 0,
 		len: 0,
 	};
 	pub static ref CHAR_TY: Type = Type {
 		ty: Ty::CHAR,
 		ptr_to: None,
 		ary_to: None,
+		size: 1,
+		align: 1,
+		offset: 0,
+		len: 0,
+	};
+	pub static ref NULL_TY: Type = Type {
+		ty: Ty::NULL,
+		ptr_to: None,
+		ary_to: None,
+		size: 0,
+		align: 0,
+		offset: 0,
 		len: 0,
 	};
 }
@@ -56,12 +71,14 @@ pub enum NodeType {
 	NULL,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub enum Ty {
 	INT,
 	PTR,
 	ARY,
 	CHAR,
+	STRUCT(Vec<Node>),
+	NULL,
 }
 
 #[derive(Debug, Clone)]
@@ -69,15 +86,21 @@ pub struct Type {
 	pub ty: Ty,
 	pub ptr_to: Option<Box<Type>>,
 	pub ary_to: Option<Box<Type>>,
+	pub size: usize,
+	pub align: usize,
+	pub offset: usize,
 	pub len: usize,
 }
 
 impl Type {
-	pub fn new(ty: Ty, ptr_to: Option<Box<Type>>, ary_to: Option<Box<Type>>, len: usize) -> Self {
+	pub fn new(ty: Ty, ptr_to: Option<Box<Type>>, ary_to: Option<Box<Type>>, size: usize, align: usize, offset: usize, len: usize) -> Self {
 		Self {
 			ty,
 			ptr_to,
 			ary_to,
+			size, 
+			align,
+			offset,
 			len,
 		}
 	}
@@ -86,19 +109,27 @@ impl Type {
 			ty: Ty::PTR,
 			ptr_to: Some(Box::new(self)),
 			ary_to: None,
+			size: 8,
+			align: 8,
+			offset: 0,
 			len: 0,
 		}
 	}
 	pub fn ary_of(self, len: usize) -> Self {
+		let size = self.size;
+		let align = self.align;
 		Self {
 			ty: Ty::ARY,
 			ptr_to: None,
 			ary_to: Some(Box::new(self)),
+			size: size * len,
+			align: align,
+			offset: 0,
 			len,
 		}
 	}
 	pub fn choose_insn(&self, op8: IrOp, op32: IrOp, op64: IrOp) -> IrOp {
-		match self.size_of() {
+		match self.size {
 			1 => { return op8; }
 			4 => { return op32; }
 			c => { assert!(c == 8); return op64; }
@@ -115,6 +146,10 @@ impl Type {
 	}
 }
 
+pub fn roundup(x: usize, align: usize) -> usize {
+	return (x + align - 1) & !(align - 1);
+}
+
 pub fn read_type(tokens: &Vec<Token>,  pos: &mut usize) -> Type {
 	if tokens[*pos].consume_ty(TokenInt, pos){
 		return INT_TY.clone();
@@ -123,8 +158,34 @@ pub fn read_type(tokens: &Vec<Token>,  pos: &mut usize) -> Type {
 		return CHAR_TY.clone();
 	}
 	if tokens[*pos].consume_ty(TokenStruct, pos){
+		let mut members = vec![];
+		tokens[*pos].assert_ty(TokenRightCurlyBrace, pos);
 		
+		// process struct member 
+		while !tokens[*pos].consume_ty(TokenLeftCurlyBrace, pos) {
+			members.push(decl(tokens, pos));
+		}
+
+		return struct_of(members);
 	}
+	return NULL_TY.clone();
+}
+
+pub fn struct_of(mut members: Vec<Node>) -> Type {
+	let mut ty_align = 0;
+
+	let mut off = 0;
+	for i in 0..members.len() {
+		if let NodeType::VarDef(ctype, _, _, _, _) = &mut members[i].op {
+			off = roundup(off, ctype.align);
+			ctype.offset = off;
+			off += ctype.size;
+			ty_align = std::cmp::max(ty_align, ctype.align);
+		}
+	}
+	let ty_size = roundup(off, ty_align);
+
+	return Type::new(Ty::STRUCT(members), None, None, ty_size ,ty_align , 0, 0);
 }
 
 #[allow(dead_code)]
@@ -537,7 +598,7 @@ fn add(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 		}
 		let ty = tokens[*pos-1].ty.clone();
 		let rhs = mul(tokens, pos);
-		let ctype = Type::new(Ty::INT, None, None, 0);
+		let ctype = INT_TY.clone();
 		lhs = Node::new_bit(ctype, ty, lhs, rhs);
 	}
 	
@@ -610,7 +671,7 @@ fn assign(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 
 fn ctype(tokens: &Vec<Token>, pos: &mut usize) -> Type {
 	
-	let mut ty = tokens[*pos].decl_type(pos);
+	let mut ty = read_type(tokens, pos);
 
 	while tokens[*pos].consume_ty(TokenStar, pos) {
 		ty = ty.ptr_to();
@@ -735,7 +796,7 @@ pub fn stmt(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 			}
 			return Node::new_stmt(stmts);
 		}
-		TokenInt | TokenChar => {
+		TokenInt | TokenChar | TokenStruct => {
 			return decl(tokens, pos);
 		}
 		TokenSemi => {

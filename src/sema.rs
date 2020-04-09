@@ -1,4 +1,4 @@
-use super::parse::{*, NodeType::*};
+use super::parse::{*, NodeType::*, INT_TY};
 use super::token::TokenType::*;
 use std::collections::HashMap;
 use std::sync::Mutex;
@@ -93,10 +93,12 @@ impl Env {
 pub fn maybe_decay(node: Node, decay: bool) -> Node {
 	match &node.op {
 		Lvar(ctype, _) | Gvar(ctype, _) => {
-			if decay && ctype.ty == Ty::ARY {
-				return Node::new_addr(ctype.ary_to.as_ref().unwrap().as_ref().clone().ptr_to(), node);
+			match ctype.ty {
+				Ty::ARY if decay => {
+					return Node::new_addr(ctype.ary_to.as_ref().unwrap().as_ref().clone().ptr_to(), node);
+				}
+				_ => { return node; }
 			}
-			return node;
 		}
 		_ => { panic!("maybe_decay type error"); }
 	}
@@ -118,27 +120,33 @@ pub fn new_global(ctype: &Type, ident: String, strname: Option<String>, is_exter
 	return var;
 }
 
-pub fn roundup(x: usize, align: usize) -> usize {
-	return (x + align - 1) & !(align - 1);
-}
-
 pub fn walk(node: &Node, env: &mut Env, decay: bool) -> Node {
 	match &node.op {
 		Num(val) => { return Node::new_num(*val); }
 		BinaryTree(_ctype, op, lhs, rhs)  => {
 			let lhs2 = walk(lhs, env, true);
 			let rhs2 = walk(rhs, env, true);
-			let mut ctype = Type::new(Ty::INT, None, None, 0);
+			let mut ctype = INT_TY.clone();
 			if lhs2.hasctype(){
 				ctype = lhs2.nodesctype();
 			}
 			match op {
 				TokenAdd | TokenSub => {
-					if rhs2.hasctype() && rhs2.nodesctype().ty == Ty::PTR {
-						if lhs2.hasctype() && lhs2.nodesctype().ty == Ty::PTR {
-							panic!("pointer +- pointer is not defind.");
+					if rhs2.hasctype() {
+						match rhs2.nodesctype().ty {
+							Ty::PTR => {
+								if lhs2.hasctype() {
+									match lhs2.nodesctype().ty {
+										Ty::PTR => {
+											panic!("")
+										}
+										_ => {}
+									}
+								}
+								ctype = rhs2.nodesctype();
+							}
+							_ => {}
 						}
-						ctype = rhs2.nodesctype();
 					}
 				}
 				_ => {}
@@ -210,8 +218,8 @@ pub fn walk(node: &Node, env: &mut Env, decay: bool) -> Node {
 				rexpr = Some(walk(rhs, env, true));
 			}
 			let stacksize = *STACKSIZE.lock().unwrap();
-			*STACKSIZE.lock().unwrap() = roundup(stacksize, ctype.align_of());
-			*STACKSIZE.lock().unwrap() += ctype.size_of();
+			*STACKSIZE.lock().unwrap() = roundup(stacksize, ctype.align);
+			*STACKSIZE.lock().unwrap() += ctype.size;
 			let offset = *STACKSIZE.lock().unwrap();
 			env.vars.insert(
 				ident.clone(),
@@ -228,8 +236,11 @@ pub fn walk(node: &Node, env: &mut Env, decay: bool) -> Node {
 		}
 		Deref(_, lhs) => {
 			let lhs2 = walk(lhs, env, true);
-			if lhs2.hasctype() && lhs2.nodesctype().ty == Ty::PTR {
-				return Node::new_deref(lhs2.nodesctype().ptr_to.as_ref().unwrap().as_ref().clone(), lhs2);
+			if lhs2.hasctype() {
+				match lhs2.nodesctype().ty {
+					Ty::PTR => { return Node::new_deref(lhs2.nodesctype().ptr_to.as_ref().unwrap().as_ref().clone(), lhs2); }
+					_ => {}
+				}
 			}
 			{ panic!("operand must be a pointer."); }
 		}
@@ -241,7 +252,7 @@ pub fn walk(node: &Node, env: &mut Env, decay: bool) -> Node {
 		Sizeof(_, _, lhs) => {
 			let lhs2 = walk(lhs, env, false);
 			if lhs2.hasctype() {
-				let val = lhs2.nodesctype().size_of();
+				let val = lhs2.nodesctype().size;
 				return Node::new_num(val as i32);
 			}
 			panic!("The size of an untyped value cannot be calculated.");
@@ -265,7 +276,7 @@ pub fn walk(node: &Node, env: &mut Env, decay: bool) -> Node {
 		Alignof(expr) => {
 			let expr2 = walk(expr, env, false);
 			if expr2.hasctype() {
-				return Node::new_num(expr2.nodesctype().align_of() as i32);
+				return Node::new_num(expr2.nodesctype().align as i32);
 			} else {
 				panic!("_Alignof should be used for Node has Ctype.");
 			}

@@ -271,13 +271,18 @@ fn gen_expr(node: &Node, code: &mut Vec<Ir>) -> usize {
 			let lhi = gen_expr(lhs, code);
 			let rhi = gen_expr(rhs, code);
 			match ty {
-				TokenAdd | TokenSub if ctype.ty == Ty::PTR => {
-					let size_of = ctype.ptr_to.as_ref().unwrap().size_of();
-					*REGNO.lock().unwrap() += 1;
-					let r1 = *REGNO.lock().unwrap();
-					code.push(Ir::new(IrImm, r1, size_of));
-					code.push(Ir::new(IrMul, rhi, r1));
-					kill(r1, code);
+				TokenAdd | TokenSub => {
+					match ctype.ty {
+						Ty::PTR => {
+							let size_of = ctype.ptr_to.as_ref().unwrap().size;
+							*REGNO.lock().unwrap() += 1;
+							let r1 = *REGNO.lock().unwrap();
+							code.push(Ir::new(IrImm, r1, size_of));
+							code.push(Ir::new(IrMul, rhi, r1));
+							kill(r1, code);
+						}
+						_ => {}
+					}
 				}
 				_ => {}
 			}
