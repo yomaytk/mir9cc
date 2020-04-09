@@ -138,7 +138,7 @@ pub fn walk(node: &Node, env: &mut Env, decay: bool) -> Node {
 								if lhs2.hasctype() {
 									match lhs2.nodesctype().ty {
 										Ty::PTR => {
-											panic!("")
+											panic!("pointer +- pointer is not defined.");
 										}
 										_ => {}
 									}
