@@ -70,7 +70,8 @@ fn main() {
 	let nodes = parse(&tokens, &mut 0);
 	// println!("{:#?}", &nodes);
 	let (nodes, globals) = sema(&nodes);
-	
+	// println!("{:#?}", &nodes);
+
 	// alloc index for register
 	let mut funcs = gen_ir(&nodes);
 	if dump_ir1 {

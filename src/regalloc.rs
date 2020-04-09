@@ -72,7 +72,7 @@ pub fn visit(reg_map: &mut Vec<i32>, used: &mut Vec<bool>, irs: &mut Vec<Ir>) {
 pub fn alloc_regs(funcs: &mut Vec<Function>) {
 
 	for fun in funcs {
-		let mut reg_map: Vec<i32> = vec![-1; 10000];
+		let mut reg_map: Vec<i32> = vec![-1; 8192];
 		let mut used: Vec<bool> = vec![false; 8];
 		visit(&mut reg_map, &mut used, &mut fun.irs);
 	}

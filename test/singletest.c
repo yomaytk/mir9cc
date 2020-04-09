@@ -5,5 +5,5 @@ int main() {
 /***************************
  * Multi-line comment test *
  ***************************/
-	return 1;
+	struct { char a; int b; } x; x.a=3; x.b=5; return x.a+x.b; 
 }

@@ -20,7 +20,7 @@ use std::fmt;
 
 lazy_static! {
 	pub static ref REGNO: Mutex<usize> = Mutex::new(1);
-	pub static ref LABEL: Mutex<usize> = Mutex::new(0);
+	pub static ref LABEL: Mutex<usize> = Mutex::new(1);
 	pub static ref RETURN_LABEL: Mutex<usize> = Mutex::new(0);
 	pub static ref RETURN_REG: Mutex<usize> = Mutex::new(0);
 }
@@ -222,6 +222,15 @@ fn gen_lval(node: &Node, code: &mut Vec<Ir>) -> usize {
 			code.push(Ir::new(IrLabelAddr(label.clone()), r, 0));
 			return r;
 		}
+		NodeType::Dot(_, expr, _, offset) => {
+			let r1 = gen_lval(expr, code);
+			*REGNO.lock().unwrap() += 1;
+			let r2 = *REGNO.lock().unwrap();
+			code.push(Ir::new(IrImm, r2, *offset));
+			code.push(Ir::new(IrAdd, r1, r2));
+			kill(r2, code);
+			return r1;
+		}
 		_ => { panic!("not an lvalue")}
 	}
 }
@@ -290,7 +299,7 @@ fn gen_expr(node: &Node, code: &mut Vec<Ir>) -> usize {
 			kill(rhi, code);
 			return lhi;
 		},
-		NodeType::Lvar(ctype, _) | NodeType::Gvar(ctype, _) => {
+		NodeType::Lvar(ctype, _) | NodeType::Gvar(ctype, _) | NodeType::Dot(ctype, _, _, _) => {
 			let lhi = gen_lval(node, code);
 			code.push(Ir::new(ctype.load_insn(), lhi, lhi));
 			return lhi;

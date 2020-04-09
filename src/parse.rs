@@ -68,6 +68,7 @@ pub enum NodeType {
 	Ne(Box<Node>, Box<Node>),
 	DoWhile(Box<Node>, Box<Node>),
 	Alignof(Box<Node>),
+	Dot(Type, Box<Node>, String, usize),
 	NULL,
 }
 
@@ -132,7 +133,12 @@ impl Type {
 		match self.size {
 			1 => { return op8; }
 			4 => { return op32; }
-			c => { assert!(c == 8); return op64; }
+			c => { 
+				if c != 8 {
+					panic!("{:?}", self)
+				}; 
+				return op64; 
+			}
 		}
 	}
 	pub fn load_insn(&self) -> IrOp {
@@ -303,6 +309,10 @@ impl NodeType {
 	fn alignof_init(expr: Node) -> Self {
 		NodeType::Alignof(Box::new(expr))
 	}
+
+	fn dot_init(ctype: Type, expr: Node, member: String, offset: usize) -> Self {
+		NodeType::Dot(ctype, Box::new(expr), member, offset)
+	}
 }
 
 #[derive(Debug, Clone)]
@@ -318,7 +328,7 @@ impl Node {
 			NodeType::Lvar(ctype, _) | NodeType::BinaryTree(ctype, _, _, _) 
 			| NodeType::Deref(ctype, _) | NodeType::Addr(ctype, _) 
 			| NodeType::Sizeof(ctype, _, _) | NodeType::Str(ctype, _, _)
-			| NodeType::Gvar(ctype, _) => { 
+			| NodeType::Gvar(ctype, _) | NodeType::Dot(ctype, _, _, _) => { 
 				return ctype.clone(); 
 			}
 			_ => { 
@@ -333,7 +343,7 @@ impl Node {
 
 	pub fn checklval(&self) {
 		match &self.op {
-			NodeType::Lvar(_, _) | NodeType::Gvar(_, _) | NodeType::Deref(_, _) => {}
+			NodeType::Lvar(_, _) | NodeType::Gvar(_, _) | NodeType::Deref(_, _) | NodeType::Dot(_, _, _, _) => {}
 			_ => { panic!("not an lvalue"); }
 		}
 	}
@@ -493,6 +503,12 @@ impl Node {
 			op: NodeType::alignof_init(expr)
 		}
 	}
+
+	pub fn new_dot(ctype: Type, expr: Node, member: String, offset: usize) -> Self {
+		Self {
+			op: NodeType::dot_init(ctype, expr, member, offset)
+		}
+	}
 }
 
 fn primary(tokens: &Vec<Token>, pos: &mut usize) -> Node {
@@ -546,7 +562,15 @@ fn primary(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 }
 
 fn postfix(tokens: &Vec<Token>, pos: &mut usize) -> Node {
+	
 	let mut lhs = primary(tokens, pos);
+
+	// struct member
+	if tokens[*pos].consume_ty(TokenDot, pos) {
+		let member = ident(tokens, pos);
+		return Node::new_dot(NULL_TY.clone(), lhs, member, 0);
+	}
+	// array
 	while tokens[*pos].consume_ty(TokenRightmiddleBrace, pos)  {
 		let id = assign(tokens, pos);
 		let lhs2 = Node::new_bit(INT_TY.clone(), TokenAdd, lhs, id);
@@ -700,13 +724,20 @@ fn read_array(tokens: &Vec<Token>, pos: &mut usize, ty: Type) -> Type {
 	return ty;
 }
 
+fn ident(tokens: &Vec<Token>, pos: &mut usize) -> String {
+	let name = String::from(&tokens[*pos].input[..tokens[*pos].val as usize]);
+	if !tokens[*pos].consume_ty(TokenIdent, pos) {
+		panic!("should be identifier at {}", &tokens[*pos].input[*pos..]);
+	}
+	return name;
+}
+
 fn decl(tokens: &Vec<Token>, pos: &mut usize) -> Node {
-	// declaratoin type
+	// declaration type
 	let mut ty = ctype(tokens, pos);
 
 	// identifier
-	let name = String::from(&tokens[*pos].input[..tokens[*pos].val as usize]);
-	tokens[*pos].assert_ty(TokenIdent, pos);
+	let name = ident(tokens, pos);
 
 	// array decralation
 	ty = read_array(tokens, pos, ty);
@@ -831,8 +862,7 @@ pub fn param(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 	let ty = ctype(tokens, pos);
 
 	// identifier
-	let name = String::from(&tokens[*pos].input[..tokens[*pos].val as usize]);
-	tokens[*pos].assert_ty(TokenIdent, pos);
+	let name = ident(tokens, pos);
 	return Node::new_vardef(ty, false, name, 0, None);
 }
 
@@ -846,10 +876,7 @@ pub fn toplevel(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 	let mut ctype = ctype(tokens, pos);
 
 	// identifier
-	let name = String::from(&tokens[*pos].input[..tokens[*pos].val as usize]);
-	if !tokens[*pos].consume_ty(TokenIdent, pos) {
-		panic!("function should start from ident : at {}", tokens[*pos].input)
-	}
+	let name = ident(tokens, pos);
 	
 	// function
 	if tokens[*pos].consume_ty(TokenRightBrac, pos){
