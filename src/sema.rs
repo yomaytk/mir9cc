@@ -127,26 +127,13 @@ pub fn walk(node: &Node, env: &mut Env, decay: bool) -> Node {
 			let lhs2 = walk(lhs, env, true);
 			let rhs2 = walk(rhs, env, true);
 			let mut ctype = INT_TY.clone();
-			if lhs2.hasctype(){
-				ctype = lhs2.nodesctype();
-			}
+			ctype = lhs2.nodesctype(Some(ctype));
 			match op {
 				TokenAdd | TokenSub => {
-					if rhs2.hasctype() {
-						match rhs2.nodesctype().ty {
-							Ty::PTR => {
-								if lhs2.hasctype() {
-									match lhs2.nodesctype().ty {
-										Ty::PTR => {
-											panic!("pointer +- pointer is not defined.");
-										}
-										_ => {}
-									}
-								}
-								ctype = rhs2.nodesctype();
-							}
-							_ => {}
-						}
+					match (lhs2.nodesctype(None).ty, rhs2.nodesctype(None).ty) {
+						(Ty::PTR, Ty::PTR) => { panic!("pointer +- pointer is not defined."); }
+						(_, Ty::PTR) => { ctype = rhs2.nodesctype(None); }
+						_ => {}
 					}
 				}
 				_ => {}
@@ -182,7 +169,7 @@ pub fn walk(node: &Node, env: &mut Env, decay: bool) -> Node {
 			let lhs2 = walk(lhs, env, false);
 			lhs2.checklval();
 			let rhs2 = walk(rhs, env, true);
-			return Node::new_eq(lhs2.nodesctype().clone(), lhs2, rhs2);
+			return Node::new_eq(lhs2.nodesctype(None).clone(), lhs2, rhs2);
 		}
 		IfThen(cond, then, elthen) => {
 			match elthen {
@@ -236,26 +223,28 @@ pub fn walk(node: &Node, env: &mut Env, decay: bool) -> Node {
 		}
 		Deref(_, lhs) => {
 			let lhs2 = walk(lhs, env, true);
-			if lhs2.hasctype() {
-				match lhs2.nodesctype().ty {
-					Ty::PTR => { return Node::new_deref(lhs2.nodesctype().ptr_to.as_ref().unwrap().as_ref().clone(), lhs2); }
-					_ => {}
-				}
+			match lhs2.nodesctype(None).ty {
+				Ty::PTR => { return Node::new_deref(lhs2.nodesctype(None).ptr_to.as_ref().unwrap().as_ref().clone(), lhs2); }
+				_ => {}
 			}
 			{ panic!("operand must be a pointer."); }
 		}
 		Addr(_, lhs) => {
 			let lhs2 = walk(lhs, env, true);
 			lhs2.checklval();
-			return Node::new_addr(lhs2.nodesctype().ptr_to(), lhs2);
+			return Node::new_addr(lhs2.nodesctype(None).ptr_to(), lhs2);
 		}
 		Sizeof(_, _, lhs) => {
 			let lhs2 = walk(lhs, env, false);
-			if lhs2.hasctype() {
-				let val = lhs2.nodesctype().size;
-				return Node::new_num(val as i32);
+			let ctype = lhs2.nodesctype(None);
+			match ctype.ty {
+				Ty::NULL => { panic!("The size of an untyped value cannot be calculated."); }
+				_ => {
+					let val = ctype.size;
+					return Node::new_num(val as i32);
+				}
 			}
-			panic!("The size of an untyped value cannot be calculated.");
+			
 		}
 		Str(ctype, strname, _) => {
 			*STRLABEL.lock().unwrap() += 1;
@@ -275,10 +264,10 @@ pub fn walk(node: &Node, env: &mut Env, decay: bool) -> Node {
 		}
 		Alignof(expr) => {
 			let expr2 = walk(expr, env, false);
-			if expr2.hasctype() {
-				return Node::new_num(expr2.nodesctype().align as i32);
-			} else {
-				panic!("_Alignof should be used for Node has Ctype.");
+			let ctype = expr2.nodesctype(None);
+			match ctype.ty {
+				Ty::NULL => { panic!("_Alignof should be used for Node has Ctype."); }
+				_ => { return Node::new_num(ctype.align as i32); }
 			}
 		}
 		NULL => {

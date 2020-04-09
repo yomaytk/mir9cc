@@ -321,7 +321,7 @@ fn gen_expr(node: &Node, code: &mut Vec<Ir>) -> usize {
 		}
 		NodeType::Deref(_, lhs) => {
 			let r = gen_expr(lhs, code);
-			code.push(Ir::new(lhs.nodesctype().ptr_to.unwrap().load_insn(), r, r));
+			code.push(Ir::new(lhs.nodesctype(None).ptr_to.unwrap().load_insn(), r, r));
 			return r;
 		}
 		NodeType::Addr(_, lhs) => {
