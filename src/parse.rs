@@ -43,33 +43,33 @@ lazy_static! {
 #[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub enum NodeType {
-	Num(i32),
-	BinaryTree(Type, TokenType, Box<Node>, Box<Node>),
-	Ret(Box<Node>),
-	Expr(Box<Node>),
-	CompStmt(Vec<Node>),
-	StmtExpr(Type, Box<Node>),
-	Ident(String),
-	EqTree(Type, Box<Node>, Box<Node>),
-	IfThen(Box<Node>, Box<Node>, Option<Box<Node>>),
-	Call(String, Vec<Node>),
-	Func(String, bool, Vec<Node>, Box<Node>, usize),
-	LogAnd(Box<Node>, Box<Node>),
-	LogOr(Box<Node>, Box<Node>),
-	For(Box<Node>, Box<Node>, Box<Node>, Box<Node>),
-	VarDef(Type, bool, String, usize, Option<Box<Node>>),
-	Lvar(Type, usize),
-	Deref(Type, Box<Node>),
-	Addr(Type, Box<Node>),
-	Sizeof(Type, usize, Box<Node>),
-	Str(Type, String, usize),
-	Gvar(Type, String),
-	EqEq(Box<Node>, Box<Node>),
-	Ne(Box<Node>, Box<Node>),
-	DoWhile(Box<Node>, Box<Node>),
-	Alignof(Box<Node>),
-	Dot(Type, Box<Node>, String, usize),
-	NULL,
+	Num(i32),																	// Num(val)
+	BinaryTree(Type, TokenType, Box<Node>, Box<Node>),							// BinaryTree(ctype, tk_ty, lhs, rhs)
+	Ret(Box<Node>),																// Ret(lhs)
+	Expr(Box<Node>),															// Expr(lhs)
+	CompStmt(Vec<Node>),														// CompStmt(stmts)
+	StmtExpr(Type, Box<Node>),													// StmtExpr(ctype, body)
+	Ident(String),																// Ident(s)
+	EqTree(Type, Box<Node>, Box<Node>),											// EqTree(ctype, lhs, rhs)
+	IfThen(Box<Node>, Box<Node>, Option<Box<Node>>),							// IfThen(cond, then, elthen)
+	Call(String, Vec<Node>),													// Call(ident, args)
+	Func(String, bool, Vec<Node>, Box<Node>, usize),							// Func(ident, is_extern, args, body, stacksize)
+	LogAnd(Box<Node>, Box<Node>),												// LogAnd(lhs, rhs)
+	LogOr(Box<Node>, Box<Node>),												// LogOr(lhs, rhs)
+	For(Box<Node>, Box<Node>, Box<Node>, Box<Node>),							// For(init, cond, inc, body)
+	VarDef(Type, bool, String, usize, Option<Box<Node>>),						// VarDef(ty, is_extern, name, off, rhs)
+	Lvar(Type, usize),															// Lvar(ty, stacksize)
+	Deref(Type, Box<Node>),														// Deref(ctype, lhs)
+	Addr(Type, Box<Node>),														// Addr(ctype, lhs)
+	Sizeof(Type, usize, Box<Node>),												// Sizeof(ctype, val, lhs)
+	Str(Type, String, usize),													// Str(ctype, strname, label)
+	Gvar(Type, String),															// Gvar(ctype, label)
+	EqEq(Box<Node>, Box<Node>),													// EqEq(lhs, rhs)
+	Ne(Box<Node>, Box<Node>),													// Ne(lhs, rhs)
+	DoWhile(Box<Node>, Box<Node>),												// Dowhile(boyd, cond)
+	Alignof(Box<Node>),															// Alignof(expr)
+	Dot(Type, Box<Node>, String, usize),										// Dot(ctype, expr, name, offset)
+	NULL,																		// NULL
 }
 
 #[derive(Debug, Clone)]
@@ -216,8 +216,8 @@ impl NodeType {
 		NodeType::CompStmt(stmts)
 	}
 
-	fn ident_init(s: String) -> Self {
-		NodeType::Ident(s)
+	fn ident_init(ident: String) -> Self {
+		NodeType::Ident(ident)
 	}
 
 	fn eq_init(ctype: Type, lhs: Node, rhs: Node) -> Self {
@@ -378,9 +378,9 @@ impl Node {
 		}
 	}
 
-	pub fn new_ident(s: String) -> Self {
+	pub fn new_ident(ident: String) -> Self {
 		Self {
-			op: NodeType::ident_init(s)
+			op: NodeType::ident_init(ident)
 		}
 	}
 
@@ -504,9 +504,9 @@ impl Node {
 		}
 	}
 
-	pub fn new_dot(ctype: Type, expr: Node, member: String, offset: usize) -> Self {
+	pub fn new_dot(ctype: Type, expr: Node, name: String, offset: usize) -> Self {
 		Self {
-			op: NodeType::dot_init(ctype, expr, member, offset)
+			op: NodeType::dot_init(ctype, expr, name, offset)
 		}
 	}
 }

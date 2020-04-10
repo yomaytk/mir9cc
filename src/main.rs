@@ -59,7 +59,11 @@ fn main() {
 			std::process::exit(1);
 		}
 	}
-	
+	let t = Token::new(TokenType::TokenSub, -1, "->");
+	let mut a = 1;
+	if t.consume_ty(TokenType::TokenString(String::new()), &mut a) {
+		panic!("jfeijfei");
+	}
 	// lexical analysis
 	let tokens = tokenize(&p);
 	// for token in &tokens {

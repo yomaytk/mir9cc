@@ -155,10 +155,9 @@ impl<'a> Token<'a> {
 		if self.ty == ty { 
 			*pos += 1; 
 			return true; 
-		}
-		else { 
-			match ty {
-				TokenString(_) => { return true;}
+		} else {
+			match (&self.ty, ty) {
+				(TokenString(_), TokenString(_))  => { return true; }
 				_ => { return false; }
 			}
 		}
@@ -290,6 +289,7 @@ pub fn tokenize(input: &String) -> Vec<Token> {
 			let start = pos;
 			pos += 2;
 			let mut pp = p.clone();
+			pp.next();
 			while let Some(c) = pp.next() {
 				pos += 1;
 				if c == '\n' {
@@ -307,6 +307,7 @@ pub fn tokenize(input: &String) -> Vec<Token> {
 			let start = pos;
 			pos += 2;
 			let mut pp = p.clone();
+			pp.next();
 			loop {
 				if let Some(c) = pp.next() {
 					pos += 1;
