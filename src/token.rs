@@ -172,7 +172,7 @@ impl<'a> Token<'a> {
 	pub fn getstring(&self) -> String {
 		match &self.ty {
 			TokenString(sb) => { return sb.clone(); }
-			_ => { panic!("getstring error."); }
+			_ => { panic!("{:?}", self); }
 		}
 	}
 }

@@ -1,6 +1,8 @@
 use super::token::*;
 use super::token::TokenType::*;
 use super::gen_ir::IrOp;
+use std::collections::HashMap;
+use std::sync::Mutex;
 
 // This is a recursive-descendent parser which constructs abstract
 // syntax tree from input tokens.
@@ -38,48 +40,7 @@ lazy_static! {
 		offset: 0,
 		len: 0,
 	};
-}
-
-#[allow(dead_code)]
-#[derive(Debug, Clone)]
-pub enum NodeType {
-	Num(i32),																	// Num(val)
-	BinaryTree(Type, TokenType, Box<Node>, Box<Node>),							// BinaryTree(ctype, tk_ty, lhs, rhs)
-	Ret(Box<Node>),																// Ret(lhs)
-	Expr(Box<Node>),															// Expr(lhs)
-	CompStmt(Vec<Node>),														// CompStmt(stmts)
-	StmtExpr(Type, Box<Node>),													// StmtExpr(ctype, body)
-	Ident(String),																// Ident(s)
-	EqTree(Type, Box<Node>, Box<Node>),											// EqTree(ctype, lhs, rhs)
-	IfThen(Box<Node>, Box<Node>, Option<Box<Node>>),							// IfThen(cond, then, elthen)
-	Call(String, Vec<Node>),													// Call(ident, args)
-	Func(String, bool, Vec<Node>, Box<Node>, usize),							// Func(ident, is_extern, args, body, stacksize)
-	LogAnd(Box<Node>, Box<Node>),												// LogAnd(lhs, rhs)
-	LogOr(Box<Node>, Box<Node>),												// LogOr(lhs, rhs)
-	For(Box<Node>, Box<Node>, Box<Node>, Box<Node>),							// For(init, cond, inc, body)
-	VarDef(Type, bool, String, usize, Option<Box<Node>>),						// VarDef(ty, is_extern, name, off, rhs)
-	Lvar(Type, usize),															// Lvar(ty, stacksize)
-	Deref(Type, Box<Node>),														// Deref(ctype, lhs)
-	Addr(Type, Box<Node>),														// Addr(ctype, lhs)
-	Sizeof(Type, usize, Box<Node>),												// Sizeof(ctype, val, lhs)
-	Str(Type, String, usize),													// Str(ctype, strname, label)
-	Gvar(Type, String),															// Gvar(ctype, label)
-	EqEq(Box<Node>, Box<Node>),													// EqEq(lhs, rhs)
-	Ne(Box<Node>, Box<Node>),													// Ne(lhs, rhs)
-	DoWhile(Box<Node>, Box<Node>),												// Dowhile(boyd, cond)
-	Alignof(Box<Node>),															// Alignof(expr)
-	Dot(Type, Box<Node>, String, usize),										// Dot(ctype, expr, name, offset)
-	NULL,																		// NULL
-}
-
-#[derive(Debug, Clone)]
-pub enum Ty {
-	INT,
-	PTR,
-	ARY,
-	CHAR,
-	STRUCT(Vec<Node>),
-	NULL,
+	pub static ref ENV: Mutex<Env> = Mutex::new(Env::new_env(None));
 }
 
 #[derive(Debug, Clone)]
@@ -152,46 +113,46 @@ impl Type {
 	}
 }
 
-pub fn roundup(x: usize, align: usize) -> usize {
-	return (x + align - 1) & !(align - 1);
+#[derive(Debug, Clone)]
+pub enum Ty {
+	INT,
+	PTR,
+	ARY,
+	CHAR,
+	STRUCT(Vec<Node>),
+	NULL,
 }
 
-pub fn read_type(tokens: &Vec<Token>,  pos: &mut usize) -> Type {
-	if tokens[*pos].consume_ty(TokenInt, pos){
-		return INT_TY.clone();
-	}
-	if tokens[*pos].consume_ty(TokenChar, pos){
-		return CHAR_TY.clone();
-	}
-	if tokens[*pos].consume_ty(TokenStruct, pos){
-		let mut members = vec![];
-		tokens[*pos].assert_ty(TokenRightCurlyBrace, pos);
-		
-		// process struct member 
-		while !tokens[*pos].consume_ty(TokenLeftCurlyBrace, pos) {
-			members.push(decl(tokens, pos));
-		}
-
-		return struct_of(members);
-	}
-	return NULL_TY.clone();
-}
-
-pub fn struct_of(mut members: Vec<Node>) -> Type {
-	let mut ty_align = 0;
-
-	let mut off = 0;
-	for i in 0..members.len() {
-		if let NodeType::VarDef(ctype, _, _, _, _) = &mut members[i].op {
-			off = roundup(off, ctype.align);
-			ctype.offset = off;
-			off += ctype.size;
-			ty_align = std::cmp::max(ty_align, ctype.align);
-		}
-	}
-	let ty_size = roundup(off, ty_align);
-
-	return Type::new(Ty::STRUCT(members), None, None, ty_size ,ty_align , 0, 0);
+#[allow(dead_code)]
+#[derive(Debug, Clone)]
+pub enum NodeType {
+	Num(i32),																	// Num(val)
+	BinaryTree(Type, TokenType, Box<Node>, Box<Node>),							// BinaryTree(ctype, tk_ty, lhs, rhs)
+	Ret(Box<Node>),																// Ret(lhs)
+	Expr(Box<Node>),															// Expr(lhs)
+	CompStmt(Vec<Node>),														// CompStmt(stmts)
+	StmtExpr(Type, Box<Node>),													// StmtExpr(ctype, body)
+	Ident(String),																// Ident(s)
+	EqTree(Type, Box<Node>, Box<Node>),											// EqTree(ctype, lhs, rhs)
+	IfThen(Box<Node>, Box<Node>, Option<Box<Node>>),							// IfThen(cond, then, elthen)
+	Call(String, Vec<Node>),													// Call(ident, args)
+	Func(String, bool, Vec<Node>, Box<Node>, usize),							// Func(ident, is_extern, args, body, stacksize)
+	LogAnd(Box<Node>, Box<Node>),												// LogAnd(lhs, rhs)
+	LogOr(Box<Node>, Box<Node>),												// LogOr(lhs, rhs)
+	For(Box<Node>, Box<Node>, Box<Node>, Box<Node>),							// For(init, cond, inc, body)
+	VarDef(Type, bool, String, usize, Option<Box<Node>>),						// VarDef(ty, is_extern, name, off, rhs)
+	Lvar(Type, usize),															// Lvar(ty, stacksize)
+	Deref(Type, Box<Node>),														// Deref(ctype, lhs)
+	Addr(Type, Box<Node>),														// Addr(ctype, lhs)
+	Sizeof(Type, usize, Box<Node>),												// Sizeof(ctype, val, lhs)
+	Str(Type, String, usize),													// Str(ctype, strname, label)
+	Gvar(Type, String),															// Gvar(ctype, label)
+	EqEq(Box<Node>, Box<Node>),													// EqEq(lhs, rhs)
+	Ne(Box<Node>, Box<Node>),													// Ne(lhs, rhs)
+	DoWhile(Box<Node>, Box<Node>),												// Dowhile(boyd, cond)
+	Alignof(Box<Node>),															// Alignof(expr)
+	Dot(Type, Box<Node>, String, usize),										// Dot(ctype, expr, name, offset)
+	NULL,																		// NULL
 }
 
 #[allow(dead_code)]
@@ -511,6 +472,91 @@ impl Node {
 	}
 }
 
+#[derive(Debug, Clone)]
+pub struct Env {
+	tags: HashMap<String, Vec<Node>>,
+	next: Option<Box<Env>>,
+}
+
+impl Env {
+	pub fn new_env(env: Option<Env>) -> Self {
+		match env {
+			Some(_env) => {
+				Self {
+					tags: HashMap::new(),
+					next: Some(Box::new(_env)),
+				}
+			}
+			None => {
+				Self {
+					tags: HashMap::new(),
+					next: None
+				}
+			}
+		}
+	}
+}
+
+pub fn roundup(x: usize, align: usize) -> usize {
+	return (x + align - 1) & !(align - 1);
+}
+
+pub fn read_type(tokens: &Vec<Token>,  pos: &mut usize) -> Type {
+	if tokens[*pos].consume_ty(TokenInt, pos){
+		return INT_TY.clone();
+	}
+	if tokens[*pos].consume_ty(TokenChar, pos){
+		return CHAR_TY.clone();
+	}
+	if tokens[*pos].consume_ty(TokenStruct, pos){
+		
+		let mut members = vec![];
+		let mut tag = String::from("");
+		
+		// tag
+		if tokens[*pos].consume_ty(TokenIdent, pos) {
+			*pos -= 1;
+			tag = ident(tokens, pos);
+		}
+		
+		// struct member
+		if tokens[*pos].consume_ty(TokenRightCurlyBrace, pos) {
+			while !tokens[*pos].consume_ty(TokenLeftCurlyBrace, pos) {
+				members.push(decl(tokens, pos));
+			}
+		}
+
+		// new struct type
+		if tag.len() > 0 && members.len() > 0 {
+			ENV.lock().unwrap().tags.insert(tag, members.clone());
+		// use existed struct type
+		} else if tag.len() > 0 && members.len() == 0 {
+			members = ENV.lock().unwrap().tags.get(&tag).unwrap().clone();
+		} else if tag.len() == 0 && members.len() == 0 {
+			panic!("bat struct definition.");
+		}
+		return struct_of(members);
+	}
+	return NULL_TY.clone();
+}
+
+pub fn struct_of(mut members: Vec<Node>) -> Type {
+	let mut ty_align = 0;
+
+	let mut off = 0;
+	for i in 0..members.len() {
+		if let NodeType::VarDef(ctype, _, _, _, _) = &mut members[i].op {
+			off = roundup(off, ctype.align);
+			ctype.offset = off;
+			off += ctype.size;
+			ty_align = std::cmp::max(ty_align, ctype.align);
+		}
+	}
+	let ty_size = roundup(off, ty_align);
+
+	return Type::new(Ty::STRUCT(members), None, None, ty_size ,ty_align , 0, 0);
+}
+
 fn primary(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 	
 	if tokens[*pos].consume_ty(TokenRightBrac, pos) {
@@ -825,11 +871,11 @@ pub fn stmt(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 		}
 		TokenRightCurlyBrace => {
 			*pos += 1;
-			let mut stmts = vec![];
+			let mut compstmts = vec![];
 			while !tokens[*pos].consume_ty(TokenLeftCurlyBrace, pos) {
-				stmts.push(stmt(tokens, pos));
+				compstmts.push(stmt(tokens, pos));
 			}
-			return Node::new_stmt(stmts);
+			return Node::new_stmt(compstmts);
 		}
 		TokenInt | TokenChar | TokenStruct => {
 			return decl(tokens, pos);
@@ -848,7 +894,8 @@ pub fn compound_stmt(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 	
 	let mut compstmts = vec![];
 	tokens[*pos].assert_ty(TokenRightCurlyBrace, pos);
-
+	let env = (*ENV.lock().unwrap()).clone();
+	*ENV.lock().unwrap() = Env::new_env(Some(env));
 	loop {
 		match tokens[*pos].consume_ty(TokenLeftCurlyBrace, pos) {
 			true => { break; },
@@ -858,7 +905,8 @@ pub fn compound_stmt(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 			}
 		}
 	}
-
+	let env = (*ENV.lock().unwrap()).clone();
+	*ENV.lock().unwrap() = *env.next.unwrap();
 	return Node::new_stmt(compstmts);
 }
 
@@ -909,6 +957,8 @@ pub fn toplevel(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 pub fn parse(tokens: &Vec<Token>, pos: &mut usize) -> Vec<Node> {
 	
 	let mut program = vec![];
+	let env = (*ENV.lock().unwrap()).clone();
+	*ENV.lock().unwrap() = Env::new_env(Some(env));
 
 	loop {
 		match tokens[*pos].consume_ty(TokenEof, pos) {
