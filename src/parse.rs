@@ -31,6 +31,15 @@ lazy_static! {
 		offset: 0,
 		len: 0,
 	};
+	pub static ref VOID_TY: Type = Type {
+		ty: Ty::VOID,
+		ptr_to: None,
+		ary_to: None,
+		size: 0,
+		align: 0,
+		offset: 0,
+		len: 0,
+	};
 	pub static ref NULL_TY: Type = Type {
 		ty: Ty::NULL,
 		ptr_to: None,
@@ -120,6 +129,7 @@ pub enum Ty {
 	ARY,
 	CHAR,
 	STRUCT(Vec<Node>),
+	VOID,
 	NULL,
 }
 
@@ -548,6 +558,9 @@ pub fn read_type(tokens: &Vec<Token>,  pos: &mut usize) -> Type {
 		}
 		return struct_of(members);
 	}
+	if tokens[*pos].consume_ty(TokenVoid, pos) {
+		return VOID_TY.clone();
+	}
 	return NULL_TY.clone();
 }
 
@@ -817,6 +830,10 @@ fn decl(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 
 	// array decralation
 	ty = read_array(tokens, pos, ty);
+	
+	if let Ty::VOID = ty.ty {
+		panic!("void variable. {}", name);
+	}
 
 	if tokens[*pos].consume_ty(TokenEq, pos) {
 		let rhs = assign(tokens, pos);

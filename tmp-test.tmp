@@ -1,4 +1,4 @@
-extern int *stderr;
+extern void *stderr;
 int one() { return 1; }
 int two() { return 2; }
 int plus(int x, int y) { return x + y; }

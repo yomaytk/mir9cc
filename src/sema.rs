@@ -225,7 +225,12 @@ pub fn walk(node: &Node, env: &mut Env, decay: bool) -> Node {
 			let lhs2 = walk(lhs, env, true);
 			let ctype = lhs2.nodesctype(None);
 			match ctype.ty {
-				Ty::PTR => { return Node::new_deref(ctype.ptr_to.as_ref().unwrap().as_ref().clone(), lhs2); }
+				Ty::PTR => { 
+					if let Ty::VOID = ctype.ptr_to.as_ref().unwrap().as_ref().ty {
+						panic!("cannot dereference void pointer.");
+					}
+					return Node::new_deref(ctype.ptr_to.as_ref().unwrap().as_ref().clone(), lhs2); 
+				}
 				_ => { panic!("operand must be a pointer."); }
 			}
 		}
