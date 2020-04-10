@@ -611,25 +611,30 @@ fn postfix(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 	
 	let mut lhs = primary(tokens, pos);
 
-	// struct member
-	if tokens[*pos].consume_ty(TokenDot, pos) {
-		let name = ident(tokens, pos);
-		return Node::new_dot(NULL_TY.clone(), lhs, name, 0);
+	loop {
+		// struct member
+		if tokens[*pos].consume_ty(TokenDot, pos) {
+			let name = ident(tokens, pos);
+			lhs = Node::new_dot(NULL_TY.clone(), lhs, name, 0);
+			continue;
+		}
+		// struct member arrow
+		if tokens[*pos].consume_ty(TokenArrow, pos) {
+			let name = ident(tokens, pos);
+			let expr = Node::new_deref(INT_TY.clone(), lhs);
+			lhs = Node::new_dot(NULL_TY.clone(), expr, name, 0);
+			continue;
+		}
+		// array
+		if tokens[*pos].consume_ty(TokenRightmiddleBrace, pos)  {
+			let id = assign(tokens, pos);
+			let lhs2 = Node::new_bit(INT_TY.clone(), TokenAdd, lhs, id);
+			lhs = Node::new_deref(INT_TY.clone(), lhs2);
+			tokens[*pos].assert_ty(TokenLeftmiddleBrace, pos);
+			continue;
+		}
+		return lhs;
 	}
-	// struct member arrow
-	if tokens[*pos].consume_ty(TokenArrow, pos) {
-		let name = ident(tokens, pos);
-		let expr = Node::new_deref(INT_TY.clone(), lhs);
-		return Node::new_dot(NULL_TY.clone(), expr, name, 0);
-	}
-	// array
-	while tokens[*pos].consume_ty(TokenRightmiddleBrace, pos)  {
-		let id = assign(tokens, pos);
-		let lhs2 = Node::new_bit(INT_TY.clone(), TokenAdd, lhs, id);
-		lhs = Node::new_deref(INT_TY.clone(), lhs2);
-		tokens[*pos].assert_ty(TokenLeftmiddleBrace, pos);
-	}
-	return lhs;
 }
 
 fn unary(tokens: &Vec<Token>, pos: &mut usize) -> Node {

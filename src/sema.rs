@@ -92,7 +92,7 @@ impl Env {
 
 pub fn maybe_decay(node: Node, decay: bool) -> Node {
 	match &node.op {
-		Lvar(ctype, _) | Gvar(ctype, _) => {
+		Lvar(ctype, _) | Gvar(ctype, _) | Dot(ctype, _, _, _) => {
 			match ctype.ty {
 				Ty::ARY if decay => {
 					return Node::new_addr(ctype.ary_to.as_ref().unwrap().as_ref().clone().ptr_to(), node);
@@ -279,7 +279,8 @@ pub fn walk(node: &Node, env: &mut Env, decay: bool) -> Node {
 							if &name[..] != &name2[..] {
 								continue;
 							}
-							return Node::new_dot(ctype.clone(), expr2, name2, ctype.offset);
+							let lhs = Node::new_dot(ctype.clone(), expr2, name2, ctype.offset);
+							return maybe_decay(lhs, decay);
 						}
 					}
 					panic!("member missing.");
