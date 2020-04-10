@@ -94,6 +94,7 @@ pub enum TokenType {
 	TokenStruct,
 	TokenDot,
 	TokenArrow,
+	TokenTypedef,
 	TokenNoSignal,
 	TokenEof,
 }
@@ -113,6 +114,7 @@ impl From<String> for TokenType {
 			"extern" => { TokenExtern }
 			"_Alignof" => { TokenAlignof }
 			"struct" => { TokenStruct }
+			"typedef" => { TokenTypedef }
 			_ => { TokenIdent }
 		}
 	}

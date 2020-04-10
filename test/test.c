@@ -141,5 +141,19 @@ int main() {
 		return x.a[0].b + x.a[0].c[1];
 	}));
 
+	EXPECT(3, ({ typedef int foo; foo x = 3; return x; }));
+	EXPECT(8, ({
+		typedef struct {
+			struct {
+				int b;
+				int c[5];
+			} a[2];
+		} t1;
+		t1 x;
+		x.a[0].b = 3;
+		x.a[0].c[1] = 5;
+		return x.a[0].b + x.a[0].c[1];
+	}));
+
 return 0;
 }

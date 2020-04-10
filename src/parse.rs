@@ -475,6 +475,7 @@ impl Node {
 #[derive(Debug, Clone)]
 pub struct Env {
 	tags: HashMap<String, Vec<Node>>,
+	typedefs: HashMap<String, Type>,
 	next: Option<Box<Env>>,
 }
 
@@ -484,13 +485,15 @@ impl Env {
 			Some(_env) => {
 				Self {
 					tags: HashMap::new(),
+					typedefs: HashMap::new(),
 					next: Some(Box::new(_env)),
 				}
 			}
 			None => {
 				Self {
 					tags: HashMap::new(),
-					next: None
+					typedefs: HashMap::new(),
+					next: None,
 				}
 			}
 		}
@@ -502,6 +505,14 @@ pub fn roundup(x: usize, align: usize) -> usize {
 }
 
 pub fn read_type(tokens: &Vec<Token>,  pos: &mut usize) -> Type {
+	if tokens[*pos].consume_ty(TokenIdent, pos) {
+		*pos -= 1;
+		let name = ident(tokens, pos);
+		if let Some(ty) = ENV.lock().unwrap().typedefs.get(&name) {
+			return ty.clone();
+		}
+		panic!("{} is no defined type.", name);
+	}
 	if tokens[*pos].consume_ty(TokenInt, pos){
 		return INT_TY.clone();
 	}
@@ -511,7 +522,7 @@ pub fn read_type(tokens: &Vec<Token>,  pos: &mut usize) -> Type {
 	if tokens[*pos].consume_ty(TokenStruct, pos){
 		
 		let mut members = vec![];
-		let mut tag = String::from("");
+		let mut tag = String::new();
 		
 		// tag
 		if tokens[*pos].consume_ty(TokenIdent, pos) {
@@ -527,12 +538,12 @@ pub fn read_type(tokens: &Vec<Token>,  pos: &mut usize) -> Type {
 		}
 
 		// new struct type
-		if tag.len() > 0 && members.len() > 0 {
+		if !tag.is_empty() && !members.is_empty() {
 			ENV.lock().unwrap().tags.insert(tag, members.clone());
 		// use existed struct type
-		} else if tag.len() > 0 && members.len() == 0 {
+		} else if !tag.is_empty() && members.is_empty() {
 			members = ENV.lock().unwrap().tags.get(&tag).unwrap().clone();
-		} else if tag.len() == 0 && members.len() == 0 {
+		} else if tag.is_empty() && members.is_empty() {
 			panic!("bat struct definition.");
 		}
 		return struct_of(members);
@@ -555,6 +566,14 @@ pub fn struct_of(mut members: Vec<Node>) -> Type {
 	let ty_size = roundup(off, ty_align);
 
 	return Type::new(Ty::STRUCT(members), None, None, ty_size ,ty_align , 0, 0);
+}
+
+pub fn type_exist(name: &str) -> bool {
+	if let Some(_) = ENV.lock().unwrap().typedefs.get(name) {
+		return true;
+	} else {
+		return false;
+	}
 }
 
 fn primary(tokens: &Vec<Token>, pos: &mut usize) -> Node {
@@ -889,7 +908,24 @@ pub fn stmt(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 			*pos += 1;
 			return Node::new_null();
 		}
+		TokenTypedef => {
+			*pos += 1;
+			let lhs = decl(tokens, pos);
+			if let NodeType::VarDef(ctype, _, name, _, None) = lhs.op {
+				ENV.lock().unwrap().typedefs.insert(name, ctype);
+				return Node::new_null();
+			}
+			panic!("typedef error.");
+		}
 		_ => {
+			if tokens[*pos].consume_ty(TokenIdent, pos) {
+				*pos -= 1;
+				let name = ident(tokens, pos);
+				*pos -= 1;
+				if type_exist(&name) {
+					return decl(tokens, pos);
+				}
+			}
 			return expr(tokens, pos);
 		}
 	}
