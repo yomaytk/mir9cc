@@ -567,8 +567,14 @@ fn postfix(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 
 	// struct member
 	if tokens[*pos].consume_ty(TokenDot, pos) {
-		let member = ident(tokens, pos);
-		return Node::new_dot(NULL_TY.clone(), lhs, member, 0);
+		let name = ident(tokens, pos);
+		return Node::new_dot(NULL_TY.clone(), lhs, name, 0);
+	}
+	// struct member arrow
+	if tokens[*pos].consume_ty(TokenArrow, pos) {
+		let name = ident(tokens, pos);
+		let expr = Node::new_deref(INT_TY.clone(), lhs);
+		return Node::new_dot(NULL_TY.clone(), expr, name, 0);
 	}
 	// array
 	while tokens[*pos].consume_ty(TokenRightmiddleBrace, pos)  {

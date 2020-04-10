@@ -270,16 +270,16 @@ pub fn walk(node: &Node, env: &mut Env, decay: bool) -> Node {
 				_ => { return Node::new_num(ctype.align as i32); }
 			}
 		}
-		Dot(_, expr, member, _) => {
+		Dot(_, expr, name, _) => {
 			let expr2 = walk(expr, env, true);
 			match expr2.nodesctype(None).ty {
 				Ty::STRUCT(members) => {
 					for membernode in members {
-						if let NodeType::VarDef(ctype, _, name, _, _) = membernode.op {
-							if &member[..] != &name[..] {
+						if let NodeType::VarDef(ctype, _, name2, _, _) = membernode.op {
+							if &name[..] != &name2[..] {
 								continue;
 							}
-							return Node::new_dot(ctype.clone(), expr2, name, ctype.offset);
+							return Node::new_dot(ctype.clone(), expr2, name2, ctype.offset);
 						}
 					}
 					panic!("member missing.");
