@@ -92,7 +92,7 @@ impl Env {
 
 pub fn maybe_decay(node: Node, decay: bool) -> Node {
 	match &node.op {
-		Lvar(ctype, _) | Gvar(ctype, _) | Dot(ctype, _, _, _) => {
+		Lvar(ctype, ..) | Gvar(ctype, ..) | Dot(ctype, ..) => {
 			match ctype.ty {
 				Ty::ARY if decay => {
 					return Node::new_addr(ctype.ary_to.as_ref().unwrap().as_ref().clone().ptr_to(), node);
@@ -239,7 +239,7 @@ pub fn walk(node: &Node, env: &mut Env, decay: bool) -> Node {
 			lhs2.checklval();
 			return Node::new_addr(lhs2.nodesctype(None).ptr_to(), lhs2);
 		}
-		Sizeof(_, _, lhs) => {
+		Sizeof(.., lhs) => {
 			let lhs2 = walk(lhs, env, false);
 			let ctype = lhs2.nodesctype(None);
 			match ctype.ty {
@@ -280,7 +280,7 @@ pub fn walk(node: &Node, env: &mut Env, decay: bool) -> Node {
 			match expr2.nodesctype(None).ty {
 				Ty::STRUCT(members) => {
 					for membernode in members {
-						if let NodeType::VarDef(ctype, _, name2, _, _) = membernode.op {
+						if let NodeType::VarDef(ctype, _, name2, ..) = membernode.op {
 							if &name[..] != &name2[..] {
 								continue;
 							}
@@ -318,7 +318,7 @@ pub fn sema(nodes: &Vec<Node>) -> (Vec<Node>, Vec<Var>) {
 	for topnode in nodes {
 		let node;
 
-		if let VarDef(ctype, is_extern, ident, _, _) = &topnode.op {
+		if let VarDef(ctype, is_extern, ident, ..) = &topnode.op {
 			let var = new_global(&ctype, ident.clone(), None, *is_extern);
 			GVARS.lock().unwrap().push(var.clone());
 			topenv.vars.insert(ident.clone(), var);

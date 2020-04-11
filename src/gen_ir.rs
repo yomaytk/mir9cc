@@ -299,7 +299,7 @@ fn gen_expr(node: &Node, code: &mut Vec<Ir>) -> usize {
 			kill(rhi, code);
 			return lhi;
 		},
-		NodeType::Lvar(ctype, _) | NodeType::Gvar(ctype, _) | NodeType::Dot(ctype, _, _, _) => {
+		NodeType::Lvar(ctype, _) | NodeType::Gvar(ctype, _) | NodeType::Dot(ctype, ..) => {
 			let lhi = gen_lval(node, code);
 			code.push(Ir::new(ctype.load_insn(), lhi, lhi));
 			return lhi;
@@ -470,7 +470,7 @@ fn gen_stmt(node: &Node, code: &mut Vec<Ir>) {
 			code.push(Ir::new(IrIf, r, x));
 			kill(r, code);
 		}
-		NodeType::VarDef(ctype, _, _, off, init) => {
+		NodeType::VarDef(ctype, .., off, init) => {
 			if let Some(rhs) = init {
 				let r2 = gen_expr(rhs, code);
 				*REGNO.lock().unwrap() += 1;
@@ -502,7 +502,7 @@ pub fn gen_ir(funcs: &Vec<Node>) -> Vec<Function> {
 				}
 				for i in 0..args.len() {
 					match &args[i].op {
-						NodeType::VarDef(ctype, _, _, offset, _) => {
+						NodeType::VarDef(ctype, .., offset, _) => {
 							code.push(Ir::new(ctype.store_arg_insn(), *offset, i));
 						}
 						_ => { panic!("Illegal function parameter."); }
@@ -512,7 +512,7 @@ pub fn gen_ir(funcs: &Vec<Node>) -> Vec<Function> {
 				let func = Function::new(name.clone(), code, *stacksize);
 				v.push(func);
 			}
-			NodeType::VarDef(_, _, _, _, _) => {}
+			NodeType::VarDef(..) => {}
 			_ => { panic!(" should be func node at gen_ir: {:?}", funode); }
 		}
 	}

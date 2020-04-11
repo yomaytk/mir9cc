@@ -306,11 +306,11 @@ impl Node {
 	
 	pub fn nodesctype(&self, basetype: Option<Type>) -> Type {
 		match &self.op {
-			NodeType::Lvar(ctype, _) | NodeType::BinaryTree(ctype, _, _, _) 
-			| NodeType::Deref(ctype, _) | NodeType::Addr(ctype, _) 
-			| NodeType::Sizeof(ctype, _, _) | NodeType::Str(ctype, _, _)
-			| NodeType::Gvar(ctype, _) | NodeType::Dot(ctype, _, _, _) 
-			| NodeType::Ternary(ctype, _, _, _) => { 
+			NodeType::Lvar(ctype, ..) | NodeType::BinaryTree(ctype, ..) 
+			| NodeType::Deref(ctype,..) | NodeType::Addr(ctype, ..) 
+			| NodeType::Sizeof(ctype, ..) | NodeType::Str(ctype, ..)
+			| NodeType::Gvar(ctype,..) | NodeType::Dot(ctype, ..) 
+			| NodeType::Ternary(ctype, ..) => { 
 				return ctype.clone(); 
 			}
 			_ => { 
@@ -325,7 +325,7 @@ impl Node {
 
 	pub fn checklval(&self) {
 		match &self.op {
-			NodeType::Lvar(_, _) | NodeType::Gvar(_, _) | NodeType::Deref(_, _) | NodeType::Dot(_, _, _, _) => {}
+			NodeType::Lvar(..) | NodeType::Gvar(..) | NodeType::Deref(..) | NodeType::Dot(..) => {}
 			_ => { panic!("not an lvalue"); }
 		}
 	}
@@ -592,7 +592,7 @@ pub fn struct_of(mut members: Vec<Node>) -> Type {
 
 	let mut off = 0;
 	for i in 0..members.len() {
-		if let NodeType::VarDef(ctype, _, _, _, _) = &mut members[i].op {
+		if let NodeType::VarDef(ctype, ..) = &mut members[i].op {
 			off = roundup(off, ctype.align);
 			ctype.offset = off;
 			off += ctype.size;
