@@ -293,6 +293,10 @@ pub fn walk(node: &Node, env: &mut Env, decay: bool) -> Node {
 				_ => { panic!("struct expected before ."); }
 			}
 		}
+		Not(expr) => {
+			let expr2 = walk(expr, env, true);
+			return Node::new_not(expr2);
+		}
 		NULL => {
 			return Node::new_null();
 		}

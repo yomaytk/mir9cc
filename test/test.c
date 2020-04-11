@@ -155,5 +155,8 @@ int main() {
 		return x.a[0].b + x.a[0].c[1];
 	}));
 
+	EXPECT(0, !1);
+	EXPECT(1, !0);
+
 return 0;
 }

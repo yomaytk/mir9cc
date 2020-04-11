@@ -350,6 +350,15 @@ fn gen_expr(node: &Node, code: &mut Vec<Ir>) -> usize {
 			kill(r2, code);
 			return r1;
 		}
+		NodeType::Not(expr) => {
+			let r1 = gen_expr(expr, code);
+			*REGNO.lock().unwrap() += 1;
+			let r2 = *REGNO.lock().unwrap();
+			code.push(Ir::new(IrImm, r2, 0));
+			code.push(Ir::new(IrEqEq, r1, r2));
+			kill(r2, code);
+			return r1;
+		}
 		NodeType::StmtExpr(_, body) => {
 			let orig_label = *RETURN_LABEL.lock().unwrap();
 			let orig_reg = *RETURN_REG.lock().unwrap();

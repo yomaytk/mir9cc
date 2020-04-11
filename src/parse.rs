@@ -162,6 +162,7 @@ pub enum NodeType {
 	DoWhile(Box<Node>, Box<Node>),												// Dowhile(boyd, cond)
 	Alignof(Box<Node>),															// Alignof(expr)
 	Dot(Type, Box<Node>, String, usize),										// Dot(ctype, expr, name, offset)
+	Not(Box<Node>),																// Not(expr)	
 	NULL,																		// NULL
 }
 
@@ -283,6 +284,10 @@ impl NodeType {
 
 	fn dot_init(ctype: Type, expr: Node, member: String, offset: usize) -> Self {
 		NodeType::Dot(ctype, Box::new(expr), member, offset)
+	}
+
+	fn not_init(expr: Node) -> Self {
+		NodeType::Not(Box::new(expr))
 	}
 }
 
@@ -478,6 +483,12 @@ impl Node {
 	pub fn new_dot(ctype: Type, expr: Node, name: String, offset: usize) -> Self {
 		Self {
 			op: NodeType::dot_init(ctype, expr, name, offset)
+		}
+	}
+
+	pub fn new_not(expr: Node) -> Self {
+		Self {
+			op: NodeType::not_init(expr)
 		}
 	}
 }
@@ -682,6 +693,9 @@ fn unary(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 	}
 	if tokens[*pos].consume_ty(TokenAlignof, pos) {
 		return Node::new_alignof(unary(tokens, pos));
+	}
+	if tokens[*pos].consume_ty(TokenNot, pos) {
+		return Node::new_not(unary(tokens, pos));
 	}
 	return postfix(tokens, pos);
 }
