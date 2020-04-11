@@ -158,5 +158,8 @@ int main() {
 	EXPECT(0, !1);
 	EXPECT(1, !0);
 
+	EXPECT(5, 0 ? 3 : 5);
+	EXPECT(3, 1 ? 3 : 5);
+
 return 0;
 }

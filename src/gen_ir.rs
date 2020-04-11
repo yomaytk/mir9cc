@@ -359,6 +359,23 @@ fn gen_expr(node: &Node, code: &mut Vec<Ir>) -> usize {
 			kill(r2, code);
 			return r1;
 		}
+		NodeType::Ternary(_, cond, then, els) => {
+			*LABEL.lock().unwrap() += 2;
+			let x = *LABEL.lock().unwrap() - 1;
+			let y = x + 1;
+			let r = gen_expr(cond, code);
+			code.push(Ir::new(IrUnless, r, x));
+			let r2 = gen_expr(then, code);
+			code.push(Ir::new(IrMov, r, r2));
+			kill(r2, code);
+			code.push(Ir::new(IrJmp, y, 0));
+			label(x, code);
+			let r3 = gen_expr(els, code);
+			code.push(Ir::new(IrMov, r, r3));
+			kill(r3, code);
+			label(y, code);
+			return r;
+		}
 		NodeType::StmtExpr(_, body) => {
 			let orig_label = *RETURN_LABEL.lock().unwrap();
 			let orig_reg = *RETURN_REG.lock().unwrap();

@@ -162,7 +162,8 @@ pub enum NodeType {
 	DoWhile(Box<Node>, Box<Node>),												// Dowhile(boyd, cond)
 	Alignof(Box<Node>),															// Alignof(expr)
 	Dot(Type, Box<Node>, String, usize),										// Dot(ctype, expr, name, offset)
-	Not(Box<Node>),																// Not(expr)	
+	Not(Box<Node>),																// Not(expr)
+	Ternary(Type, Box<Node>, Box<Node>, Box<Node>),								// Ternary(ctype, cond, then, els)
 	NULL,																		// NULL
 }
 
@@ -289,6 +290,10 @@ impl NodeType {
 	fn not_init(expr: Node) -> Self {
 		NodeType::Not(Box::new(expr))
 	}
+
+	fn ternary_init(ctype: Type, cond: Node, then: Node, els: Node) -> Self {
+		NodeType::Ternary(ctype, Box::new(cond), Box::new(then), Box::new(els))
+	}
 }
 
 #[derive(Debug, Clone)]
@@ -304,7 +309,8 @@ impl Node {
 			NodeType::Lvar(ctype, _) | NodeType::BinaryTree(ctype, _, _, _) 
 			| NodeType::Deref(ctype, _) | NodeType::Addr(ctype, _) 
 			| NodeType::Sizeof(ctype, _, _) | NodeType::Str(ctype, _, _)
-			| NodeType::Gvar(ctype, _) | NodeType::Dot(ctype, _, _, _) => { 
+			| NodeType::Gvar(ctype, _) | NodeType::Dot(ctype, _, _, _) 
+			| NodeType::Ternary(ctype, _, _, _) => { 
 				return ctype.clone(); 
 			}
 			_ => { 
@@ -489,6 +495,12 @@ impl Node {
 	pub fn new_not(expr: Node) -> Self {
 		Self {
 			op: NodeType::not_init(expr)
+		}
+	}
+
+	pub fn new_ternary(ctype: Type, cond: Node, then: Node, els: Node) -> Self {
+		Self {
+			op: NodeType::ternary_init(ctype, cond, then, els)
 		}
 	}
 }
@@ -785,8 +797,19 @@ fn logor(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 	}
 }
 
+fn conditional(tokens: &Vec<Token>, pos: &mut usize) -> Node {
+	let cond = logor(tokens, pos);
+	if tokens[*pos].consume_ty(TokenQuestion, pos) {
+		let then = assign(tokens, pos);
+		tokens[*pos].assert_ty(TokenColon, pos);
+		let els = assign(tokens, pos);
+		return Node::new_ternary(NULL_TY.clone(), cond, then, els);
+	}
+	return cond;
+}
+
 fn assign(tokens: &Vec<Token>, pos: &mut usize) -> Node {
-	let mut lhs = logor(tokens, pos);
+	let mut lhs = conditional(tokens, pos);
 	if tokens[*pos].consume_ty(TokenEq, pos) {
 		let rhs = logor(tokens, pos);
 		lhs = Node::new_eq(INT_TY.clone(), lhs, rhs);

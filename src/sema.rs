@@ -297,6 +297,12 @@ pub fn walk(node: &Node, env: &mut Env, decay: bool) -> Node {
 			let expr2 = walk(expr, env, true);
 			return Node::new_not(expr2);
 		}
+		Ternary(_, cond, then, els) => {
+			let cond2 = walk(cond, env, true);
+			let then2 = walk(then, env, true);
+			let els2 = walk(els, env, true);
+			return Node::new_ternary(then2.nodesctype(Some(INT_TY.clone())), cond2, then2, els2);
+		}
 		NULL => {
 			return Node::new_null();
 		}
