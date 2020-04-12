@@ -208,11 +208,9 @@ fn gen_binop(irop: IrOp, lhs: &Node, rhs: &Node, code: &mut Vec<Ir>) -> usize {
 
 fn gen_pre_inc(ctype: &Type, lhs: &Node, code: &mut Vec<Ir>, num: i32) -> usize {
 	let r1 = gen_lval(lhs, code);
-	*REGNO.lock().unwrap() += 1;
-	let r2 = *REGNO.lock().unwrap();
+	let r2 = new_regno();
 	code.push(Ir::new(ctype.load_insn(), r2, r1));
-	*REGNO.lock().unwrap() += 1;
-	let imm = *REGNO.lock().unwrap();
+	let imm = new_regno();
 	code.push(Ir::new(IrImm, imm, num as usize));
 	code.push(Ir::new(IrAdd, r2, imm));
 	kill(imm, code);
@@ -223,11 +221,9 @@ fn gen_pre_inc(ctype: &Type, lhs: &Node, code: &mut Vec<Ir>, num: i32) -> usize 
 
 fn gen_post_inc(ctype: &Type, lhs: &Node, code: &mut Vec<Ir>, num: i32) -> usize {
 	let r1 = gen_lval(lhs, code);
-	*REGNO.lock().unwrap() += 1;
-	let r2 = *REGNO.lock().unwrap();
+	let r2 = new_regno();
 	code.push(Ir::new(ctype.load_insn(), r2, r1));
-	*REGNO.lock().unwrap() += 1;
-	let imm = *REGNO.lock().unwrap();
+	let imm = new_regno();
 	code.push(Ir::new(IrImm, imm, num as usize));
 	code.push(Ir::new(IrAdd, r2, imm));
 	code.push(Ir::new(ctype.store_insn(), r1, r2));
@@ -235,6 +231,16 @@ fn gen_post_inc(ctype: &Type, lhs: &Node, code: &mut Vec<Ir>, num: i32) -> usize
 	code.push(Ir::new(IrSub, r2, imm));
 	kill(imm, code);
 	return r2;
+}
+
+fn new_regno() -> usize {
+	*REGNO.lock().unwrap() += 1;
+	return *REGNO.lock().unwrap();
+}
+
+fn new_label() -> usize {
+	*LABEL.lock().unwrap() += 1;
+	return *LABEL.lock().unwrap();
 }
 
 // In C, all expressions that can be written on the left-hand side of
@@ -262,21 +268,18 @@ fn gen_lval(node: &Node, code: &mut Vec<Ir>) -> usize {
 			return gen_expr(expr, code);
 		}
 		NodeType::Lvar(_, off) => {
-			*REGNO.lock().unwrap() += 1;
-			let r1 = *REGNO.lock().unwrap();
+			let r1 = new_regno();
 			code.push(Ir::new(IrBpRel, r1, *off));
 			return r1;
 		}
 		NodeType::Gvar(_, label) => {
-			*REGNO.lock().unwrap() += 1;
-			let r = *REGNO.lock().unwrap();
+			let r = new_regno();
 			code.push(Ir::new(IrLabelAddr(label.clone()), r, 0));
 			return r;
 		}
 		NodeType::Dot(_, expr, _, offset) => {
 			let r1 = gen_lval(expr, code);
-			*REGNO.lock().unwrap() += 1;
-			let r2 = *REGNO.lock().unwrap();
+			let r2 = new_regno();
 			code.push(Ir::new(IrImm, r2, *offset));
 			code.push(Ir::new(IrAdd, r1, r2));
 			kill(r2, code);
@@ -291,16 +294,14 @@ fn gen_expr(node: &Node, code: &mut Vec<Ir>) -> usize {
 
 	match &node.op {
 		NodeType::Num(val) => {
-			*REGNO.lock().unwrap() += 1;
-			let r = *REGNO.lock().unwrap();
+			let r = new_regno();
 			let ir = Ir::new(IrImm, r, *val as usize);
 			code.push(ir);
 			return r;
 		},
 		NodeType::LogAnd(lhs, rhs) => {
 			let r1 = gen_expr(lhs, code);
-			*LABEL.lock().unwrap() += 1;
-			let x = *LABEL.lock().unwrap();
+			let x = new_label();
 			code.push(Ir::new(IrUnless, r1, x));
 			let r2 = gen_expr(rhs, code);
 			code.push(Ir::new(IrMov, r1, r2));
@@ -312,9 +313,8 @@ fn gen_expr(node: &Node, code: &mut Vec<Ir>) -> usize {
 		}
 		NodeType::LogOr(lhs, rhs) => {
 			let r1 = gen_expr(lhs, code);
-			*LABEL.lock().unwrap() += 2;
-			let x = *LABEL.lock().unwrap()-1;
-			let y = x+1;
+			let x = new_label();
+			let y = new_label();
 			code.push(Ir::new(IrUnless, r1, x));
 			code.push(Ir::new(IrImm, r1, 1));
 			code.push(Ir::new(IrJmp, y, 0));
@@ -335,8 +335,7 @@ fn gen_expr(node: &Node, code: &mut Vec<Ir>) -> usize {
 					match ctype.ty {
 						Ty::PTR => {
 							let size_of = ctype.ptr_to.as_ref().unwrap().size;
-							*REGNO.lock().unwrap() += 1;
-							let r1 = *REGNO.lock().unwrap();
+							let r1 = new_regno();
 							code.push(Ir::new(IrImm, r1, size_of));
 							code.push(Ir::new(IrMul, rhi, r1));
 							kill(r1, code);
@@ -367,8 +366,7 @@ fn gen_expr(node: &Node, code: &mut Vec<Ir>) -> usize {
 			for arg in callarg {
 				args.push(gen_expr(arg, code));
 			}
-			*REGNO.lock().unwrap() += 1;
-			let r = *REGNO.lock().unwrap();
+			let r = new_regno();
 			code.push(Ir::new(IrCall{ 
 				name: (*ident).clone(), 
 				len: args.len(),
@@ -395,17 +393,15 @@ fn gen_expr(node: &Node, code: &mut Vec<Ir>) -> usize {
 		}
 		NodeType::Not(expr) => {
 			let r1 = gen_expr(expr, code);
-			*REGNO.lock().unwrap() += 1;
-			let r2 = *REGNO.lock().unwrap();
+			let r2 = new_regno();
 			code.push(Ir::new(IrImm, r2, 0));
 			code.push(Ir::new(IrEqEq, r1, r2));
 			kill(r2, code);
 			return r1;
 		}
 		NodeType::Ternary(_, cond, then, els) => {
-			*LABEL.lock().unwrap() += 2;
-			let x = *LABEL.lock().unwrap() - 1;
-			let y = x + 1;
+			let x = new_label();
+			let y = new_label();
 			let r = gen_expr(cond, code);
 			code.push(Ir::new(IrUnless, r, x));
 			let r2 = gen_expr(then, code);
@@ -490,9 +486,8 @@ fn gen_stmt(node: &Node, code: &mut Vec<Ir>) {
 		}
 		NodeType::IfThen(cond, then, elthen) => {
 			let lhi = gen_expr(cond, code);
-			*LABEL.lock().unwrap() += 2;
-			let x1 = *LABEL.lock().unwrap();
-			let x2 = x1-1;
+			let x1 = new_label();
+			let x2 = new_label();
 			code.push(Ir::new(IrUnless, lhi, x1));
 			kill(lhi, code);
 			gen_stmt(then, code);
@@ -501,11 +496,10 @@ fn gen_stmt(node: &Node, code: &mut Vec<Ir>) {
 					code.push(Ir::new(IrJmp, x2, 0));
 					label(x1, code);
 					gen_stmt(elnode, code);
-					*LABEL.lock().unwrap() += 1;
 					label(x2, code);
 				},
 				None => {
-					label(*LABEL.lock().unwrap(), code);
+					label(x1, code);
 				}
 			}
 		}
@@ -515,9 +509,8 @@ fn gen_stmt(node: &Node, code: &mut Vec<Ir>) {
 			}
 		}
 		NodeType::For(init, cond, inc, body) => {
-			*LABEL.lock().unwrap() += 2;
-			let x = *LABEL.lock().unwrap()-1;
-			let y = x+1;
+			let x = new_label();
+			let y = new_label();
 			gen_stmt(init, code);
 			label(x, code);
 			let r2 = gen_expr(cond, code);
@@ -529,8 +522,7 @@ fn gen_stmt(node: &Node, code: &mut Vec<Ir>) {
 			label(y, code);
 		}
 		NodeType::DoWhile(body, cond) => {
-			*LABEL.lock().unwrap() += 1;
-			let x = *LABEL.lock().unwrap();
+			let x = new_label();
 			label(x, code);
 			gen_stmt(body, code);
 			let r = gen_expr(cond, code);
@@ -540,8 +532,7 @@ fn gen_stmt(node: &Node, code: &mut Vec<Ir>) {
 		NodeType::VarDef(ctype, .., off, init) => {
 			if let Some(rhs) = init {
 				let r2 = gen_expr(rhs, code);
-				*REGNO.lock().unwrap() += 1;
-				let r1 = *REGNO.lock().unwrap();
+				let r1 = new_regno();
 				code.push(Ir::new(IrBpRel, r1, *off));
 				code.push(Ir::new(ctype.store_insn(), r1, r2));
 				kill(r1, code);
