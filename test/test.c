@@ -182,5 +182,8 @@ int main() {
 	EXPECT(8, 1 << 3);
 	EXPECT(4, 16 >> 2);
 
+	EXPECT(4, 19 % 5);
+	EXPECT(0, 9 % 3);
+
 return 0;
 }

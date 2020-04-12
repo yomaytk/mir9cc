@@ -757,12 +757,15 @@ fn mul(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 	let mut lhs = unary(tokens, pos);
 	
 	loop {
-		if !tokens[*pos].consume_ty(TokenStar, pos) && !tokens[*pos].consume_ty(TokenDiv, pos) {
+		if tokens[*pos].consume_ty(TokenStar, pos) {
+			lhs = Node::new_bit(NULL_TY.clone(), TokenStar, lhs, unary(tokens, pos));
+		} else if tokens[*pos].consume_ty(TokenDiv, pos) {
+			lhs = Node::new_bit(NULL_TY.clone(), TokenDiv, lhs, unary(tokens, pos));
+		} else if tokens[*pos].consume_ty(TokenMod, pos) {
+			lhs = Node::new_bit(NULL_TY.clone(), TokenMod, lhs, unary(tokens, pos));
+		} else {
 			return lhs;
 		}
-		let ty = tokens[*pos-1].ty.clone();
-		let rhs = unary(tokens, pos);
-		lhs = Node::new_bit(NULL_TY.clone(), ty, lhs, rhs);
 	}
 
 }
