@@ -330,7 +330,8 @@ impl Node {
 			| NodeType::Deref(ctype,..) | NodeType::Addr(ctype, ..) 
 			| NodeType::Sizeof(ctype, ..) | NodeType::Str(ctype, ..)
 			| NodeType::Gvar(ctype,..) | NodeType::Dot(ctype, ..) 
-			| NodeType::Ternary(ctype, ..) => { 
+			| NodeType::Ternary(ctype, ..) | NodeType::BitOr(ctype, ..) 
+			| NodeType::BitXor(ctype, ..) | NodeType::BitAnd(ctype, ..) => { 
 				return ctype.clone(); 
 			}
 			_ => { 
@@ -765,7 +766,7 @@ fn mul(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 		}
 		let ty = tokens[*pos-1].ty.clone();
 		let rhs = unary(tokens, pos);
-		lhs = Node::new_bit(INT_TY.clone(), ty, lhs, rhs);
+		lhs = Node::new_bit(NULL_TY.clone(), ty, lhs, rhs);
 	}
 
 }
@@ -779,8 +780,7 @@ fn add(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 		}
 		let ty = tokens[*pos-1].ty.clone();
 		let rhs = mul(tokens, pos);
-		let ctype = INT_TY.clone();
-		lhs = Node::new_bit(ctype, ty, lhs, rhs);
+		lhs = Node::new_bit(NULL_TY.clone(), ty, lhs, rhs);
 	}
 	
 }
@@ -820,61 +820,46 @@ fn equarity(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 fn bitand(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 	let mut lhs = equarity(tokens, pos);
 
-	loop {
-		if tokens[*pos].consume_ty(TokenAmpersand, pos) {
-			lhs = Node::new_bitand(INT_TY.clone(), lhs, equarity(tokens, pos));
-			continue;
-		}
-		return lhs;
+	while tokens[*pos].consume_ty(TokenAmpersand, pos) {
+		lhs = Node::new_bitand(INT_TY.clone(), lhs, equarity(tokens, pos));
 	}
+	return lhs;
 }
 
 fn bitxor(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 	let mut lhs = bitand(tokens, pos);
 
-	loop {
-		if tokens[*pos].consume_ty(TokenXor, pos) {
-			lhs = Node::new_bitxor(INT_TY.clone(), lhs, bitand(tokens, pos));
-			continue;
-		}
-		return lhs;
+	while tokens[*pos].consume_ty(TokenXor, pos) {
+		lhs = Node::new_bitxor(INT_TY.clone(), lhs, bitand(tokens, pos));
 	}
+	return lhs;
 }
 
 fn bitor(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 	let mut lhs = bitxor(tokens, pos);
 
-	loop {
-		if tokens[*pos].consume_ty(TokenOr, pos) {
-			lhs = Node::new_bitor(INT_TY.clone(), lhs, bitxor(tokens, pos));
-			continue;
-		}
-		return lhs;
+	while tokens[*pos].consume_ty(TokenOr, pos) {
+		lhs = Node::new_bitor(INT_TY.clone(), lhs, bitxor(tokens, pos));
 	}
+	return lhs;
 }
 
 fn logand(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 	let mut lhs = bitor(tokens, pos);
 
-	loop {
-		if !tokens[*pos].consume_ty(TokenLogAnd, pos) {
-			return lhs;
-		}
-		let rhs = add(tokens, pos);
-		lhs = Node::new_and(lhs, rhs);
+	while tokens[*pos].consume_ty(TokenLogAnd, pos) {
+		lhs = Node::new_and(lhs, bitor(tokens, pos));
 	}
+	return lhs;
 }
 
 fn logor(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 	let mut lhs = logand(tokens, pos);
 
-	loop {
-		if !tokens[*pos].consume_ty(TokenLogOr, pos) {
-			return lhs;
-		}
-		let rhs = logand(tokens, pos);
-		lhs = Node::new_or(lhs, rhs);
+	while tokens[*pos].consume_ty(TokenLogOr, pos) {
+		lhs = Node::new_or(lhs, logand(tokens, pos));
 	}
+	return lhs;
 }
 
 fn conditional(tokens: &Vec<Token>, pos: &mut usize) -> Node {
