@@ -120,6 +120,16 @@ pub fn new_global(ctype: &Type, ident: String, strname: Option<String>, is_exter
 	return var;
 }
 
+pub fn binwalk(f: fn(Type, lhs: Node, rhs: Node) -> Node, lhs: &Node, rhs: &Node, env: &mut Env, lhs_or_rhs: i32) -> Node {
+	let lhs2 = walk(lhs, env, true);
+	let rhs2 = walk(rhs, env, true);
+	if lhs_or_rhs == -1 {
+		return f(lhs2.nodesctype(Some(INT_TY.clone())), lhs2, rhs2);
+	} else {
+		return f(rhs2.nodesctype(Some(INT_TY.clone())), lhs2, rhs2);
+	}
+}
+
 pub fn walk(node: &Node, env: &mut Env, decay: bool) -> Node {
 	match &node.op {
 		Num(val) => { return Node::new_num(*val); }
@@ -304,19 +314,13 @@ pub fn walk(node: &Node, env: &mut Env, decay: bool) -> Node {
 			return Node::new_ternary(then2.nodesctype(Some(INT_TY.clone())), cond2, then2, els2);
 		}
 		TupleExpr(_, lhs, rhs) => {
-			let lhs2 = walk(lhs, env, true);
-			let rhs2 = walk(rhs, env, true);
-			return Node::new_tuple(rhs2.nodesctype(Some(INT_TY.clone())), lhs2, rhs2);
+			return binwalk(Node::new_tuple, lhs, rhs, env, 1);
 		}
 		BitOr(_, lhs, rhs) => {
-			let lhs2 = walk(lhs, env, true);
-			let rhs2 = walk(rhs, env, true);
-			return Node::new_bitor(lhs2.nodesctype(Some(INT_TY.clone())), lhs2, rhs2);
+			return binwalk(Node::new_bitor, lhs, rhs, env, -1);
 		}
 		BitXor(_, lhs, rhs) => {
-			let lhs2 = walk(lhs, env, true);
-			let rhs2 = walk(rhs, env, true);
-			return Node::new_bitxor(lhs2.nodesctype(Some(INT_TY.clone())), lhs2, rhs2);
+			return binwalk(Node::new_bitxor, lhs, rhs, env, -1);
 		}
 		NULL => {
 			return Node::new_null();
