@@ -190,6 +190,14 @@ pub fn gen(fun: &Function, label: usize) {
 			IrAnd => {
 				println!("\tand {}, {}", REG64[ir.lhs], REG64[ir.rhs]);
 			}
+			IrShl => {
+				println!("\tmov cl, {}", REG8[ir.rhs]);
+				println!("\tshl {}, cl", REG64[ir.lhs]);
+			}
+			IrShr => {
+				println!("\tmov cl, {}", REG8[ir.rhs]);
+				println!("\tshr {}, cl", REG64[ir.lhs]);
+			}
 			IrNop => {},
 			_ => { panic!("unexpected IrOp in gen_x86"); }
 		}

@@ -716,24 +716,20 @@ fn postfix(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 		if tokens[*pos].consume_ty(TokenDot, pos) {
 			let name = ident(tokens, pos);
 			lhs = Node::new_dot(NULL_TY.clone(), lhs, name, 0);
-			continue;
-		}
 		// struct member arrow
-		if tokens[*pos].consume_ty(TokenArrow, pos) {
+		} else if tokens[*pos].consume_ty(TokenArrow, pos) {
 			let name = ident(tokens, pos);
 			let expr = Node::new_deref(INT_TY.clone(), lhs);
 			lhs = Node::new_dot(NULL_TY.clone(), expr, name, 0);
-			continue;
-		}
 		// array
-		if tokens[*pos].consume_ty(TokenRightmiddleBrace, pos)  {
+		} else if tokens[*pos].consume_ty(TokenRightmiddleBrace, pos)  {
 			let id = assign(tokens, pos);
 			let lhs2 = Node::new_bit(INT_TY.clone(), TokenAdd, lhs, id);
 			lhs = Node::new_deref(INT_TY.clone(), lhs2);
 			tokens[*pos].assert_ty(TokenLeftmiddleBrace, pos);
-			continue;
+		} else {
+			return lhs;
 		}
-		return lhs;
 	}
 }
 
@@ -785,43 +781,50 @@ fn add(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 	
 }
 
-fn rel(tokens: &Vec<Token>, pos: &mut usize) -> Node {
+fn shift(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 	let mut lhs = add(tokens, pos);
+
+	loop {
+		if tokens[*pos].consume_ty(TokenShl, pos) {
+			lhs = Node::new_bit(NULL_TY.clone(), TokenShl, lhs, add(tokens, pos));
+		} else if tokens[*pos].consume_ty(TokenShr, pos) {
+			lhs = Node::new_bit(NULL_TY.clone(), TokenShr, lhs, add(tokens, pos));
+		} else {
+			return lhs;
+		}
+	}
+
+}
+
+fn relational(tokens: &Vec<Token>, pos: &mut usize) -> Node {
+	let mut lhs = shift(tokens, pos);
 	
 	loop {
 		if tokens[*pos].consume_ty(TokenLt, pos) {
-			lhs = Node::new_bit(INT_TY.clone(), TokenLt, lhs, add(tokens, pos));
-			continue;
+			lhs = Node::new_bit(INT_TY.clone(), TokenLt, lhs, shift(tokens, pos));
+		} else if tokens[*pos].consume_ty(TokenRt, pos) {
+			lhs = Node::new_bit(INT_TY.clone(), TokenLt, shift(tokens, pos), lhs);
+		} else if tokens[*pos].consume_ty(TokenLe, pos) {
+			lhs = Node::new_bit(INT_TY.clone(), TokenLe, lhs, shift(tokens, pos));
+		} else if tokens[*pos].consume_ty(TokenGe, pos) {
+			lhs = Node::new_bit(INT_TY.clone(), TokenLe, shift(tokens, pos), lhs);
+		} else {
+			return lhs;
 		}
-		if tokens[*pos].consume_ty(TokenRt, pos) {
-			lhs = Node::new_bit(INT_TY.clone(), TokenLt, add(tokens, pos), lhs);
-			continue;
-		}
-		if tokens[*pos].consume_ty(TokenLe, pos) {
-			lhs = Node::new_bit(INT_TY.clone(), TokenLe, lhs, add(tokens, pos));
-			continue;
-		}
-		if tokens[*pos].consume_ty(TokenGe, pos) {
-			lhs = Node::new_bit(INT_TY.clone(), TokenLe, add(tokens, pos), lhs);
-			continue;
-		}
-		return lhs;
 	}
 }
 
 fn equarity(tokens: &Vec<Token>, pos: &mut usize) -> Node {
-	let mut lhs = rel(tokens, pos);
+	let mut lhs = relational(tokens, pos);
 	
 	loop {
 		if tokens[*pos].consume_ty(TokenEqEq, pos) {
-			lhs = Node::new_eqeq(lhs, rel(tokens, pos));
-			continue;
+			lhs = Node::new_eqeq(lhs, relational(tokens, pos));
+		} else if tokens[*pos].consume_ty(TokenNe, pos) {
+			lhs = Node::new_neq(lhs, relational(tokens, pos));
+		} else {
+			return lhs;
 		}
-		if tokens[*pos].consume_ty(TokenNe, pos) {
-			lhs = Node::new_neq(lhs, rel(tokens, pos));
-			continue;
-		}
-		return lhs;
 	}
 }
 

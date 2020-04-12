@@ -179,5 +179,8 @@ int main() {
 	EXPECT(1, 5 >= 5);
 	EXPECT(1, 6 >= 5);
 
+	EXPECT(8, 1 << 3);
+	EXPECT(4, 16 >> 2);
+
 return 0;
 }

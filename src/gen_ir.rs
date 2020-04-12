@@ -59,6 +59,8 @@ pub enum IrOp {
 	IrXor,
 	IrAnd,
 	IrLe,
+	IrShl,
+	IrShr,
 	IrKill,
 	IrNop,
 }
@@ -86,6 +88,8 @@ impl Ir {
 			TokenDiv => { IrDiv },
 			TokenLt => { IrLt },
 			TokenLe => { IrLe },
+			TokenShl => { IrShl },
+			TokenShr => { IrShr },
 			TokenEof => { panic!("tokeneof!!!"); }
 			_ => { panic!("bittype error."); }
 		}
