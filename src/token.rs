@@ -29,7 +29,7 @@ lazy_static! {
 }
 
 
-pub static SIGNALS: [Signal; 32] = [
+pub static SIGNALS: &[Signal] = &[
 	Signal::new("&&", TokenLogAnd),
 	Signal::new("||", TokenLogOr),
 	Signal::new("==", TokenEqEq),
@@ -39,6 +39,8 @@ pub static SIGNALS: [Signal; 32] = [
 	Signal::new(">=", TokenGe),
 	Signal::new("<<", TokenShl),
 	Signal::new(">>", TokenShr),
+	Signal::new("++", TokenInc),
+	Signal::new("--", TokenDec),
 	Signal::new("+", TokenAdd),
 	Signal::new("-", TokenSub),
 	Signal::new("*", TokenStar),
@@ -116,6 +118,8 @@ pub enum TokenType {
 	TokenShl,
 	TokenShr,
 	TokenMod,
+	TokenInc,
+	TokenDec,
 	TokenNoSignal,
 	TokenEof,
 }
@@ -364,7 +368,7 @@ pub fn tokenize(input: &String) -> Vec<Token> {
 		}
 		
 		// signal
-		for signal in &SIGNALS {
+		for signal in &SIGNALS[..] {
 			let len = signal.name.len();
 			if input.len() >= pos+len && *signal.name == input[pos..pos+len] {
 				let token = Token::new(signal.ty.clone(), len as i32, &input[pos..]);

@@ -185,5 +185,12 @@ int main() {
 	EXPECT(4, 19 % 5);
 	EXPECT(0, 9 % 3);
 
+	EXPECT(0-3, -3);
+
+	EXPECT(3, ({ int i = 3; return i++; }));
+	EXPECT(4, ({ int i = 3; return ++i; }));
+	EXPECT(3, ({ int i = 3; return i--; }));
+	EXPECT(2, ({ int i = 3; return --i; }));
+
 return 0;
 }

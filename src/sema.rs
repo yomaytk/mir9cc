@@ -325,6 +325,14 @@ pub fn walk(node: &Node, env: &mut Env, decay: bool) -> Node {
 		BitAnd(_, lhs, rhs) => {
 			return binwalk(Node::new_bitand, lhs, rhs, env, -1);
 		}
+		Neg(expr) => {
+			return Node::new_neg(walk(expr, env, true));
+		}
+		IncDec(_, selector, expr) => {
+			let lhs = walk(expr, env, true);
+			lhs.checklval();
+			return Node::new_incdec(lhs.nodesctype(None), *selector, lhs);
+		}
 		NULL => {
 			return Node::new_null();
 		}

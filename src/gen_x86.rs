@@ -204,6 +204,9 @@ pub fn gen(fun: &Function, label: usize) {
 				println!("\tdiv {}", REG64[ir.rhs]);
 				println!("\tmov {}, rdx", REG64[ir.lhs]);
 			}
+			IrNeg => {
+				println!("\tneg {}", REG64[ir.lhs]);
+			}
 			IrNop => {},
 			_ => { panic!("unexpected IrOp in gen_x86"); }
 		}

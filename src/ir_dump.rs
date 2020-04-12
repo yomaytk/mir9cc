@@ -49,6 +49,7 @@ lazy_static! {
 		(IrOp::IrShl, IrInfo::new("SHL", IrType::RegReg)),
 		(IrOp::IrShr, IrInfo::new("SHR", IrType::RegReg)),
 		(IrOp::IrMod, IrInfo::new("MOD", IrType::RegReg)),
+		(IrOp::IrNeg, IrInfo::new("NEG", IrType::Reg)),
 		(IrOp::IrKill, IrInfo::new("KILL", IrType::Reg)),
 		(IrOp::IrNop, IrInfo::new("NOP", IrType::NoArg))
 	]);

@@ -62,6 +62,7 @@ pub enum IrOp {
 	IrShl,
 	IrShr,
 	IrMod,
+	IrNeg,
 	IrKill,
 	IrNop,
 }
@@ -203,6 +204,37 @@ fn gen_binop(irop: IrOp, lhs: &Node, rhs: &Node, code: &mut Vec<Ir>) -> usize {
 	code.push(Ir::new(irop, r1, r2));
 	kill(r2, code);
 	return r1;
+}
+
+fn gen_pre_inc(ctype: &Type, lhs: &Node, code: &mut Vec<Ir>, num: i32) -> usize {
+	let r1 = gen_lval(lhs, code);
+	*REGNO.lock().unwrap() += 1;
+	let r2 = *REGNO.lock().unwrap();
+	code.push(Ir::new(ctype.load_insn(), r2, r1));
+	*REGNO.lock().unwrap() += 1;
+	let imm = *REGNO.lock().unwrap();
+	code.push(Ir::new(IrImm, imm, num as usize));
+	code.push(Ir::new(IrAdd, r2, imm));
+	kill(imm, code);
+	code.push(Ir::new(ctype.store_insn(), r1, r2));
+	kill(r1, code);
+	return r2;
+}
+
+fn gen_post_inc(ctype: &Type, lhs: &Node, code: &mut Vec<Ir>, num: i32) -> usize {
+	let r1 = gen_lval(lhs, code);
+	*REGNO.lock().unwrap() += 1;
+	let r2 = *REGNO.lock().unwrap();
+	code.push(Ir::new(ctype.load_insn(), r2, r1));
+	*REGNO.lock().unwrap() += 1;
+	let imm = *REGNO.lock().unwrap();
+	code.push(Ir::new(IrImm, imm, num as usize));
+	code.push(Ir::new(IrAdd, r2, imm));
+	code.push(Ir::new(ctype.store_insn(), r1, r2));
+	kill(r1, code);
+	code.push(Ir::new(IrSub, r2, imm));
+	kill(imm, code);
+	return r2;
 }
 
 // In C, all expressions that can be written on the left-hand side of
@@ -399,6 +431,17 @@ fn gen_expr(node: &Node, code: &mut Vec<Ir>) -> usize {
 		}
 		NodeType::BitAnd(_, lhs, rhs) => {
 			return gen_binop(IrAnd, lhs, rhs, code);
+		}
+		NodeType::Neg(expr) => {
+			let r = gen_expr(expr, code);
+			code.push(Ir::new(IrNeg, r, 0));
+			return r;
+		}
+		NodeType::IncDec(ctype, selector, lhs) => {
+			if *selector == 1 { return gen_pre_inc(ctype, lhs, code, 1); }
+			else if *selector == 2 { return gen_pre_inc(ctype, lhs, code, -1); }
+			else if *selector == 3 { return gen_post_inc(ctype, lhs, code, 1); }
+			else { return gen_post_inc(ctype, lhs, code, -1); }
 		}
 		NodeType::StmtExpr(_, body) => {
 			let orig_label = *RETURN_LABEL.lock().unwrap();

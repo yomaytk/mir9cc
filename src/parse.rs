@@ -168,6 +168,8 @@ pub enum NodeType {
 	BitOr(Type, Box<Node>, Box<Node>),											// BitOr(ctype, lhs, rhs)
 	BitXor(Type, Box<Node>, Box<Node>),											// BixXor(ctype, lhs, rhs)
 	BitAnd(Type, Box<Node>, Box<Node>),											// BitAnd(ctype, lhs, rhs)
+	Neg(Box<Node>),																// Neg(expr)
+	IncDec(Type, i32, Box<Node>),												// IncDec(ctype, selector, expr)
 	NULL,																		// NULL
 }
 
@@ -313,6 +315,14 @@ impl NodeType {
 
 	fn bitand_init(ctype: Type, lhs: Node, rhs: Node) -> Self {
 		NodeType::BitAnd(ctype, Box::new(lhs), Box::new(rhs))
+	}
+
+	fn neg_init(expr: Node) -> Self {
+		NodeType::Neg(Box::new(expr))
+	}
+
+	fn incdec_init(ctype: Type, selector: i32, expr: Node) -> Self {
+		NodeType::IncDec(ctype, selector, Box::new(expr))
 	}
 }
 
@@ -548,6 +558,18 @@ impl Node {
 			op: NodeType::bitand_init(ctype, lhs, rhs)
 		}
 	}
+
+	pub fn new_neg(expr: Node) -> Self {
+		Self {
+			op: NodeType::neg_init(expr)
+		}
+	}
+
+	pub fn new_incdec(ctype: Type, selector: i32, expr: Node) -> Self {
+		Self {
+			op: NodeType::incdec_init(ctype, selector, expr)
+		}
+	}
 }
 
 #[derive(Debug, Clone)]
@@ -712,6 +734,12 @@ fn postfix(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 	let mut lhs = primary(tokens, pos);
 
 	loop {
+		if tokens[*pos].consume_ty(TokenInc, pos) {
+			lhs = Node::new_incdec(NULL_TY.clone(), 3, lhs);
+		}
+		if tokens[*pos].consume_ty(TokenDec, pos) {
+			lhs = Node::new_incdec(NULL_TY.clone(), 4, lhs);
+		}
 		// struct member
 		if tokens[*pos].consume_ty(TokenDot, pos) {
 			let name = ident(tokens, pos);
@@ -735,11 +763,20 @@ fn postfix(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 
 fn unary(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 	
+	if tokens[*pos].consume_ty(TokenInc, pos) {
+		return Node::new_incdec(NULL_TY.clone(), 1, unary(tokens, pos));
+	}
+	if tokens[*pos].consume_ty(TokenDec, pos) {
+		return Node::new_incdec(NULL_TY.clone(), 2, unary(tokens, pos));
+	}
+	if tokens[*pos].consume_ty(TokenSub, pos) {
+		return Node::new_neg(unary(tokens, pos));
+	}
 	if tokens[*pos].consume_ty(TokenStar, pos) {
-		return Node::new_deref(INT_TY.clone(), mul(tokens, pos));
+		return Node::new_deref(INT_TY.clone(), unary(tokens, pos));
 	}
 	if tokens[*pos].consume_ty(TokenAmpersand, pos) {
-		return Node::new_addr(INT_TY.clone(), mul(tokens, pos));
+		return Node::new_addr(INT_TY.clone(), unary(tokens, pos));
 	}
 	if tokens[*pos].consume_ty(TokenSizeof, pos) {
 		return Node::new_sizeof(INT_TY.clone(), 0, unary(tokens, pos));
