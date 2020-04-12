@@ -303,6 +303,11 @@ pub fn walk(node: &Node, env: &mut Env, decay: bool) -> Node {
 			let els2 = walk(els, env, true);
 			return Node::new_ternary(then2.nodesctype(Some(INT_TY.clone())), cond2, then2, els2);
 		}
+		TupleExpr(_, lhs, rhs) => {
+			let lhs2 = walk(lhs, env, true);
+			let rhs2 = walk(rhs, env, true);
+			return Node::new_tuple(rhs2.nodesctype(Some(INT_TY.clone())), lhs2, rhs2);
+		}
 		NULL => {
 			return Node::new_null();
 		}

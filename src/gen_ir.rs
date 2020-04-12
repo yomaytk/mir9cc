@@ -376,6 +376,10 @@ fn gen_expr(node: &Node, code: &mut Vec<Ir>) -> usize {
 			label(y, code);
 			return r;
 		}
+		NodeType::TupleExpr(_, lhs, rhs) => {
+			kill(gen_expr(lhs, code), code);
+			return gen_expr(rhs, code);
+		}
 		NodeType::StmtExpr(_, body) => {
 			let orig_label = *RETURN_LABEL.lock().unwrap();
 			let orig_reg = *RETURN_REG.lock().unwrap();

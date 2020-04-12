@@ -164,6 +164,7 @@ pub enum NodeType {
 	Dot(Type, Box<Node>, String, usize),										// Dot(ctype, expr, name, offset)
 	Not(Box<Node>),																// Not(expr)
 	Ternary(Type, Box<Node>, Box<Node>, Box<Node>),								// Ternary(ctype, cond, then, els)
+	TupleExpr(Type, Box<Node>, Box<Node>),										// TupleExpr(ctype, lhs, rhs)
 	NULL,																		// NULL
 }
 
@@ -293,6 +294,10 @@ impl NodeType {
 
 	fn ternary_init(ctype: Type, cond: Node, then: Node, els: Node) -> Self {
 		NodeType::Ternary(ctype, Box::new(cond), Box::new(then), Box::new(els))
+	}
+
+	fn tuple_init(ctype: Type, lhs: Node, rhs: Node) -> Self {
+		NodeType::TupleExpr(ctype, Box::new(lhs), Box::new(rhs))
 	}
 }
 
@@ -503,6 +508,12 @@ impl Node {
 			op: NodeType::ternary_init(ctype, cond, then, els)
 		}
 	}
+
+	pub fn new_tuple(ctype: Type, lhs: Node, rhs: Node) -> Self {
+		Self {
+			op: NodeType::tuple_init(ctype, lhs, rhs)
+		}
+	}
 }
 
 #[derive(Debug, Clone)]
@@ -621,7 +632,7 @@ fn primary(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 			tokens[*pos].assert_ty(TokenLeftBrac, pos);
 			return body;
 		}
-		let lhs = assign(tokens, pos);
+		let lhs = expr(tokens, pos);
 		tokens[*pos].assert_ty(TokenLeftBrac, pos);
 		return lhs;
 	}
@@ -800,9 +811,9 @@ fn logor(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 fn conditional(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 	let cond = logor(tokens, pos);
 	if tokens[*pos].consume_ty(TokenQuestion, pos) {
-		let then = assign(tokens, pos);
+		let then = expr(tokens, pos);
 		tokens[*pos].assert_ty(TokenColon, pos);
-		let els = assign(tokens, pos);
+		let els = conditional(tokens, pos);
 		return Node::new_ternary(NULL_TY.clone(), cond, then, els);
 	}
 	return cond;
@@ -813,6 +824,14 @@ fn assign(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 	if tokens[*pos].consume_ty(TokenEq, pos) {
 		let rhs = logor(tokens, pos);
 		lhs = Node::new_eq(INT_TY.clone(), lhs, rhs);
+	}
+	return lhs;
+}
+
+fn expr(tokens: &Vec<Token>, pos: &mut usize) -> Node {
+	let lhs = assign(tokens, pos);
+	if tokens[*pos].consume_ty(TokenComma, pos) {
+		return Node::new_tuple(NULL_TY.clone(), lhs, expr(tokens, pos));
 	}
 	return lhs;
 }
@@ -832,7 +851,7 @@ fn read_array(tokens: &Vec<Token>, pos: &mut usize, ty: Type) -> Type {
 	let mut ty = ty.clone();
 
 	while tokens[*pos].consume_ty(TokenRightmiddleBrace, pos) {
-		let len = primary(tokens, pos);
+		let len = expr(tokens, pos);
 		if let NodeType::Num(val) = &len.op {
 			ary_size.push(*val as usize);
 			tokens[*pos].assert_ty(TokenLeftmiddleBrace, pos);
@@ -882,8 +901,8 @@ fn decl(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 	}
 }
 
-fn expr(tokens: &Vec<Token>, pos: &mut usize) -> Node {
-	let lhs = assign(tokens, pos);
+fn expr_stmt(tokens: &Vec<Token>, pos: &mut usize) -> Node {
+	let lhs = expr(tokens, pos);
 	tokens[*pos].consume_ty(TokenSemi, pos);
 	return Node::new_expr(lhs);
 }
@@ -893,14 +912,14 @@ pub fn stmt(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 	match tokens[*pos].ty {
 		TokenRet => {
 			*pos += 1;
-			let lhs = assign(tokens, pos);
+			let lhs = expr(tokens, pos);
 			tokens[*pos].assert_ty(TokenSemi, pos);
 			return Node::new_ret(lhs);
 		},
 		TokenIf => {
 			*pos += 1;
 			tokens[*pos].assert_ty(TokenRightBrac, pos);
-			let cond = assign(tokens, pos);
+			let cond = expr(tokens, pos);
 			tokens[*pos].assert_ty(TokenLeftBrac, pos);
 			let then = stmt(tokens, pos);
 			if tokens[*pos].consume_ty(TokenElse, pos) {
@@ -918,9 +937,9 @@ pub fn stmt(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 				*pos -= 1;
 				init = decl(tokens, pos);
 			} else {
-				init = expr(tokens, pos);
+				init = expr_stmt(tokens, pos);
 			}
-			let cond = assign(tokens, pos);
+			let cond = expr(tokens, pos);
 			tokens[*pos].assert_ty(TokenSemi, pos);
 			let inc = stmt(tokens, pos);
 			tokens[*pos].assert_ty(TokenLeftBrac, pos);
@@ -932,7 +951,7 @@ pub fn stmt(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 			let init = Node::new_null();
 			let inc = Node::new_null();
 			tokens[*pos].assert_ty(TokenRightBrac, pos);
-			let cond = assign(tokens, pos);
+			let cond = expr(tokens, pos);
 			tokens[*pos].assert_ty(TokenLeftBrac, pos);
 			let body = stmt(tokens, pos);
 			return Node::new_for(init, cond, inc, body);
@@ -942,7 +961,7 @@ pub fn stmt(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 			let body = stmt(tokens, pos);
 			tokens[*pos].assert_ty(TokenWhile, pos);
 			tokens[*pos].assert_ty(TokenRightBrac, pos);
-			let cond = assign(tokens, pos);
+			let cond = expr(tokens, pos);
 			tokens[*pos].assert_ty(TokenLeftBrac, pos);
 			tokens[*pos].assert_ty(TokenSemi, pos);
 			return Node::new_dowhile(body, cond);
@@ -980,7 +999,7 @@ pub fn stmt(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 					return decl(tokens, pos);
 				}
 			}
-			return expr(tokens, pos);
+			return expr_stmt(tokens, pos);
 		}
 	}
 }
