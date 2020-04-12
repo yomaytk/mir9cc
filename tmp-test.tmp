@@ -99,5 +99,11 @@ int main() {
  do { int e1 = (5); int e2 = (6 ^ 3); if (e1 == e2) { fprintf(stderr, "%s => %d\n", "6 ^ 3", e2); } else { fprintf(stderr, "%d: %s: %d expected, but got %d\n", 169, "6 ^ 3", e1, e2); exit(1); } } while (0);
  do { int e1 = (2); int e2 = (6 & 3); if (e1 == e2) { fprintf(stderr, "%s => %d\n", "6 & 3", e2); } else { fprintf(stderr, "%d: %s: %d expected, but got %d\n", 171, "6 & 3", e1, e2); exit(1); } } while (0);
  do { int e1 = (0); int e2 = (6 & 0); if (e1 == e2) { fprintf(stderr, "%s => %d\n", "6 & 0", e2); } else { fprintf(stderr, "%d: %s: %d expected, but got %d\n", 172, "6 & 0", e1, e2); exit(1); } } while (0);
+ do { int e1 = (1); int e2 = (4 <= 5); if (e1 == e2) { fprintf(stderr, "%s => %d\n", "4 <= 5", e2); } else { fprintf(stderr, "%d: %s: %d expected, but got %d\n", 174, "4 <= 5", e1, e2); exit(1); } } while (0);
+ do { int e1 = (1); int e2 = (5 <= 5); if (e1 == e2) { fprintf(stderr, "%s => %d\n", "5 <= 5", e2); } else { fprintf(stderr, "%d: %s: %d expected, but got %d\n", 175, "5 <= 5", e1, e2); exit(1); } } while (0);
+ do { int e1 = (0); int e2 = (6 <= 5); if (e1 == e2) { fprintf(stderr, "%s => %d\n", "6 <= 5", e2); } else { fprintf(stderr, "%d: %s: %d expected, but got %d\n", 176, "6 <= 5", e1, e2); exit(1); } } while (0);
+ do { int e1 = (0); int e2 = (4 >= 5); if (e1 == e2) { fprintf(stderr, "%s => %d\n", "4 >= 5", e2); } else { fprintf(stderr, "%d: %s: %d expected, but got %d\n", 178, "4 >= 5", e1, e2); exit(1); } } while (0);
+ do { int e1 = (1); int e2 = (5 >= 5); if (e1 == e2) { fprintf(stderr, "%s => %d\n", "5 >= 5", e2); } else { fprintf(stderr, "%d: %s: %d expected, but got %d\n", 179, "5 >= 5", e1, e2); exit(1); } } while (0);
+ do { int e1 = (1); int e2 = (6 >= 5); if (e1 == e2) { fprintf(stderr, "%s => %d\n", "6 >= 5", e2); } else { fprintf(stderr, "%d: %s: %d expected, but got %d\n", 180, "6 >= 5", e1, e2); exit(1); } } while (0);
 return 0;
 }

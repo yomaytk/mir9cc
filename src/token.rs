@@ -29,12 +29,14 @@ lazy_static! {
 }
 
 
-pub static SIGNALS: [Signal; 27] = [
+pub static SIGNALS: [Signal; 29] = [
 	Signal::new("&&", TokenLogAnd),
 	Signal::new("||", TokenLogOr),
 	Signal::new("==", TokenEqEq),
 	Signal::new("!=", TokenNe),
 	Signal::new("->", TokenArrow),
+	Signal::new("<=", TokenLe),
+	Signal::new(">=", TokenGe),
 	Signal::new("+", TokenAdd),
 	Signal::new("-", TokenSub),
 	Signal::new("*", TokenStar),
@@ -106,6 +108,8 @@ pub enum TokenType {
 	TokenColon,
 	TokenOr,
 	TokenXor,
+	TokenLe,
+	TokenGe,
 	TokenNoSignal,
 	TokenEof,
 }

@@ -58,6 +58,7 @@ pub enum IrOp {
 	IrOr,
 	IrXor,
 	IrAnd,
+	IrLe,
 	IrKill,
 	IrNop,
 }
@@ -77,15 +78,16 @@ impl Ir {
 			rhs: rhs,
 		}
 	}
-	fn fouroperator2irop(ty: TokenType) -> IrOp {
+	fn bittype(ty: TokenType) -> IrOp {
 		match ty {
 			TokenAdd => { IrAdd },
 			TokenSub => { IrSub },
 			TokenStar => { IrMul },
 			TokenDiv => { IrDiv },
 			TokenLt => { IrLt },
+			TokenLe => { IrLe },
 			TokenEof => { panic!("tokeneof!!!"); }
-			_ => { panic!("fouroperator2irop error."); }
+			_ => { panic!("bittype error."); }
 		}
 	}
 	pub fn get_irinfo(&self) -> IrInfo {
@@ -306,7 +308,7 @@ fn gen_expr(node: &Node, code: &mut Vec<Ir>) -> usize {
 				}
 				_ => {}
 			}
-			code.push(Ir::new(Ir::fouroperator2irop(ty.clone()), lhi, rhi));
+			code.push(Ir::new(Ir::bittype(ty.clone()), lhi, rhi));
 			kill(rhi, code);
 			return lhi;
 		},

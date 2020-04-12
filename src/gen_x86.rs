@@ -165,6 +165,9 @@ pub fn gen(fun: &Function, label: usize) {
 			IrLt => {
 				emit_cmp(ir, String::from("setl"));
 			}
+			IrLe => {
+				emit_cmp(ir, String::from("setle"));
+			}
 			IrEqEq => {
 				emit_cmp(ir, String::from("sete"));
 			}

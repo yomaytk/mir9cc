@@ -797,6 +797,14 @@ fn rel(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 			lhs = Node::new_bit(INT_TY.clone(), TokenLt, add(tokens, pos), lhs);
 			continue;
 		}
+		if tokens[*pos].consume_ty(TokenLe, pos) {
+			lhs = Node::new_bit(INT_TY.clone(), TokenLe, lhs, add(tokens, pos));
+			continue;
+		}
+		if tokens[*pos].consume_ty(TokenGe, pos) {
+			lhs = Node::new_bit(INT_TY.clone(), TokenLe, add(tokens, pos), lhs);
+			continue;
+		}
 		return lhs;
 	}
 }

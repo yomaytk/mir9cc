@@ -21,6 +21,7 @@ lazy_static! {
 		(IrOp::IrMul, IrInfo::new("MUL", IrType::RegReg)),
 		(IrOp::IrDiv, IrInfo::new("DIV", IrType::RegReg)),
 		(IrOp::IrLt, IrInfo::new("LT", IrType::RegReg)),
+		(IrOp::IrLe, IrInfo::new("LE", IrType::RegReg)),
 		(IrOp::IrImm, IrInfo::new("IMM", IrType::RegImm)),
 		(IrOp::IrBpRel, IrInfo::new("BPREL", IrType::RegImm)),
 		(IrOp::IrMov, IrInfo::new("MOV", IrType::RegReg)),
