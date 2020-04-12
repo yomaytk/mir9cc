@@ -42,6 +42,7 @@ lazy_static! {
 		(IrOp::IrEqEq, IrInfo::new("EqEq", IrType::RegReg)),
 		(IrOp::IrNe, IrInfo::new("Neq", IrType::RegReg)),
 		(IrOp::IrIf, IrInfo::new("If", IrType::Reg)),
+		(IrOp::IrOr, IrInfo::new("Or", IrType::RegReg)),
 		(IrOp::IrKill, IrInfo::new("KILL", IrType::Reg)),
 		(IrOp::IrNop, IrInfo::new("NOP", IrType::NoArg))
 	]);

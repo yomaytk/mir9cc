@@ -163,5 +163,8 @@ int main() {
 
 	EXPECT(3, (1, 2, 3));
 
+	EXPECT(11, 9 | 2);
+	EXPECT(11, 9 | 3);
+
 return 0;
 }

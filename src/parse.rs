@@ -165,6 +165,7 @@ pub enum NodeType {
 	Not(Box<Node>),																// Not(expr)
 	Ternary(Type, Box<Node>, Box<Node>, Box<Node>),								// Ternary(ctype, cond, then, els)
 	TupleExpr(Type, Box<Node>, Box<Node>),										// TupleExpr(ctype, lhs, rhs)
+	BitOr(Type, Box<Node>, Box<Node>),											// BitOr(ctype, lhs, rhs)
 	NULL,																		// NULL
 }
 
@@ -298,6 +299,10 @@ impl NodeType {
 
 	fn tuple_init(ctype: Type, lhs: Node, rhs: Node) -> Self {
 		NodeType::TupleExpr(ctype, Box::new(lhs), Box::new(rhs))
+	}
+
+	fn bitor_init(ctype: Type, lhs: Node, rhs: Node) -> Self {
+		NodeType::BitOr(ctype, Box::new(lhs), Box::new(rhs))
 	}
 }
 
@@ -512,6 +517,12 @@ impl Node {
 	pub fn new_tuple(ctype: Type, lhs: Node, rhs: Node) -> Self {
 		Self {
 			op: NodeType::tuple_init(ctype, lhs, rhs)
+		}
+	}
+
+	pub fn new_bitor(ctype: Type, lhs: Node, rhs: Node) -> Self {
+		Self {
+			op: NodeType::bitor_init(ctype, lhs, rhs)
 		}
 	}
 }
@@ -784,8 +795,20 @@ fn equarity(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 	}
 }
 
-fn logand(tokens: &Vec<Token>, pos: &mut usize) -> Node {
+fn bitor(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 	let mut lhs = equarity(tokens, pos);
+
+	loop {
+		if tokens[*pos].consume_ty(TokenOr, pos) {
+			lhs = Node::new_bitor(INT_TY.clone(), lhs, equarity(tokens, pos));
+			continue;
+		}
+		return lhs;
+	}
+}
+
+fn logand(tokens: &Vec<Token>, pos: &mut usize) -> Node {
+	let mut lhs = bitor(tokens, pos);
 
 	loop {
 		if !tokens[*pos].consume_ty(TokenLogAnd, pos) {

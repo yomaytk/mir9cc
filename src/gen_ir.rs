@@ -55,6 +55,7 @@ pub enum IrOp {
 	IrNe,
 	IrIf,
 	IrLabelAddr(String),
+	IrOr,
 	IrKill,
 	IrNop,
 }
@@ -184,6 +185,14 @@ fn kill(r: usize, code: &mut Vec<Ir>) {
 
 fn label(r: usize, code: &mut Vec<Ir>) {
 	code.push(Ir::new(IrLabel, r, 0));
+}
+
+fn gen_binop(irop: IrOp, lhs: &Node, rhs: &Node, code: &mut Vec<Ir>) -> usize {
+	let r1 = gen_expr(lhs, code);
+	let r2 = gen_expr(rhs, code);
+	code.push(Ir::new(irop, r1, r2));
+	kill(r2, code);
+	return r1;
 }
 
 // In C, all expressions that can be written on the left-hand side of
@@ -337,18 +346,10 @@ fn gen_expr(node: &Node, code: &mut Vec<Ir>) -> usize {
 			return gen_lval(lhs, code);
 		}
 		NodeType::EqEq(lhs, rhs) => {
-			let r1 = gen_expr(lhs, code);
-			let r2 = gen_expr(rhs, code);
-			code.push(Ir::new(IrEqEq, r1, r2));
-			kill(r2, code);
-			return r1;
+			return gen_binop(IrEqEq, lhs, rhs, code);
 		}
 		NodeType::Ne(lhs, rhs) => {
-			let r1 = gen_expr(lhs, code);
-			let r2 = gen_expr(rhs, code);
-			code.push(Ir::new(IrNe, r1, r2));
-			kill(r2, code);
-			return r1;
+			return gen_binop(IrNe, lhs, rhs, code);
 		}
 		NodeType::Not(expr) => {
 			let r1 = gen_expr(expr, code);
@@ -379,6 +380,9 @@ fn gen_expr(node: &Node, code: &mut Vec<Ir>) -> usize {
 		NodeType::TupleExpr(_, lhs, rhs) => {
 			kill(gen_expr(lhs, code), code);
 			return gen_expr(rhs, code);
+		}
+		NodeType::BitOr(_, lhs, rhs) => {
+			return gen_binop(IrOr, lhs, rhs, code);
 		}
 		NodeType::StmtExpr(_, body) => {
 			let orig_label = *RETURN_LABEL.lock().unwrap();

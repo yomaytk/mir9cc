@@ -178,6 +178,9 @@ pub fn gen(fun: &Function, label: usize) {
 			IrLabelAddr(label) => {
 				println!("\tlea {}, {}", REG64[ir.lhs], label);
 			}
+			IrOr => {
+				println!("\tor {}, {}", REG64[ir.lhs], REG64[ir.rhs]);
+			}
 			IrNop => {},
 			_ => { panic!("unexpected IrOp in gen_x86"); }
 		}

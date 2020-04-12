@@ -308,6 +308,11 @@ pub fn walk(node: &Node, env: &mut Env, decay: bool) -> Node {
 			let rhs2 = walk(rhs, env, true);
 			return Node::new_tuple(rhs2.nodesctype(Some(INT_TY.clone())), lhs2, rhs2);
 		}
+		BitOr(_, lhs, rhs) => {
+			let lhs2 = walk(lhs, env, true);
+			let rhs2 = walk(rhs, env, true);
+			return Node::new_bitor(lhs2.nodesctype(Some(INT_TY.clone())), lhs2, rhs2);
+		}
 		NULL => {
 			return Node::new_null();
 		}
