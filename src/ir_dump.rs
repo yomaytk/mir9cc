@@ -39,10 +39,11 @@ lazy_static! {
 		(IrOp::IrStoreArgs32, IrInfo::new("STOREARGS32", IrType::ImmImm)),
 		(IrOp::IrStoreArgs64, IrInfo::new("STOREARGS64", IrType::ImmImm)),
 		(IrOp::IrLabelAddr(String::new()), IrInfo::new("LABELADDR", IrType::LabelAddr)),
-		(IrOp::IrEqEq, IrInfo::new("EqEq", IrType::RegReg)),
-		(IrOp::IrNe, IrInfo::new("Neq", IrType::RegReg)),
-		(IrOp::IrIf, IrInfo::new("If", IrType::Reg)),
-		(IrOp::IrOr, IrInfo::new("Or", IrType::RegReg)),
+		(IrOp::IrEqEq, IrInfo::new("EQEQ", IrType::RegReg)),
+		(IrOp::IrNe, IrInfo::new("Ne", IrType::RegReg)),
+		(IrOp::IrIf, IrInfo::new("IF", IrType::Reg)),
+		(IrOp::IrOr, IrInfo::new("OR", IrType::RegReg)),
+		(IrOp::IrXor, IrInfo::new("XOR", IrType::RegReg)),
 		(IrOp::IrKill, IrInfo::new("KILL", IrType::Reg)),
 		(IrOp::IrNop, IrInfo::new("NOP", IrType::NoArg))
 	]);

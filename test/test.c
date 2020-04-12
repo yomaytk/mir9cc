@@ -166,5 +166,7 @@ int main() {
 	EXPECT(11, 9 | 2);
 	EXPECT(11, 9 | 3);
 
+	EXPECT(5, 6 ^ 3);
+
 return 0;
 }

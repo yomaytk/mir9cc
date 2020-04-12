@@ -29,7 +29,7 @@ lazy_static! {
 }
 
 
-pub static SIGNALS: [Signal; 26] = [
+pub static SIGNALS: [Signal; 27] = [
 	Signal::new("&&", TokenLogAnd),
 	Signal::new("||", TokenLogOr),
 	Signal::new("==", TokenEqEq),
@@ -56,6 +56,7 @@ pub static SIGNALS: [Signal; 26] = [
 	Signal::new(":", TokenColon),
 	Signal::new("?", TokenQuestion),
 	Signal::new("|", TokenOr),
+	Signal::new("^", TokenXor),
 ];
 
 #[derive(Debug, PartialEq, Clone)]
@@ -104,6 +105,7 @@ pub enum TokenType {
 	TokenQuestion,
 	TokenColon,
 	TokenOr,
+	TokenXor,
 	TokenNoSignal,
 	TokenEof,
 }

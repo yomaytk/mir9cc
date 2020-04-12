@@ -96,5 +96,6 @@ int main() {
  do { int e1 = (3); int e2 = ((1, 2, 3)); if (e1 == e2) { fprintf(stderr, "%s => %d\n", "(1, 2, 3)", e2); } else { fprintf(stderr, "%d: %s: %d expected, but got %d\n", 164, "(1, 2, 3)", e1, e2); exit(1); } } while (0);
  do { int e1 = (11); int e2 = (9 | 2); if (e1 == e2) { fprintf(stderr, "%s => %d\n", "9 | 2", e2); } else { fprintf(stderr, "%d: %s: %d expected, but got %d\n", 166, "9 | 2", e1, e2); exit(1); } } while (0);
  do { int e1 = (11); int e2 = (9 | 3); if (e1 == e2) { fprintf(stderr, "%s => %d\n", "9 | 3", e2); } else { fprintf(stderr, "%d: %s: %d expected, but got %d\n", 167, "9 | 3", e1, e2); exit(1); } } while (0);
+ do { int e1 = (5); int e2 = (6 ^ 3); if (e1 == e2) { fprintf(stderr, "%s => %d\n", "6 ^ 3", e2); } else { fprintf(stderr, "%d: %s: %d expected, but got %d\n", 169, "6 ^ 3", e1, e2); exit(1); } } while (0);
 return 0;
 }

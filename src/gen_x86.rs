@@ -181,6 +181,9 @@ pub fn gen(fun: &Function, label: usize) {
 			IrOr => {
 				println!("\tor {}, {}", REG64[ir.lhs], REG64[ir.rhs]);
 			}
+			IrXor => {
+				println!("\txor {}, {}", REG64[ir.lhs], REG64[ir.rhs]);
+			}
 			IrNop => {},
 			_ => { panic!("unexpected IrOp in gen_x86"); }
 		}
