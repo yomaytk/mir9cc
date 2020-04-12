@@ -168,5 +168,8 @@ int main() {
 
 	EXPECT(5, 6 ^ 3);
 
+	EXPECT(2, 6 & 3);
+	EXPECT(0, 6 & 0);
+
 return 0;
 }

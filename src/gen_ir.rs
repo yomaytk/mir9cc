@@ -57,6 +57,7 @@ pub enum IrOp {
 	IrLabelAddr(String),
 	IrOr,
 	IrXor,
+	IrAnd,
 	IrKill,
 	IrNop,
 }
@@ -387,6 +388,9 @@ fn gen_expr(node: &Node, code: &mut Vec<Ir>) -> usize {
 		}
 		NodeType::BitXor(_, lhs, rhs) => {
 			return gen_binop(IrXor, lhs, rhs, code);
+		}
+		NodeType::BitAnd(_, lhs, rhs) => {
+			return gen_binop(IrAnd, lhs, rhs, code);
 		}
 		NodeType::StmtExpr(_, body) => {
 			let orig_label = *RETURN_LABEL.lock().unwrap();

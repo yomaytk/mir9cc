@@ -322,6 +322,9 @@ pub fn walk(node: &Node, env: &mut Env, decay: bool) -> Node {
 		BitXor(_, lhs, rhs) => {
 			return binwalk(Node::new_bitxor, lhs, rhs, env, -1);
 		}
+		BitAnd(_, lhs, rhs) => {
+			return binwalk(Node::new_bitand, lhs, rhs, env, -1);
+		}
 		NULL => {
 			return Node::new_null();
 		}
