@@ -23,6 +23,7 @@ lazy_static! {
 	pub static ref LABEL: Mutex<usize> = Mutex::new(1);
 	pub static ref RETURN_LABEL: Mutex<usize> = Mutex::new(0);
 	pub static ref RETURN_REG: Mutex<usize> = Mutex::new(0);
+	pub static ref BREAK_LABEL: Mutex<usize> = Mutex::new(0);
 }
 
 #[allow(dead_code)]
@@ -494,6 +495,8 @@ fn gen_stmt(node: &Node, code: &mut Vec<Ir>) {
 		NodeType::For(init, cond, inc, body) => {
 			let x = new_label();
 			let y = new_label();
+			let orig = *BREAK_LABEL.lock().unwrap();
+			*BREAK_LABEL.lock().unwrap() = new_label();
 			gen_stmt(init, code);
 			label(x, code);
 			let r2 = gen_expr(cond, code);
@@ -503,14 +506,20 @@ fn gen_stmt(node: &Node, code: &mut Vec<Ir>) {
 			gen_stmt(inc, code);
 			code.push(Ir::new(IrJmp, x, 0));
 			label(y, code);
+			label(*BREAK_LABEL.lock().unwrap(), code);
+			*BREAK_LABEL.lock().unwrap() = orig;
 		}
 		NodeType::DoWhile(body, cond) => {
 			let x = new_label();
+			let orig = *BREAK_LABEL.lock().unwrap();
+			*BREAK_LABEL.lock().unwrap() = new_label();
 			label(x, code);
 			gen_stmt(body, code);
 			let r = gen_expr(cond, code);
 			code.push(Ir::new(IrIf, r, x));
 			kill(r, code);
+			label(*BREAK_LABEL.lock().unwrap(), code);
+			*BREAK_LABEL.lock().unwrap() = orig;
 		}
 		NodeType::VarDef(ctype, .., off, init) => {
 			if let Some(rhs) = init {
@@ -521,6 +530,12 @@ fn gen_stmt(node: &Node, code: &mut Vec<Ir>) {
 				kill(r1, code);
 				kill(r2, code);
 			}
+		}
+		NodeType::Break => {
+			if *BREAK_LABEL.lock().unwrap() == 0 {
+				panic!("stray 'break' statement");
+			}
+			code.push(Ir::new(IrJmp, *BREAK_LABEL.lock().unwrap(), 0));
 		}
 		enode => { panic!("unexpeceted node {:?}", enode); }
 	}

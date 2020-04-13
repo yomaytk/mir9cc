@@ -120,6 +120,7 @@ pub enum TokenType {
 	TokenMod,
 	TokenInc,
 	TokenDec,
+	TokenBreak,
 	TokenNoSignal,
 	TokenEof,
 }
@@ -141,6 +142,7 @@ impl From<String> for TokenType {
 			"struct" => { TokenStruct }
 			"typedef" => { TokenTypedef }
 			"void" => { TokenVoid }
+			"break" => { TokenBreak }
 			_ => { TokenIdent }
 		}
 	}

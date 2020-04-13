@@ -266,6 +266,8 @@ pub fn walk(node: &Node, env: &mut Env, decay: bool) -> Node {
 			
 		}
 		Str(ctype, strname, _) => {
+		// A string literal is converted to a reference to an anonymous
+		// global variable of type char array.
 			*STRLABEL.lock().unwrap() += 1;
 			let labelname = format!(".L.str{}", *STRLABEL.lock().unwrap());
 			GVARS.lock().unwrap().push(new_global(&ctype, labelname.clone(), Some(strname.clone()), false));
@@ -339,6 +341,9 @@ pub fn walk(node: &Node, env: &mut Env, decay: bool) -> Node {
 			let lhs = walk(expr, env, true);
 			lhs.checklval();
 			return Node::new_incdec(lhs.nodesctype(None), *selector, lhs);
+		}
+		Break => {
+			return Node::new_break();
 		}
 		NULL => {
 			return Node::new_null();

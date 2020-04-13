@@ -199,6 +199,7 @@ pub enum NodeType {
 	BitAnd(Type, Box<Node>, Box<Node>),											// BitAnd(ctype, lhs, rhs)
 	Neg(Box<Node>),																// Neg(expr)
 	IncDec(Type, i32, Box<Node>),												// IncDec(ctype, selector, expr)
+	Break,																		// Break
 	NULL,																		// NULL
 }
 
@@ -352,6 +353,10 @@ impl NodeType {
 
 	fn incdec_init(ctype: Type, selector: i32, expr: Node) -> Self {
 		NodeType::IncDec(ctype, selector, Box::new(expr))
+	}
+
+	fn break_init() -> Self {
+		NodeType::Break
 	}
 }
 
@@ -597,6 +602,12 @@ impl Node {
 	pub fn new_incdec(ctype: Type, selector: i32, expr: Node) -> Self {
 		Self {
 			op: NodeType::incdec_init(ctype, selector, expr)
+		}
+	}
+
+	pub fn new_break() -> Self {
+		Self {
+			op: NodeType::break_init()
 		}
 	}
 }
@@ -1121,6 +1132,10 @@ pub fn stmt(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 				return Node::new_null();
 			}
 			panic!("typedef error.");
+		}
+		TokenBreak => {
+			*pos += 1;
+			return Node::new_break();
 		}
 		_ => {
 			if tokens[*pos].consume_ty(TokenIdent, pos) {
