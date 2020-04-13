@@ -13,10 +13,14 @@ use super::gen_ir::{*, IrOp::*, IrType::*};
 // registers are exhausted and need to be spilled to memory.
 
 static REG_SIZE: usize = 7;
+static REGMAP_SZ: usize = 8192;
 
 // allocate the register can be used
 fn alloc(reg_map: &mut [i32], used: &mut [bool], ir_reg: usize) -> usize {
 	
+	if REGMAP_SZ < ir_reg {
+		panic!("program too big.");
+	}
 	if reg_map[ir_reg] != -1 {
 		if !used[reg_map[ir_reg] as usize] { panic!("the register allocated is not used. at reg_map[{}]", ir_reg); }
 		return reg_map[ir_reg] as usize;
