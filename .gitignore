@@ -1,7 +1,0 @@
-.gitignore
-*.s
-*.o
-*.tmp
-compile
-tmp-test
-mir9cc.code-workspace
