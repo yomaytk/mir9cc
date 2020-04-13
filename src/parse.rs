@@ -375,7 +375,8 @@ impl Node {
 			| NodeType::Sizeof(ctype, ..) | NodeType::Str(ctype, ..)
 			| NodeType::Gvar(ctype,..) | NodeType::Dot(ctype, ..) 
 			| NodeType::Ternary(ctype, ..) | NodeType::BitOr(ctype, ..) 
-			| NodeType::BitXor(ctype, ..) | NodeType::BitAnd(ctype, ..) => { 
+			| NodeType::BitXor(ctype, ..) | NodeType::BitAnd(ctype, ..) 
+			| NodeType::IncDec(ctype, ..) => { 
 				return ctype.clone(); 
 			}
 			_ => { 

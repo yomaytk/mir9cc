@@ -210,11 +210,18 @@ fn gen_binop(irop: IrOp, lhs: &Node, rhs: &Node, code: &mut Vec<Ir>) -> usize {
 	return r1;
 }
 
+fn gen_inc_scale(ctype: &Type) -> usize {
+	match ctype.ty {
+		Ty::PTR => { return ctype.ptr_to.as_ref().unwrap().size; }
+		_ => { return 1; }
+	}
+}
+
 fn gen_pre_inc(ctype: &Type, lhs: &Node, code: &mut Vec<Ir>, num: i32) -> usize {
 	let r1 = gen_lval(lhs, code);
 	let r2 = new_regno();
 	code.push(Ir::new(ctype.load_insn(), r2, r1));
-	code.push(Ir::new(IrAddImm, r2, num as usize));
+	code.push(Ir::new(IrAddImm, r2, num as usize * gen_inc_scale(ctype)));
 	code.push(Ir::new(ctype.store_insn(), r1, r2));
 	kill(r1, code);
 	return r2;
@@ -222,7 +229,7 @@ fn gen_pre_inc(ctype: &Type, lhs: &Node, code: &mut Vec<Ir>, num: i32) -> usize 
 
 fn gen_post_inc(ctype: &Type, lhs: &Node, code: &mut Vec<Ir>, num: i32) -> usize {
 	let r = gen_pre_inc(ctype, lhs, code, num);
-	code.push(Ir::new(IrSubImm, r, num as usize));
+	code.push(Ir::new(IrSubImm, r, num as usize * gen_inc_scale(ctype)));
 	return r;
 }
 
