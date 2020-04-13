@@ -23,6 +23,7 @@ int var1;
 int var2[5];
 extern int global_arr[1];
 int *aaa;
+typedef int myint;
 
 // Single-line comment test
 
@@ -191,6 +192,10 @@ int main() {
 	EXPECT(4, ({ int i = 3; return ++i; }));
 	EXPECT(3, ({ int i = 3; return i--; }));
 	EXPECT(2, ({ int i = 3; return --i; }));
+
+	EXPECT(4, ({ myint foo = 3; return sizeof(foo); }));
+
+	EXPECT(1, ({ typedef struct foo_ foo; return 1; }));
 
 return 0;
 }

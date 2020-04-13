@@ -12,6 +12,26 @@ use std::sync::Mutex;
 // `1+2=3`, are accepted by this parser, but that's intentional.
 // Semantic errors are detected in a later pass.
 
+macro_rules! env_find {
+	($s:expr, $m:ident, $ty:expr) => {
+		{
+			if let Some(t) = ENV.lock().unwrap().$m.get(&$s) {
+				return t.clone()
+			}
+			let mut env = &ENV.lock().unwrap().next;
+			let mut ctype = NULL_TY.clone();
+			while let Some(e) = env {
+				if let Some(t) = e.$m.get(&$s) {
+					ctype = t.clone();
+					break;
+				}
+				env = &e.next;
+			}
+			return ctype
+		}
+	};
+}
+
 lazy_static! {
 	pub static ref INT_TY: Type = Type {
 		ty: Ty::INT,
@@ -42,6 +62,15 @@ lazy_static! {
 	};
 	pub static ref NULL_TY: Type = Type {
 		ty: Ty::NULL,
+		ptr_to: None,
+		ary_to: None,
+		size: 0,
+		align: 0,
+		offset: 0,
+		len: 0,
+	};
+	pub static ref STRUCT_TY: Type = Type {
+		ty: Ty::STRUCT(Vec::new()),
 		ptr_to: None,
 		ary_to: None,
 		size: 0,
@@ -574,7 +603,7 @@ impl Node {
 
 #[derive(Debug, Clone)]
 pub struct Env {
-	tags: HashMap<String, Vec<Node>>,
+	tags: HashMap<String, Type>,
 	typedefs: HashMap<String, Type>,
 	next: Option<Box<Env>>,
 }
@@ -608,10 +637,7 @@ pub fn read_type(tokens: &Vec<Token>,  pos: &mut usize) -> Type {
 	if tokens[*pos].consume_ty(TokenIdent, pos) {
 		*pos -= 1;
 		let name = ident(tokens, pos);
-		if let Some(ty) = ENV.lock().unwrap().typedefs.get(&name) {
-			return ty.clone();
-		}
-		panic!("{} is no defined type.", name);
+		env_find!(name, typedefs, NULL_TY.clone());
 	}
 	if tokens[*pos].consume_ty(TokenInt, pos){
 		return INT_TY.clone();
@@ -623,7 +649,6 @@ pub fn read_type(tokens: &Vec<Token>,  pos: &mut usize) -> Type {
 		
 		let mut members = vec![];
 		let mut tag = String::new();
-		
 		// tag
 		if tokens[*pos].consume_ty(TokenIdent, pos) {
 			*pos -= 1;
@@ -636,17 +661,19 @@ pub fn read_type(tokens: &Vec<Token>,  pos: &mut usize) -> Type {
 				members.push(decl(tokens, pos));
 			}
 		}
-
-		// new struct type
-		if !tag.is_empty() && !members.is_empty() {
-			ENV.lock().unwrap().tags.insert(tag, members.clone());
-		// use existed struct type
-		} else if !tag.is_empty() && members.is_empty() {
-			members = ENV.lock().unwrap().tags.get(&tag).unwrap().clone();
-		} else if tag.is_empty() && members.is_empty() {
-			panic!("bat struct definition.");
+		if members.is_empty() {
+			if tag.is_empty() {
+				panic!("bat struct definition.");
+			} else {
+				env_find!(tag.clone(), tags, STRUCT_TY.clone());
+			}
+		} else {
+			let struct_type = new_struct(members);
+			if !tag.is_empty() {
+				ENV.lock().unwrap().tags.insert(tag, struct_type.clone());
+			}
+			return struct_type;
 		}
-		return struct_of(members);
 	}
 	if tokens[*pos].consume_ty(TokenVoid, pos) {
 		return VOID_TY.clone();
@@ -654,7 +681,7 @@ pub fn read_type(tokens: &Vec<Token>,  pos: &mut usize) -> Type {
 	return NULL_TY.clone();
 }
 
-pub fn struct_of(mut members: Vec<Node>) -> Type {
+pub fn new_struct(mut members: Vec<Node>) -> Type {
 	let mut ty_align = 0;
 
 	let mut off = 0;
@@ -1097,12 +1124,11 @@ pub fn stmt(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 		}
 		_ => {
 			if tokens[*pos].consume_ty(TokenIdent, pos) {
-				*pos -= 1;
-				let name = ident(tokens, pos);
-				*pos -= 1;
-				if type_exist(&name) {
+				if tokens[*pos].consume_ty(TokenIdent, pos) {
+					*pos -= 2;
 					return decl(tokens, pos);
 				}
+				*pos -= 1;
 			}
 			return expr_stmt(tokens, pos);
 		}
@@ -1144,15 +1170,19 @@ pub fn toplevel(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 	let mut args = vec![];
 
 	let is_extern = tokens[*pos].consume_ty(TokenExtern, pos);
-	
+	let is_typedef = tokens[*pos].consume_ty(TokenTypedef, pos);
+
 	// Ctype
 	let mut ctype = ctype(tokens, pos);
-
+	
 	// identifier
 	let name = ident(tokens, pos);
 	
 	// function
 	if tokens[*pos].consume_ty(TokenRightBrac, pos){
+		if is_typedef {
+			panic!("typedef {} has function definition.", name);
+		}
 		// argument
 		if !tokens[*pos].consume_ty(TokenLeftBrac, pos) {
 			loop {
@@ -1165,10 +1195,15 @@ pub fn toplevel(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 		let body = compound_stmt(tokens, pos);
 		return Node::new_func(name, is_extern, args, body, 0);
 	}
-	
-	// global variable
+
 	ctype = read_array(tokens, pos, ctype);
 	tokens[*pos].assert_ty(TokenSemi, pos);
+	// typedef
+	if is_typedef {
+		ENV.lock().unwrap().typedefs.insert(name, ctype);
+		return Node::new_null();
+	}
+	// global variable
 	return Node::new_vardef(ctype, is_extern, name, 0, None);
 
 }

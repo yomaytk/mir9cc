@@ -1,5 +1,4 @@
+typedef int myint;
 int main() {
-	char *p = "abc"; return p[0];
-	//kkpkppok
-	/**/
+	myint foo = 3; return sizeof(foo);
 }

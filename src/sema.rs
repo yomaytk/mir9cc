@@ -64,7 +64,7 @@ impl Env {
 					next: Some(Box::new(nextenv)),
 				}
 			}
-			_ => { 
+			_ => {
 				Self {
 					vars: HashMap::new(),
 					next: None,
@@ -165,6 +165,9 @@ pub fn walk(node: &Node, env: &mut Env, decay: bool) -> Node {
 		}
 		Ident(name) => {
 			if let Some(var) = env.find(name.clone()) {
+				if let Ty::NULL = var.ctype.ty {
+					panic!("type of {} is invalid.", var.ident);
+				}
 				if var.is_local {
 					let lvar = Node::new_lvar(var.ctype.clone(), var.offset);
 					return maybe_decay(lvar, decay);
@@ -289,6 +292,9 @@ pub fn walk(node: &Node, env: &mut Env, decay: bool) -> Node {
 			let expr2 = walk(expr, env, true);
 			match expr2.nodesctype(None).ty {
 				Ty::STRUCT(members) => {
+					if members.is_empty() {
+						panic!("incomplete type.");
+					}
 					for membernode in members {
 						if let NodeType::VarDef(ctype, _, name2, ..) = membernode.op {
 							if &name[..] != &name2[..] {
@@ -359,6 +365,7 @@ pub fn sema(nodes: &Vec<Node>) -> (Vec<Node>, Vec<Var>) {
 			Func(name, is_extern, args, body, _) => { 
 				node = Node::new_func(name.clone(), is_extern, args, *body, *STACKSIZE.lock().unwrap());
 			}
+			NULL => { continue; }
 			_ => { panic!("funode should be NodeType::Func. "); }
 		}
 		funcv.push(node);
