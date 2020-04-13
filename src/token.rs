@@ -246,6 +246,7 @@ fn read_string<'a> (p: &mut core::str::Chars, pos: &mut usize, input: &'a String
 
 	while let Some(c) = p.next() {
 		if c == '"'	{
+			len += 1;
 			*pos += 1;
 			break;
 		}
