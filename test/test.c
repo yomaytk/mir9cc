@@ -95,6 +95,7 @@ int main() {
 		}
 		return a;
 	}));
+	EXPECT(10, ({ int i=0; for (;;) { i++; if (i==10) break; } return i; }));
 
 	EXPECT(45, ({ int i=0; int j=0; while (i<10) { j=j+i; i=i+1; } return j;}));
 

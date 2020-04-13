@@ -499,9 +499,14 @@ fn gen_stmt(node: &Node, code: &mut Vec<Ir>) {
 			*BREAK_LABEL.lock().unwrap() = new_label();
 			gen_stmt(init, code);
 			label(x, code);
-			let r2 = gen_expr(cond, code);
-			code.push(Ir::new(IrUnless, r2, y));
-			kill(r2, code);
+			match cond.op {
+				NodeType::NULL => {}
+				_ => {
+					let r2 = gen_expr(cond, code);
+					code.push(Ir::new(IrUnless, r2, y));
+					kill(r2, code);
+				}
+			}
 			gen_stmt(body, code);
 			gen_stmt(inc, code);
 			code.push(Ir::new(IrJmp, x, 0));

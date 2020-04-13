@@ -1079,13 +1079,21 @@ pub fn stmt(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 			if tokens[*pos].is_typename(pos) {
 				*pos -= 1;
 				init = decl(tokens, pos);
+			} else if tokens[*pos].consume_ty(TokenSemi, pos) {
+				init = Node::new_null();
 			} else {
 				init = expr_stmt(tokens, pos);
 			}
-			let cond = expr(tokens, pos);
-			tokens[*pos].assert_ty(TokenSemi, pos);
-			let inc = stmt(tokens, pos);
-			tokens[*pos].assert_ty(TokenLeftBrac, pos);
+			let mut cond = Node::new_null();
+			if !tokens[*pos].consume_ty(TokenSemi, pos) {
+				cond = expr(tokens, pos);
+				tokens[*pos].assert_ty(TokenSemi, pos);
+			}
+			let mut inc = Node::new_null();
+			if !tokens[*pos].consume_ty(TokenLeftBrac, pos) {
+				inc = stmt(tokens, pos);
+				tokens[*pos].assert_ty(TokenLeftBrac, pos);
+			} 
 			let body = stmt(tokens, pos);
 			return Node::new_for(init, cond, inc, body);
 		}
