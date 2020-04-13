@@ -202,6 +202,10 @@ fn label(r: usize, code: &mut Vec<Ir>) {
 	code.push(Ir::new(IrLabel, r, 0));
 }
 
+fn jmp(x: usize, code: &mut Vec<Ir>) {
+	code.push(Ir::new(IrJmp, x, 0));
+}
+
 fn gen_binop(irop: IrOp, lhs: &Node, rhs: &Node, code: &mut Vec<Ir>) -> usize {
 	let r1 = gen_expr(lhs, code);
 	let r2 = gen_expr(rhs, code);
@@ -314,7 +318,7 @@ fn gen_expr(node: &Node, code: &mut Vec<Ir>) -> usize {
 			let y = new_label();
 			code.push(Ir::new(IrUnless, r1, x));
 			code.push(Ir::new(IrImm, r1, 1));
-			code.push(Ir::new(IrJmp, y, 0));
+			jmp(y, code);
 			label(x, code);
 			let r2 = gen_expr(rhs, code);
 			code.push(Ir::new(IrMov, r1, r2));
@@ -398,7 +402,7 @@ fn gen_expr(node: &Node, code: &mut Vec<Ir>) -> usize {
 			let r2 = gen_expr(then, code);
 			code.push(Ir::new(IrMov, r, r2));
 			kill(r2, code);
-			code.push(Ir::new(IrJmp, y, 0));
+			jmp(y, code);
 			label(x, code);
 			let r3 = gen_expr(els, code);
 			code.push(Ir::new(IrMov, r, r3));
@@ -465,7 +469,7 @@ fn gen_stmt(node: &Node, code: &mut Vec<Ir>) {
 			if *RETURN_LABEL.lock().unwrap() > 0 {
 				code.push(Ir::new(IrMov, *RETURN_REG.lock().unwrap(), lhi));
 				kill(lhi, code);
-				code.push(Ir::new(IrJmp, *RETURN_LABEL.lock().unwrap(), 0));
+				jmp(*RETURN_LABEL.lock().unwrap(), code);
 				return;
 			}
 
@@ -484,7 +488,7 @@ fn gen_stmt(node: &Node, code: &mut Vec<Ir>) {
 			gen_stmt(then, code);
 			match elthen {
 				Some(elnode) => {
-					code.push(Ir::new(IrJmp, x2, 0));
+					jmp(x2, code);
 					label(x1, code);
 					gen_stmt(elnode, code);
 					label(x2, code);
@@ -516,7 +520,7 @@ fn gen_stmt(node: &Node, code: &mut Vec<Ir>) {
 			}
 			gen_stmt(body, code);
 			gen_stmt(inc, code);
-			code.push(Ir::new(IrJmp, x, 0));
+			jmp(x, code);
 			label(y, code);
 			label(*BREAK_LABEL.lock().unwrap(), code);
 			*BREAK_LABEL.lock().unwrap() = orig;
@@ -547,7 +551,7 @@ fn gen_stmt(node: &Node, code: &mut Vec<Ir>) {
 			if *BREAK_LABEL.lock().unwrap() == 0 {
 				panic!("stray 'break' statement");
 			}
-			code.push(Ir::new(IrJmp, *BREAK_LABEL.lock().unwrap(), 0));
+			jmp(*BREAK_LABEL.lock().unwrap(), code);
 		}
 		enode => { panic!("unexpeceted node {:?}", enode); }
 	}
