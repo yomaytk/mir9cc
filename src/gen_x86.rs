@@ -112,6 +112,10 @@ pub fn gen(fun: &Function, label: usize) {
 				emit!("mov {}, rax", REG64[lhs]);
 			}
 			IrMulImm => {
+				if rhs < 256 && rhs.count_ones() == 1 {
+					emit!("shl {}, {}", REG64[lhs], rhs.trailing_zeros());
+					continue;
+				}
 				emit!("mov rax, {}", rhs);
 				emit!("mul {}", REG64[lhs]);
 				emit!("mov {}, rax", REG64[lhs]);
