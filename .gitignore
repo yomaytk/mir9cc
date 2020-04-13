@@ -1,3 +1,7 @@
-/target
-compile1.s
+.gitignore
+*.s
+*.o
+*.tmp
 compile
+tmp-test
+mir9cc.code-workspace
