@@ -210,7 +210,8 @@ pub fn walk(node: &Node, env: &mut Env, decay: bool) -> Node {
 		LogAnd(lhs, rhs) => { return Node::new_and(walk(lhs, env, true), walk(rhs, env, true)); }
 		LogOr(lhs, rhs) => { return Node::new_or(walk(lhs, env, true), walk(rhs, env, true)); }
 		For(init, cond, inc, body) => {
-			return Node::new_for(walk(init, env,  true), walk(cond, env, true), walk(inc, env, true), walk(body, env, true));
+			let mut newenv = Env::new(Some(env.clone()));
+			return Node::new_for(walk(init, &mut newenv,  true), walk(cond, &mut newenv, true), walk(inc, &mut newenv, true), walk(body, &mut newenv, true));
 		}
 		VarDef(ctype, is_extern, ident, _, init) => {
 			let mut rexpr = None;
