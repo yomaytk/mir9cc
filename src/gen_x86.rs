@@ -77,77 +77,79 @@ pub fn gen(fun: &Function, label: usize) {
 	let ret = format!(".Lend{}", label);
 
 	for ir in &fun.irs {
+		let lhs = ir.lhs;
+		let rhs = ir.rhs;
 		match &ir.op {
 			IrImm => {
-				println!("\tmov {}, {}", REG64[ir.lhs], ir.rhs);
+				println!("\tmov {}, {}", REG64[lhs], rhs);
 			}
 			IrMov => {
-				println!("\tmov {}, {}", REG64[ir.lhs], REG64[ir.rhs]);
+				println!("\tmov {}, {}", REG64[lhs], REG64[rhs]);
 			}
 			IrAdd => {
-				println!("\tadd {}, {}", REG64[ir.lhs], REG64[ir.rhs]);
+				println!("\tadd {}, {}", REG64[lhs], REG64[rhs]);
 			}
 			IrAddImm => {
-				println!("\tadd {}, {}", REG64[ir.lhs], ir.rhs);
+				println!("\tadd {}, {}", REG64[lhs], rhs);
 			}
 			IrSub => {
-				println!("\tsub {}, {}", REG64[ir.lhs], REG64[ir.rhs]);
+				println!("\tsub {}, {}", REG64[lhs], REG64[rhs]);
 			}
 			IrSubImm => {
-				println!("\tsub {}, {}", REG64[ir.lhs], ir.rhs);
+				println!("\tsub {}, {}", REG64[lhs], rhs);
 			}
 			IrBpRel => {
-				println!("\tlea {}, [rbp-{}]", REG64[ir.lhs], ir.rhs);
+				println!("\tlea {}, [rbp-{}]", REG64[lhs], rhs);
 			}
 			IrMul => {
-				println!("\tmov rax, {}", REG64[ir.rhs]);
-				println!("\tmul {}", REG64[ir.lhs]);
-				println!("\tmov {}, rax", REG64[ir.lhs]);
+				println!("\tmov rax, {}", REG64[rhs]);
+				println!("\tmul {}", REG64[lhs]);
+				println!("\tmov {}, rax", REG64[lhs]);
 			}
 			IrMulImm => {
-				println!("\tmov rax, {}", ir.rhs);
-				println!("\tmul {}", REG64[ir.lhs]);
-				println!("\tmov {}, rax", REG64[ir.lhs]);
+				println!("\tmov rax, {}", rhs);
+				println!("\tmul {}", REG64[lhs]);
+				println!("\tmov {}, rax", REG64[lhs]);
 			}
 			IrDiv => {
-				println!("\tmov rax, {}", REG64[ir.lhs]);
+				println!("\tmov rax, {}", REG64[lhs]);
 				println!("\tcqo");
-				println!("\tdiv {}", REG64[ir.rhs]);
-				println!("\tmov {}, rax", REG64[ir.lhs]);
+				println!("\tdiv {}", REG64[rhs]);
+				println!("\tmov {}, rax", REG64[lhs]);
 			}
 			IrRet => {
 				*LABEL.lock().unwrap() += 1;
-				println!("\tmov rax, {}", REG64[ir.lhs]);
+				println!("\tmov rax, {}", REG64[lhs]);
 				println!("\tjmp {}", ret);
 			}
 			IrStore8 => {
-				println!("\tmov [{}], {}", REG64[ir.lhs], REG8[ir.rhs]);
+				println!("\tmov [{}], {}", REG64[lhs], REG8[rhs]);
 			}
 			IrStore32 => {
-				println!("\tmov [{}], {}", REG64[ir.lhs], REG32[ir.rhs]);
+				println!("\tmov [{}], {}", REG64[lhs], REG32[rhs]);
 			}
 			IrStore64 => {
-				println!("\tmov [{}], {}", REG64[ir.lhs], REG64[ir.rhs]);
+				println!("\tmov [{}], {}", REG64[lhs], REG64[rhs]);
 			}
 			IrLoad8 => {
-				println!("\tmov {}, [{}]", REG8[ir.lhs], REG64[ir.rhs]);
-				println!("\tmovzb {}, {}", REG64[ir.lhs], REG8[ir.rhs]);
+				println!("\tmov {}, [{}]", REG8[lhs], REG64[rhs]);
+				println!("\tmovzb {}, {}", REG64[lhs], REG8[rhs]);
 			}
 			IrLoad32 => {
-				println!("\tmov {}, [{}]", REG32[ir.lhs], REG64[ir.rhs]);
+				println!("\tmov {}, [{}]", REG32[lhs], REG64[rhs]);
 			}
 			IrLoad64 => {
-				println!("\tmov {}, [{}]", REG64[ir.lhs], REG64[ir.rhs]);
+				println!("\tmov {}, [{}]", REG64[lhs], REG64[rhs]);
 			}
 			IrUnless => {
-				println!("\tcmp {}, 0", REG64[ir.lhs]);
-				println!("\tje .L{}", ir.rhs);
+				println!("\tcmp {}, 0", REG64[lhs]);
+				println!("\tje .L{}", rhs);
 			}
 			IrLabel => {
-				println!(".L{}:", ir.lhs);
+				println!(".L{}:", lhs);
 			}
 			IrJmp => {
-				println!("\tjmp .L{}", ir.lhs);
+				println!("\tjmp .L{}", lhs);
 			}
 			IrCall { name, len , args } => {
 
@@ -162,16 +164,16 @@ pub fn gen(fun: &Function, label: usize) {
 				println!("\tpop r11");
 				println!("\tpop r10");
 				
-				println!("\tmov {}, rax", REG64[ir.lhs]);
+				println!("\tmov {}, rax", REG64[lhs]);
 			}
 			IrStoreArgs8 => {
-				println!("\tmov [rbp-{}], {}", ir.lhs, ARGREG8[ir.rhs]);
+				println!("\tmov [rbp-{}], {}", lhs, ARGREG8[rhs]);
 			}
 			IrStoreArgs32 => {
-				println!("\tmov [rbp-{}], {}", ir.lhs, ARGREG32[ir.rhs]);
+				println!("\tmov [rbp-{}], {}", lhs, ARGREG32[rhs]);
 			}
 			IrStoreArgs64 => {
-				println!("\tmov [rbp-{}], {}", ir.lhs, ARGREG64[ir.rhs]);
+				println!("\tmov [rbp-{}], {}", lhs, ARGREG64[rhs]);
 			}
 			IrLt => {
 				emit_cmp(ir, String::from("setl"));
@@ -186,37 +188,37 @@ pub fn gen(fun: &Function, label: usize) {
 				emit_cmp(ir, String::from("setne"));
 			}
 			IrIf => {
-				println!("\tcmp {}, 0", REG64[ir.lhs]);
-				println!("\tjne .L{}", ir.rhs);
+				println!("\tcmp {}, 0", REG64[lhs]);
+				println!("\tjne .L{}", rhs);
 			}
 			IrLabelAddr(label) => {
-				println!("\tlea {}, {}", REG64[ir.lhs], label);
+				println!("\tlea {}, {}", REG64[lhs], label);
 			}
 			IrOr => {
-				println!("\tor {}, {}", REG64[ir.lhs], REG64[ir.rhs]);
+				println!("\tor {}, {}", REG64[lhs], REG64[rhs]);
 			}
 			IrXor => {
-				println!("\txor {}, {}", REG64[ir.lhs], REG64[ir.rhs]);
+				println!("\txor {}, {}", REG64[lhs], REG64[rhs]);
 			}
 			IrAnd => {
-				println!("\tand {}, {}", REG64[ir.lhs], REG64[ir.rhs]);
+				println!("\tand {}, {}", REG64[lhs], REG64[rhs]);
 			}
 			IrShl => {
-				println!("\tmov cl, {}", REG8[ir.rhs]);
-				println!("\tshl {}, cl", REG64[ir.lhs]);
+				println!("\tmov cl, {}", REG8[rhs]);
+				println!("\tshl {}, cl", REG64[lhs]);
 			}
 			IrShr => {
-				println!("\tmov cl, {}", REG8[ir.rhs]);
-				println!("\tshr {}, cl", REG64[ir.lhs]);
+				println!("\tmov cl, {}", REG8[rhs]);
+				println!("\tshr {}, cl", REG64[lhs]);
 			}
 			IrMod => {
-				println!("\tmov rax, {}", REG64[ir.lhs]);
+				println!("\tmov rax, {}", REG64[lhs]);
 				println!("\tcqo");
-				println!("\tdiv {}", REG64[ir.rhs]);
-				println!("\tmov {}, rdx", REG64[ir.lhs]);
+				println!("\tdiv {}", REG64[rhs]);
+				println!("\tmov {}, rdx", REG64[lhs]);
 			}
 			IrNeg => {
-				println!("\tneg {}", REG64[ir.lhs]);
+				println!("\tneg {}", REG64[lhs]);
 			}
 			IrNop => {},
 			_ => { panic!("unexpected IrOp in gen_x86"); }
