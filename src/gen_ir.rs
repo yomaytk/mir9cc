@@ -31,9 +31,12 @@ pub enum IrOp {
 	IrImm,
 	IrMov,
 	IrAdd,
+	IrAddImm,
 	IrBpRel,
 	IrSub,
+	IrSubImm,
 	IrMul,
+	IrMulImm,
 	IrDiv,
 	IrRet,
 	IrExpr,
@@ -210,27 +213,16 @@ fn gen_pre_inc(ctype: &Type, lhs: &Node, code: &mut Vec<Ir>, num: i32) -> usize 
 	let r1 = gen_lval(lhs, code);
 	let r2 = new_regno();
 	code.push(Ir::new(ctype.load_insn(), r2, r1));
-	let imm = new_regno();
-	code.push(Ir::new(IrImm, imm, num as usize));
-	code.push(Ir::new(IrAdd, r2, imm));
-	kill(imm, code);
+	code.push(Ir::new(IrAddImm, r2, num as usize));
 	code.push(Ir::new(ctype.store_insn(), r1, r2));
 	kill(r1, code);
 	return r2;
 }
 
 fn gen_post_inc(ctype: &Type, lhs: &Node, code: &mut Vec<Ir>, num: i32) -> usize {
-	let r1 = gen_lval(lhs, code);
-	let r2 = new_regno();
-	code.push(Ir::new(ctype.load_insn(), r2, r1));
-	let imm = new_regno();
-	code.push(Ir::new(IrImm, imm, num as usize));
-	code.push(Ir::new(IrAdd, r2, imm));
-	code.push(Ir::new(ctype.store_insn(), r1, r2));
-	kill(r1, code);
-	code.push(Ir::new(IrSub, r2, imm));
-	kill(imm, code);
-	return r2;
+	let r = gen_pre_inc(ctype, lhs, code, num);
+	code.push(Ir::new(IrSubImm, r, num as usize));
+	return r;
 }
 
 fn new_regno() -> usize {
@@ -279,10 +271,7 @@ fn gen_lval(node: &Node, code: &mut Vec<Ir>) -> usize {
 		}
 		NodeType::Dot(_, expr, _, offset) => {
 			let r1 = gen_lval(expr, code);
-			let r2 = new_regno();
-			code.push(Ir::new(IrImm, r2, *offset));
-			code.push(Ir::new(IrAdd, r1, r2));
-			kill(r2, code);
+			code.push(Ir::new(IrAddImm, r1, *offset));
 			return r1;
 		}
 		_ => { panic!("not an lvalue")}
@@ -332,15 +321,9 @@ fn gen_expr(node: &Node, code: &mut Vec<Ir>) -> usize {
 			let rhi = gen_expr(rhs, code);
 			match ty {
 				TokenAdd | TokenSub => {
-					match ctype.ty {
-						Ty::PTR => {
-							let size_of = ctype.ptr_to.as_ref().unwrap().size;
-							let r1 = new_regno();
-							code.push(Ir::new(IrImm, r1, size_of));
-							code.push(Ir::new(IrMul, rhi, r1));
-							kill(r1, code);
-						}
-						_ => {}
+					if let Ty::PTR = ctype.ty {
+						let size_of = ctype.ptr_to.as_ref().unwrap().size;
+						code.push(Ir::new(IrMulImm, rhi, size_of));
 					}
 				}
 				_ => {}

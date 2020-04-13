@@ -87,14 +87,25 @@ pub fn gen(fun: &Function, label: usize) {
 			IrAdd => {
 				println!("\tadd {}, {}", REG64[ir.lhs], REG64[ir.rhs]);
 			}
+			IrAddImm => {
+				println!("\tadd {}, {}", REG64[ir.lhs], ir.rhs);
+			}
 			IrSub => {
 				println!("\tsub {}, {}", REG64[ir.lhs], REG64[ir.rhs]);
+			}
+			IrSubImm => {
+				println!("\tsub {}, {}", REG64[ir.lhs], ir.rhs);
 			}
 			IrBpRel => {
 				println!("\tlea {}, [rbp-{}]", REG64[ir.lhs], ir.rhs);
 			}
 			IrMul => {
 				println!("\tmov rax, {}", REG64[ir.rhs]);
+				println!("\tmul {}", REG64[ir.lhs]);
+				println!("\tmov {}, rax", REG64[ir.lhs]);
+			}
+			IrMulImm => {
+				println!("\tmov rax, {}", ir.rhs);
 				println!("\tmul {}", REG64[ir.lhs]);
 				println!("\tmov {}, rax", REG64[ir.lhs]);
 			}
