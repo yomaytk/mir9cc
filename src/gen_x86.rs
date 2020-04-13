@@ -18,6 +18,11 @@ macro_rules! hash {
 	};
 }
 
+macro_rules! emit{
+    ($fmt:expr) => (print!(concat!("\t", $fmt, "\n")));
+    ($fmt:expr, $($arg:tt)*) => (print!(concat!("\t", $fmt, "\n"), $($arg)*));
+}
+
 pub static REG8: [&str; 7] = ["r10b", "r11b", "bl", "r12b", "r13b", "r14b", "r15b"];
 pub static REG32: [&str; 7] = ["r10d", "r11d", "ebx", "r12d", "r13d", "r14d", "r15d"];
 pub static REG64: [&str; 7] = ["r10", "r11", "rbx", "r12", "r13", "r14", "r15"];
@@ -55,9 +60,9 @@ fn escape(strname: String, len: usize) -> String {
 }
 
 fn emit_cmp(ir: &Ir, insn: String) {
-	println!("\tcmp {}, {}", REG64[ir.lhs], REG64[ir.rhs]);
-	println!("\t{} {}", insn, REG8[ir.lhs]);
-	println!("\tmovzb {}, {}", REG64[ir.lhs], REG8[ir.lhs]);
+	emit!("cmp {}, {}", REG64[ir.lhs], REG64[ir.rhs]);
+	emit!("{} {}", insn, REG8[ir.lhs]);
+	emit!("movzb {}, {}", REG64[ir.lhs], REG8[ir.lhs]);
 }
 
 pub fn gen(fun: &Function, label: usize) {
@@ -66,13 +71,13 @@ pub fn gen(fun: &Function, label: usize) {
 	println!(".text");
 	println!(".global {}", fun.name);
 	println!("{}:", fun.name);
-	println!("\tpush rbp");
-	println!("\tmov rbp, rsp");
-	println!("\tsub rsp, {}", roundup(fun.stacksize, 16));
-	println!("\tpush r12");
-	println!("\tpush r13");
-	println!("\tpush r14");
-	println!("\tpush r15");
+	emit!("push rbp");
+	emit!("mov rbp, rsp");
+	emit!("sub rsp, {}", roundup(fun.stacksize, 16));
+	emit!("push r12");
+	emit!("push r13");
+	emit!("push r14");
+	emit!("push r15");
 
 	let ret = format!(".Lend{}", label);
 
@@ -81,99 +86,99 @@ pub fn gen(fun: &Function, label: usize) {
 		let rhs = ir.rhs;
 		match &ir.op {
 			IrImm => {
-				println!("\tmov {}, {}", REG64[lhs], rhs);
+				emit!("mov {}, {}", REG64[lhs], rhs);
 			}
 			IrMov => {
-				println!("\tmov {}, {}", REG64[lhs], REG64[rhs]);
+				emit!("mov {}, {}", REG64[lhs], REG64[rhs]);
 			}
 			IrAdd => {
-				println!("\tadd {}, {}", REG64[lhs], REG64[rhs]);
+				emit!("add {}, {}", REG64[lhs], REG64[rhs]);
 			}
 			IrAddImm => {
-				println!("\tadd {}, {}", REG64[lhs], rhs);
+				emit!("add {}, {}", REG64[lhs], rhs);
 			}
 			IrSub => {
-				println!("\tsub {}, {}", REG64[lhs], REG64[rhs]);
+				emit!("sub {}, {}", REG64[lhs], REG64[rhs]);
 			}
 			IrSubImm => {
-				println!("\tsub {}, {}", REG64[lhs], rhs);
+				emit!("sub {}, {}", REG64[lhs], rhs);
 			}
 			IrBpRel => {
-				println!("\tlea {}, [rbp-{}]", REG64[lhs], rhs);
+				emit!("lea {}, [rbp-{}]", REG64[lhs], rhs);
 			}
 			IrMul => {
-				println!("\tmov rax, {}", REG64[rhs]);
-				println!("\tmul {}", REG64[lhs]);
-				println!("\tmov {}, rax", REG64[lhs]);
+				emit!("mov rax, {}", REG64[rhs]);
+				emit!("mul {}", REG64[lhs]);
+				emit!("mov {}, rax", REG64[lhs]);
 			}
 			IrMulImm => {
-				println!("\tmov rax, {}", rhs);
-				println!("\tmul {}", REG64[lhs]);
-				println!("\tmov {}, rax", REG64[lhs]);
+				emit!("mov rax, {}", rhs);
+				emit!("mul {}", REG64[lhs]);
+				emit!("mov {}, rax", REG64[lhs]);
 			}
 			IrDiv => {
-				println!("\tmov rax, {}", REG64[lhs]);
-				println!("\tcqo");
-				println!("\tdiv {}", REG64[rhs]);
-				println!("\tmov {}, rax", REG64[lhs]);
+				emit!("mov rax, {}", REG64[lhs]);
+				emit!("cqo");
+				emit!("div {}", REG64[rhs]);
+				emit!("mov {}, rax", REG64[lhs]);
 			}
 			IrRet => {
 				*LABEL.lock().unwrap() += 1;
-				println!("\tmov rax, {}", REG64[lhs]);
-				println!("\tjmp {}", ret);
+				emit!("mov rax, {}", REG64[lhs]);
+				emit!("jmp {}", ret);
 			}
 			IrStore8 => {
-				println!("\tmov [{}], {}", REG64[lhs], REG8[rhs]);
+				emit!("mov [{}], {}", REG64[lhs], REG8[rhs]);
 			}
 			IrStore32 => {
-				println!("\tmov [{}], {}", REG64[lhs], REG32[rhs]);
+				emit!("mov [{}], {}", REG64[lhs], REG32[rhs]);
 			}
 			IrStore64 => {
-				println!("\tmov [{}], {}", REG64[lhs], REG64[rhs]);
+				emit!("mov [{}], {}", REG64[lhs], REG64[rhs]);
 			}
 			IrLoad8 => {
-				println!("\tmov {}, [{}]", REG8[lhs], REG64[rhs]);
-				println!("\tmovzb {}, {}", REG64[lhs], REG8[rhs]);
+				emit!("mov {}, [{}]", REG8[lhs], REG64[rhs]);
+				emit!("movzb {}, {}", REG64[lhs], REG8[rhs]);
 			}
 			IrLoad32 => {
-				println!("\tmov {}, [{}]", REG32[lhs], REG64[rhs]);
+				emit!("mov {}, [{}]", REG32[lhs], REG64[rhs]);
 			}
 			IrLoad64 => {
-				println!("\tmov {}, [{}]", REG64[lhs], REG64[rhs]);
+				emit!("mov {}, [{}]", REG64[lhs], REG64[rhs]);
 			}
 			IrUnless => {
-				println!("\tcmp {}, 0", REG64[lhs]);
-				println!("\tje .L{}", rhs);
+				emit!("cmp {}, 0", REG64[lhs]);
+				emit!("je .L{}", rhs);
 			}
 			IrLabel => {
 				println!(".L{}:", lhs);
 			}
 			IrJmp => {
-				println!("\tjmp .L{}", lhs);
+				emit!("jmp .L{}", lhs);
 			}
 			IrCall { name, len , args } => {
 
 				for i in 0..*len {
-					println!("\tmov {}, {}", ARGREG64[i], REG64[args[i]]);
+					emit!("mov {}, {}", ARGREG64[i], REG64[args[i]]);
 				}
 				
-				println!("\tpush r10");
-				println!("\tpush r11");
-				println!("\tmov rax, 0");
-				println!("\tcall {}", name);
-				println!("\tpop r11");
-				println!("\tpop r10");
+				emit!("push r10");
+				emit!("push r11");
+				emit!("mov rax, 0");
+				emit!("call {}", name);
+				emit!("pop r11");
+				emit!("pop r10");
 				
-				println!("\tmov {}, rax", REG64[lhs]);
+				emit!("mov {}, rax", REG64[lhs]);
 			}
 			IrStoreArgs8 => {
-				println!("\tmov [rbp-{}], {}", lhs, ARGREG8[rhs]);
+				emit!("mov [rbp-{}], {}", lhs, ARGREG8[rhs]);
 			}
 			IrStoreArgs32 => {
-				println!("\tmov [rbp-{}], {}", lhs, ARGREG32[rhs]);
+				emit!("mov [rbp-{}], {}", lhs, ARGREG32[rhs]);
 			}
 			IrStoreArgs64 => {
-				println!("\tmov [rbp-{}], {}", lhs, ARGREG64[rhs]);
+				emit!("mov [rbp-{}], {}", lhs, ARGREG64[rhs]);
 			}
 			IrLt => {
 				emit_cmp(ir, String::from("setl"));
@@ -188,37 +193,37 @@ pub fn gen(fun: &Function, label: usize) {
 				emit_cmp(ir, String::from("setne"));
 			}
 			IrIf => {
-				println!("\tcmp {}, 0", REG64[lhs]);
-				println!("\tjne .L{}", rhs);
+				emit!("cmp {}, 0", REG64[lhs]);
+				emit!("jne .L{}", rhs);
 			}
 			IrLabelAddr(label) => {
-				println!("\tlea {}, {}", REG64[lhs], label);
+				emit!("lea {}, {}", REG64[lhs], label);
 			}
 			IrOr => {
-				println!("\tor {}, {}", REG64[lhs], REG64[rhs]);
+				emit!("or {}, {}", REG64[lhs], REG64[rhs]);
 			}
 			IrXor => {
-				println!("\txor {}, {}", REG64[lhs], REG64[rhs]);
+				emit!("xor {}, {}", REG64[lhs], REG64[rhs]);
 			}
 			IrAnd => {
-				println!("\tand {}, {}", REG64[lhs], REG64[rhs]);
+				emit!("and {}, {}", REG64[lhs], REG64[rhs]);
 			}
 			IrShl => {
-				println!("\tmov cl, {}", REG8[rhs]);
-				println!("\tshl {}, cl", REG64[lhs]);
+				emit!("mov cl, {}", REG8[rhs]);
+				emit!("shl {}, cl", REG64[lhs]);
 			}
 			IrShr => {
-				println!("\tmov cl, {}", REG8[rhs]);
-				println!("\tshr {}, cl", REG64[lhs]);
+				emit!("mov cl, {}", REG8[rhs]);
+				emit!("shr {}, cl", REG64[lhs]);
 			}
 			IrMod => {
-				println!("\tmov rax, {}", REG64[lhs]);
-				println!("\tcqo");
-				println!("\tdiv {}", REG64[rhs]);
-				println!("\tmov {}, rdx", REG64[lhs]);
+				emit!("mov rax, {}", REG64[lhs]);
+				emit!("cqo");
+				emit!("div {}", REG64[rhs]);
+				emit!("mov {}, rdx", REG64[lhs]);
 			}
 			IrNeg => {
-				println!("\tneg {}", REG64[lhs]);
+				emit!("neg {}", REG64[lhs]);
 			}
 			IrNop => {},
 			_ => { panic!("unexpected IrOp in gen_x86"); }
@@ -226,27 +231,27 @@ pub fn gen(fun: &Function, label: usize) {
 	}
 	
 	println!("{}:", ret);
-	println!("\tpop r15");
-	println!("\tpop r14");
-	println!("\tpop r13");
-	println!("\tpop r12");
-	println!("\tmov rsp, rbp");
-	println!("\tpop rbp");
-	println!("\tret");
+	emit!("pop r15");
+	emit!("pop r14");
+	emit!("pop r13");
+	emit!("pop r12");
+	emit!("mov rsp, rbp");
+	emit!("pop rbp");
+	emit!("ret");
 }
 
 pub fn gen_x86(globals: Vec<Var>, funcs: Vec<Function>) {
 	
-	println!(".intel_syntax noprefix");
+	emit!(".intel_syntax noprefix");
 	
 	// global variable
-	println!(".data");
+	emit!(".data");
 	for gvar in &globals {
 		if gvar.is_extern {
 			continue;
 		}
 		println!("{}:", gvar.ident.clone());
-		println!("  .ascii \"{}\"", escape(gvar.strname.clone(), gvar.ctype.size));
+		emit!(".ascii \"{}\"", escape(gvar.strname.clone(), gvar.ctype.size));
 	}
 
 	for i in 0..funcs.len() {
