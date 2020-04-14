@@ -47,9 +47,7 @@ pub enum IrOp {
 	IrUnless,
 	IrJmp,
 	IrCall { name: String, len: usize, args: Vec<usize> },
-	IrStoreArgs8,
-	IrStoreArgs32,
-	IrStoreArgs64,
+	IrStoreArg(usize),
 	IrLt,
 	IrEqEq, 
 	IrNe,
@@ -113,6 +111,9 @@ impl Ir {
 			}
 			IrStore(_) => {
 				return IRINFO.lock().unwrap().get(&IrOp::IrStore(0)).unwrap().clone();
+			}
+			IrStoreArg(_) => {
+				return IRINFO.lock().unwrap().get(&IrOp::IrStoreArg(0)).unwrap().clone();
 			}
 			_ => {
 				return IRINFO.lock().unwrap().get(&self.op).unwrap().clone();
@@ -222,6 +223,10 @@ fn load(ctype: &Type, dst: usize, src: usize, code: &mut Vec<Ir>) {
 
 fn store(ctype: &Type, dst: usize, src: usize, code: &mut Vec<Ir>) {
 	code.push(Ir::new(IrOp::IrStore(ctype.size), dst, src));
+}
+
+fn store_arg(ctype: &Type, offset: usize, id: usize, code: &mut Vec<Ir>) {
+	code.push(Ir::new(IrOp::IrStoreArg(ctype.size), offset, id));
 }
 
 fn gen_binop(irop: IrOp, lhs: &Node, rhs: &Node, code: &mut Vec<Ir>) -> usize {
@@ -593,7 +598,7 @@ pub fn gen_ir(funcs: &Vec<Node>) -> Vec<Function> {
 				for i in 0..args.len() {
 					match &args[i].op {
 						NodeType::VarDef(ctype, .., offset, _) => {
-							code.push(Ir::new(ctype.store_arg_insn(), *offset, i));
+							store_arg(ctype, *offset, i, &mut code);
 						}
 						_ => { panic!("Illegal function parameter."); }
 					}

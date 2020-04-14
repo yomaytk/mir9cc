@@ -71,6 +71,12 @@ fn reg(size: usize, r: usize) -> &'static str {
 	else { return REG64[r]; }
 }
 
+fn argreg(size: usize, r: usize) -> &'static str {
+	if size == 1 { return ARGREG8[r]; }
+	else if size == 4 { return ARGREG32[r]; }
+	else { return ARGREG64[r]; }
+}
+
 pub fn gen(fun: &Function, label: usize) {
 
 	// program
@@ -171,14 +177,8 @@ pub fn gen(fun: &Function, label: usize) {
 				
 				emit!("mov {}, rax", REG64[lhs]);
 			}
-			IrStoreArgs8 => {
-				emit!("mov [rbp-{}], {}", lhs, ARGREG8[rhs]);
-			}
-			IrStoreArgs32 => {
-				emit!("mov [rbp-{}], {}", lhs, ARGREG32[rhs]);
-			}
-			IrStoreArgs64 => {
-				emit!("mov [rbp-{}], {}", lhs, ARGREG64[rhs]);
+			IrStoreArg(size) => {
+				emit!("mov [rbp-{}], {}", lhs, argreg(*size, rhs));
 			}
 			IrLt => {
 				emit_cmp(ir, String::from("setl"));

@@ -1,6 +1,5 @@
 use super::token::*;
 use super::token::TokenType::*;
-use super::gen_ir::IrOp;
 use std::collections::HashMap;
 use std::sync::Mutex;
 
@@ -127,21 +126,6 @@ impl Type {
 			offset: 0,
 			len,
 		}
-	}
-	pub fn choose_insn(&self, op8: IrOp, op32: IrOp, op64: IrOp) -> IrOp {
-		match self.size {
-			1 => { return op8; }
-			4 => { return op32; }
-			c => { 
-				if c != 8 {
-					panic!("{:?}", self)
-				}; 
-				return op64; 
-			}
-		}
-	}
-	pub fn store_arg_insn(&self) -> IrOp {
-		return self.choose_insn(IrOp::IrStoreArgs8, IrOp::IrStoreArgs32, IrOp::IrStoreArgs64);
 	}
 }
 
