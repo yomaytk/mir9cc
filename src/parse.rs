@@ -653,12 +653,19 @@ pub fn new_struct(mut members: Vec<Node>) -> Type {
 	return Type::new(Ty::STRUCT(members), None, None, ty_size ,ty_align , 0, 0);
 }
 
-pub fn type_exist(name: &str) -> bool {
-	if let Some(_) = ENV.lock().unwrap().typedefs.get(name) {
-		return true;
-	} else {
-		return false;
-	}
+fn assignment_op(tokens: &Vec<Token>, pos: &mut usize) -> Option<TokenType> {
+	if tokens[*pos].consume_ty(TokenAddEq, pos) { return Some(TokenAdd); }
+	else if tokens[*pos].consume_ty(TokenSubEq, pos) { return Some(TokenSub); }
+	else if tokens[*pos].consume_ty(TokenMulEq, pos) { return Some(TokenStar); }
+	else if tokens[*pos].consume_ty(TokenDivEq, pos) { return Some(TokenDiv); }
+	else if tokens[*pos].consume_ty(TokenModEq, pos) { return Some(TokenMod); }
+	else if tokens[*pos].consume_ty(TokenShlEq, pos) { return Some(TokenShl); }
+	else if tokens[*pos].consume_ty(TokenShrEq, pos) { return Some(TokenShr); }
+	else if tokens[*pos].consume_ty(TokenAndEq, pos) { return Some(TokenAmpersand); }
+	else if tokens[*pos].consume_ty(TokenOrEq, pos) { return Some(TokenOr); }
+	else if tokens[*pos].consume_ty(TokenXorEq, pos) { return Some(TokenXor); }
+	else if tokens[*pos].consume_ty(TokenEq, pos) { return Some(TokenEq); }
+	else { return None; }
 }
 
 fn primary(tokens: &Vec<Token>, pos: &mut usize) -> Node {
@@ -908,9 +915,18 @@ fn conditional(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 
 fn assign(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 	let mut lhs = conditional(tokens, pos);
-	if tokens[*pos].consume_ty(TokenEq, pos) {
+
+	if let Some(op) = assignment_op(tokens, pos) {
 		let rhs = logor(tokens, pos);
-		lhs = Node::new_eq(INT_TY.clone(), lhs, rhs);
+		match op {
+			TokenEq => {
+				lhs = Node::new_eq(NULL_TY.clone(), lhs, rhs);
+			}
+			_ => {
+				let llhs = Node::new_bit(NULL_TY.clone(), op, lhs.clone(), rhs);
+				lhs = Node::new_eq(NULL_TY.clone(), lhs, llhs);
+			}
+		}
 	}
 	return lhs;
 }
