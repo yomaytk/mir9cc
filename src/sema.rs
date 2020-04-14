@@ -199,14 +199,6 @@ pub fn walk(node: &Node, env: &mut Env, decay: bool) -> Node {
 			}
 			return Node::new_call(name.clone(), v);
 		}
-		Func(name, is_extern, args, body, _) => {
-			let mut argv = vec![];
-			for arg in args {
-				argv.push(walk(arg, env, true));
-			}
-			let body = walk(body, env, true);
-			return Node::new_func(name.clone(), *is_extern, argv, body, 0);
-		}
 		LogAnd(lhs, rhs) => { return Node::new_and(walk(lhs, env, true), walk(rhs, env, true)); }
 		LogOr(lhs, rhs) => { return Node::new_or(walk(lhs, env, true), walk(rhs, env, true)); }
 		For(init, cond, inc, body) => {
@@ -358,9 +350,14 @@ pub fn sema(nodes: &Vec<Node>) -> (Vec<Node>, Vec<Var>) {
 			continue;
 		}
 
-		match walk(topnode, &mut topenv, true).op {
-			Func(name, is_extern, args, body, _) => { 
-				node = Node::new_func(name.clone(), is_extern, args, *body, *STACKSIZE.lock().unwrap());
+		match &topnode.op {
+			Func(name, is_extern, args, body, _) => {
+				let mut argv = vec![];
+				for arg in args {
+					argv.push(walk(arg, &mut topenv, true));
+				}
+				let body = walk(body, &mut topenv, true);
+				node = Node::new_func(name.clone(), *is_extern, argv, body, *STACKSIZE.lock().unwrap());
 			}
 			NULL => { continue; }
 			_ => { panic!("funode should be NodeType::Func. "); }

@@ -31,7 +31,7 @@ pub static ARGREG32: [&str; 6] = ["edi", "esi", "edx", "ecx", "r8d", "r9d"];
 pub static ARGREG64: [&str; 6] = ["rdi", "rsi", "rdx", "rcx", "r8", "r9"];
 
 lazy_static! {
-	pub static ref ESCAPED: Mutex<HashMap<char, char>> = Mutex::new(hash![
+	pub static ref BACKSLASH_ESCAPED: Mutex<HashMap<char, char>> = Mutex::new(hash![
 		/*('b', '\b'), ('f', '\f'),*/ ('\n', 'n'), ('\r', 'r'),
 		('\t', 't'), ('\\', '\\'), ('\'', '\''), ('\"', '\"')
 	]);
@@ -43,7 +43,7 @@ fn escape(strname: String, len: usize) -> String {
 
 	for _ in 0..len {
 		if let Some(c) = p.next(){
-			if let Some(c2) = ESCAPED.lock().unwrap().get(&c) {
+			if let Some(c2) = BACKSLASH_ESCAPED.lock().unwrap().get(&c) {
 				name.push('\\');
 				name.push(*c2);
 			} else if c.is_ascii_graphic() || c == ' ' {
