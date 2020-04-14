@@ -3,6 +3,7 @@ use IrOp::*;
 use IrType::*;
 use super::parse::*;
 use super::ir_dump::{IrInfo, IRINFO};
+use super::lib::*;
 
 use std::sync::Mutex;
 use std::fmt;
@@ -589,6 +590,8 @@ fn gen_stmt(node: &Node, code: &mut Vec<Ir>) {
 		}
 		NodeType::Break => {
 			if *BREAK_LABEL.lock().unwrap() == 0 {
+				error(&format!("stray 'break' statement"));
+				// for debug.
 				panic!("stray 'break' statement");
 			}
 			jmp(*BREAK_LABEL.lock().unwrap(), code);
@@ -617,7 +620,11 @@ pub fn gen_ir(funcs: &Vec<Node>) -> Vec<Function> {
 						NodeType::VarDef(ctype, .., offset, _) => {
 							store_arg(ctype, *offset, i, &mut code);
 						}
-						_ => { panic!("Illegal function parameter."); }
+						_ => {
+							error(&format!("Illegal function parameter."));
+							// for debug. 
+							panic!("Illegal function parameter.");
+						}
 					}
 				}
 				gen_stmt(body, &mut code);

@@ -1,5 +1,6 @@
 use super::parse::{*, NodeType::*, INT_TY};
 use super::token::TokenType::*;
+use super::lib::*;
 use std::collections::HashMap;
 use std::sync::Mutex;
 
@@ -176,6 +177,8 @@ pub fn walk(node: &Node, env: &mut Env, decay: bool) -> Node {
 					return maybe_decay(gvar, decay);
 				}
 			}
+			error(&format!("\"{}\" is not defined.", name));
+			// for debug.
 			panic!("\"{}\" is not defined.", name);
 		}
 		EqTree(_, lhs, rhs) => {
@@ -233,11 +236,15 @@ pub fn walk(node: &Node, env: &mut Env, decay: bool) -> Node {
 			match ctype.ty {
 				Ty::PTR => { 
 					if let Ty::VOID = ctype.ptr_to.as_ref().unwrap().as_ref().ty {
-						panic!("cannot dereference void pointer.");
+						error("cannot dereference void pointer.");
 					}
 					return Node::new_deref(ctype.ptr_to.as_ref().unwrap().as_ref().clone(), lhs2); 
 				}
-				_ => { panic!("operand must be a pointer."); }
+				_ => {
+					error(&format!("operand must be a pointer."));
+					// for debug.
+					panic!("operand must be a pointer."); 
+				}
 			}
 		}
 		Addr(_, lhs) => {
@@ -288,7 +295,9 @@ pub fn walk(node: &Node, env: &mut Env, decay: bool) -> Node {
 			match expr2.nodesctype(None).ty {
 				Ty::STRUCT(members) => {
 					if members.is_empty() {
-						panic!("incomplete type.");
+						error("incomplete type.");
+						// for debug.
+						panic!("incomplete type.")
 					}
 					for membernode in members {
 						if let NodeType::VarDef(ctype, _, name2, ..) = membernode.op {
@@ -299,9 +308,14 @@ pub fn walk(node: &Node, env: &mut Env, decay: bool) -> Node {
 							return maybe_decay(lhs, decay);
 						}
 					}
+					error(&format!("member missing."));
+					// for debug.
 					panic!("member missing.");
 				}
-				_ => { panic!("struct expected before ."); }
+				_ => {
+					error(&format!("struct expected before ."));
+					// for debug.
+					panic!("struct expected before ."); }
 			}
 		}
 		Not(expr) => {

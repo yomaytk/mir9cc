@@ -1,6 +1,7 @@
 use TokenType::*;
 use std::collections::HashMap;
 use std::sync::Mutex;
+use super::lib::*;
 
 // Atomic unit in the grammar is called "token".
 // For example, `123`, `"abc"` and `while` are tokens.
@@ -192,15 +193,11 @@ impl<'a> Token<'a> {
 		}
 		return false;
 	}
-	pub fn expect(&self, c: &str, pos: &mut usize) -> bool {
-		if self.consume(c, pos) {
-			return true;
-		}
-		panic!("expect fun error: {} is expected, but got {}", c, &self.input[..self.val as usize]);
-	}
 	pub fn assert_ty(&self, ty: TokenType, pos: &mut usize) {
 		if !self.consume_ty(ty, pos) {
-			panic!("assertion failed at: {}", &self.input[..self.val as usize])
+			error(&format!("assertion failed at: {}", &self.input[..self.val as usize]));
+			// for debug.
+			panic!("assertion failed at: {}", &self.input[..self.val as usize]);
 		}
 	}
 	pub fn consume_ty(&self, ty: TokenType, pos: &mut usize) -> bool {
@@ -282,7 +279,7 @@ fn read_string<'a> (p: &mut core::str::Chars, pos: &mut usize, input: &'a String
 		}
 		let c2 = p.next().unwrap();
 		if c2 == '\0' {
-			panic!("PREMATURE end of input.");
+			error("premature end of input.");
 		} else if let Some(c3) = ESCAPED.lock().unwrap().get(&c2) {
 			sb.push(*c3);
 		} else {
@@ -296,7 +293,7 @@ fn read_string<'a> (p: &mut core::str::Chars, pos: &mut usize, input: &'a String
 
 fn read_char<'a> (p: &mut core::str::Chars, pos: &mut usize, input: &'a String) -> Token<'a> {
 	
-	let val;
+	let mut val = 0;
 	let start = *pos;
 
 	if let Some(c) = p.next() {
@@ -312,11 +309,11 @@ fn read_char<'a> (p: &mut core::str::Chars, pos: &mut usize, input: &'a String) 
 					val = c2 as i32;
 				}
 			} else {
-				panic!("premature end of input.");
+				error("premature end of input.");
 			}
 		}
 	} else {
-		panic!("unclosed char literal.");
+		error("unclosed char literal.");
 	}
 	assert!(p.next().unwrap() == '\'');
 	*pos += 1;
@@ -369,7 +366,7 @@ pub fn tokenize(input: &String) -> Vec<Token> {
 						break;
 					}
 				} else {
-					panic!("premature end of input.");
+					error("premature end of input.");
 				}
 			}
 			for _ in 0..(pos - start)-1 {
@@ -437,7 +434,7 @@ pub fn tokenize(input: &String) -> Vec<Token> {
 			pos += 1;
 			continue;
 		}
-		panic!("cannot scan at {}", &input[pos..]);
+		error(&format!("cannot scan at {}", &input[pos..]));
 	}
 
 	// guard

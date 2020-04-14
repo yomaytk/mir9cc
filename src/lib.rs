@@ -1,5 +1,5 @@
-// pub mod tok;
-// pub mod parse;
-// pub mod ir;
-// pub mod regalloc;
-// pub mod codegen;
+pub fn error(message: &str) {
+	eprintln!("Compile error.");
+	eprintln!("{}", message);
+	std::process::exit(1);
+}

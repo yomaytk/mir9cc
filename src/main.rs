@@ -36,7 +36,7 @@ fn main() {
 	
 	let mut dump_ir1 = false;
 	let mut dump_ir2 = false;
-
+	
 	if args.len() == 4 && args[1] == "-dump-ir1" && args[2] == "-dump-ir2" {
 		dump_ir1 = true;
 		dump_ir2 = true;
