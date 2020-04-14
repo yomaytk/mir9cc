@@ -140,9 +140,6 @@ impl Type {
 			}
 		}
 	}
-	pub fn load_insn(&self) -> IrOp {
-		return self.choose_insn(IrOp::IrLoad8, IrOp::IrLoad32, IrOp::IrLoad64);
-	}
 	pub fn store_insn(&self) -> IrOp {
 		return self.choose_insn( IrOp::IrStore8, IrOp::IrStore32, IrOp::IrStore64);
 	}

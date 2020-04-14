@@ -44,9 +44,7 @@ pub enum IrOp {
 	IrStore8,
 	IrStore32,
 	IrStore64,
-	IrLoad8,
-	IrLoad32,
-	IrLoad64,
+	IrLoad(usize),
 	IrLabel,
 	IrUnless,
 	IrJmp,
@@ -79,7 +77,7 @@ pub struct Ir {
 }
 
 impl Ir {
-	fn new(ty: IrOp, lhs: usize, rhs: usize) -> Self {
+	pub fn new(ty: IrOp, lhs: usize, rhs: usize) -> Self {
 		Self {
 			op: ty,
 			lhs: lhs,
@@ -112,6 +110,9 @@ impl Ir {
 			IrLabelAddr(_) => {
 				return IRINFO.lock().unwrap().get(&IrOp::IrLabelAddr(String::new())).unwrap().clone();
 			}
+			IrLoad(_) => {
+				return IRINFO.lock().unwrap().get(&IrOp::IrLoad(0)).unwrap().clone();
+			}
 			_ => {
 				return IRINFO.lock().unwrap().get(&self.op).unwrap().clone();
 			}
@@ -143,6 +144,12 @@ impl Ir {
 			Imm => { format!("{} {}", irinfo.name, self.lhs) },
 			ImmImm => { format!("{} {} {}", irinfo.name, self.lhs, self.rhs) }
 			LabelAddr => { format!("{} r{} .L.str{}", irinfo.name, self.lhs, self.rhs) }
+			IrMem => { 
+				match self.op {
+					IrLoad(size) => { format!("{}{} r{} r{}", irinfo.name, size, self.lhs, self.rhs) }
+					_ => { panic!("tostr IrMem error."); }
+				} 
+			}
 		}
 	}
 }
@@ -159,6 +166,7 @@ pub enum IrType {
 	Imm,
 	ImmImm,
 	LabelAddr,
+	IrMem,
 }
 
 impl fmt::Display for IrType {
@@ -174,6 +182,7 @@ impl fmt::Display for IrType {
 			Imm => { write!(f, "Imm") },
 			ImmImm => { write!(f, "ImmImm") },
 			LabelAddr => { write!(f, "LabelAddr") },
+			IrMem => { write!(f, "IrMem") },
 		}
 	}
 }
@@ -206,6 +215,10 @@ fn jmp(x: usize, code: &mut Vec<Ir>) {
 	code.push(Ir::new(IrJmp, x, 0));
 }
 
+fn load(ctype: &Type, dst: usize, src: usize, code: &mut Vec<Ir>) {
+	code.push(Ir::new(IrOp::IrLoad(ctype.size), dst, src));
+}
+
 fn gen_binop(irop: IrOp, lhs: &Node, rhs: &Node, code: &mut Vec<Ir>) -> usize {
 	let r1 = gen_expr(lhs, code);
 	let r2 = gen_expr(rhs, code);
@@ -224,7 +237,7 @@ fn gen_inc_scale(ctype: &Type) -> usize {
 fn gen_pre_inc(ctype: &Type, lhs: &Node, code: &mut Vec<Ir>, num: i32) -> usize {
 	let r1 = gen_lval(lhs, code);
 	let r2 = new_regno();
-	code.push(Ir::new(ctype.load_insn(), r2, r1));
+	load(ctype, r2, r1, code);
 	code.push(Ir::new(IrAddImm, r2, num as usize * gen_inc_scale(ctype)));
 	code.push(Ir::new(ctype.store_insn(), r1, r2));
 	kill(r1, code);
@@ -346,7 +359,7 @@ fn gen_expr(node: &Node, code: &mut Vec<Ir>) -> usize {
 		},
 		NodeType::Lvar(ctype, _) | NodeType::Gvar(ctype, _) | NodeType::Dot(ctype, ..) => {
 			let lhi = gen_lval(node, code);
-			code.push(Ir::new(ctype.load_insn(), lhi, lhi));
+			load(ctype, lhi, lhi, code);
 			return lhi;
 		},
 		NodeType::EqTree(ctype, lhs, rhs) => {
@@ -374,7 +387,7 @@ fn gen_expr(node: &Node, code: &mut Vec<Ir>) -> usize {
 		}
 		NodeType::Deref(_, lhs) => {
 			let r = gen_expr(lhs, code);
-			code.push(Ir::new(lhs.nodesctype(None).ptr_to.unwrap().load_insn(), r, r));
+			load(lhs.nodesctype(None).ptr_to.unwrap().as_ref(), r, r, code);
 			return r;
 		}
 		NodeType::Addr(_, lhs) => {

@@ -65,6 +65,12 @@ fn emit_cmp(ir: &Ir, insn: String) {
 	emit!("movzb {}, {}", REG64[ir.lhs], REG8[ir.lhs]);
 }
 
+fn reg(size: usize, r: usize) -> &'static str {
+	if size == 1 { return REG8[r]; }
+	else if size == 4 { return REG32[r]; }
+	else { return REG64[r]; }
+}
+
 pub fn gen(fun: &Function, label: usize) {
 
 	// program
@@ -140,15 +146,11 @@ pub fn gen(fun: &Function, label: usize) {
 			IrStore64 => {
 				emit!("mov [{}], {}", REG64[lhs], REG64[rhs]);
 			}
-			IrLoad8 => {
-				emit!("mov {}, [{}]", REG8[lhs], REG64[rhs]);
-				emit!("movzb {}, {}", REG64[lhs], REG8[rhs]);
-			}
-			IrLoad32 => {
-				emit!("mov {}, [{}]", REG32[lhs], REG64[rhs]);
-			}
-			IrLoad64 => {
-				emit!("mov {}, [{}]", REG64[lhs], REG64[rhs]);
+			IrLoad(size) => {
+				emit!("mov {}, [{}]", reg(*size, lhs), REG64[rhs]);
+				if *size == 1 {
+					emit!("movzb {}, {}", REG64[lhs], REG8[rhs]);
+				}
 			}
 			IrUnless => {
 				emit!("cmp {}, 0", REG64[lhs]);

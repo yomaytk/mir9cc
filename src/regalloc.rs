@@ -47,7 +47,7 @@ pub fn visit(reg_map: &mut Vec<i32>, used: &mut Vec<bool>, irs: &mut Vec<Ir>) {
 			Reg | RegImm | RegLabel | LabelAddr => {
 				ir.lhs = alloc(reg_map, used, ir.lhs);
 			},
-			RegReg => {
+			RegReg | IrMem => {
 				ir.lhs = alloc(reg_map, used, ir.lhs);
 				ir.rhs = alloc(reg_map, used, ir.rhs);
 			},
