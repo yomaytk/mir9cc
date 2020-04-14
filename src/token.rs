@@ -74,6 +74,7 @@ pub static SIGNALS: &[Signal] = &[
 	Signal::new("|", TokenOr),
 	Signal::new("^", TokenXor),
 	Signal::new("%", TokenMod),
+	Signal::new("~", TokenTilde),
 ];
 
 #[derive(Debug, PartialEq, Clone)]
@@ -141,6 +142,7 @@ pub enum TokenType {
 	TokenAndEq,
 	TokenOrEq,
 	TokenXorEq,
+	TokenTilde,
 	TokenNoSignal,
 	TokenEof,
 }

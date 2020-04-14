@@ -46,7 +46,7 @@ pub fn visit(reg_map: &mut Vec<i32>, used: &mut Vec<bool>, irs: &mut Vec<Ir>) {
 		match info.ty {
 			Binary => {
 				match ir.op {
-					IrAdd(is_imm) | IrSub(is_imm) | IrMul(is_imm) => {
+					IrAdd(is_imm) | IrSub(is_imm) | IrMul(is_imm) | IrXor(is_imm, _)=> {
 						if is_imm {
 							ir.lhs = alloc(reg_map, used, ir.lhs);
 						} else {

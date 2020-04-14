@@ -205,8 +205,12 @@ pub fn gen(fun: &Function, label: usize) {
 			IrOr => {
 				emit!("or {}, {}", REG64[lhs], REG64[rhs]);
 			}
-			IrXor => {
-				emit!("xor {}, {}", REG64[lhs], REG64[rhs]);
+			IrXor(is_imm, posneg) => {
+				if *is_imm {
+					emit!("xor {}, {}", REG64[lhs], rhs as i32 * *posneg);
+				} else {
+					emit!("xor {}, {}", REG64[lhs], REG64[rhs]);
+				}
 			}
 			IrAnd => {
 				emit!("and {}, {}", REG64[lhs], REG64[rhs]);

@@ -209,6 +209,9 @@ int main() {
 
 	EXPECT(0-3, -3);
 
+	EXPECT(-1, ~0);
+	EXPECT(-4, ~3);
+
 	EXPECT(3, ({ int i = 3; return i++; }));
 	EXPECT(4, ({ int i = 3; return ++i; }));
 	EXPECT(3, ({ int i = 3; return i--; }));

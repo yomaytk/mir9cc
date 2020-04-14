@@ -51,7 +51,7 @@ pub enum IrOp {
 	IrIf,
 	IrLabelAddr(String),
 	IrOr,
-	IrXor,
+	IrXor(bool, i32),
 	IrAnd,
 	IrLe,
 	IrShl,
@@ -90,7 +90,7 @@ impl Ir {
 			TokenMod => { IrMod },
 			TokenAmpersand => { IrAnd },
 			TokenOr => { IrOr },
-			TokenXor => { IrXor },
+			TokenXor => { IrXor(false, 1) },
 			TokenEof => { panic!("tokeneof!!!"); }
 			_ => { panic!("bittype error."); }
 		}
@@ -115,14 +115,17 @@ impl Ir {
 			IrStoreArg(_) => {
 				return IRINFO.lock().unwrap().get(&IrOp::IrStoreArg(0)).unwrap().clone();
 			}
-			IrAdd(is_imm) => {
-				return IRINFO.lock().unwrap().get(&IrOp::IrAdd(*is_imm)).unwrap().clone();
+			IrAdd(_) => {
+				return IRINFO.lock().unwrap().get(&IrOp::IrAdd(true)).unwrap().clone();
 			}
-			IrSub(is_imm) => {
-				return IRINFO.lock().unwrap().get(&IrOp::IrSub(*is_imm)).unwrap().clone();
+			IrSub(_) => {
+				return IRINFO.lock().unwrap().get(&IrOp::IrSub(true)).unwrap().clone();
 			}
-			IrMul(is_imm) => {
-				return IRINFO.lock().unwrap().get(&IrOp::IrMul(*is_imm)).unwrap().clone();
+			IrMul(_) => {
+				return IRINFO.lock().unwrap().get(&IrOp::IrMul(true)).unwrap().clone();
+			}
+			IrXor(_, _) => {
+				return IRINFO.lock().unwrap().get(&IrOp::IrXor(true, 0)).unwrap().clone();
 			}
 			_ => {
 				return IRINFO.lock().unwrap().get(&self.op).unwrap().clone();
@@ -380,6 +383,11 @@ fn gen_expr(node: &Node, code: &mut Vec<Ir>) -> usize {
 						let size_of = ctype.ptr_to.as_ref().unwrap().size;
 						code.push(Ir::new(IrMul(true), rhi, size_of));
 					}
+				}
+				TokenTilde => {
+					kill(rhi, code);
+					code.push(Ir::new(IrXor(true, -1), lhi, 1));
+					return lhi;
 				}
 				_ => {}
 			}

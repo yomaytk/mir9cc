@@ -781,6 +781,9 @@ fn unary(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 	if tokens[*pos].consume_ty(TokenNot, pos) {
 		return Node::new_not(unary(tokens, pos));
 	}
+	if tokens[*pos].consume_ty(TokenTilde, pos) {
+		return Node::new_bit(NULL_TY.clone(), TokenTilde, unary(tokens, pos), Node::new_num(1));
+	}
 	return postfix(tokens, pos);
 }
 
