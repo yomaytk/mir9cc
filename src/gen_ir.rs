@@ -41,9 +41,7 @@ pub enum IrOp {
 	IrDiv,
 	IrRet,
 	IrExpr,
-	IrStore8,
-	IrStore32,
-	IrStore64,
+	IrStore(usize),
 	IrLoad(usize),
 	IrLabel,
 	IrUnless,
@@ -112,6 +110,9 @@ impl Ir {
 			}
 			IrLoad(_) => {
 				return IRINFO.lock().unwrap().get(&IrOp::IrLoad(0)).unwrap().clone();
+			}
+			IrStore(_) => {
+				return IRINFO.lock().unwrap().get(&IrOp::IrStore(0)).unwrap().clone();
 			}
 			_ => {
 				return IRINFO.lock().unwrap().get(&self.op).unwrap().clone();
@@ -219,6 +220,10 @@ fn load(ctype: &Type, dst: usize, src: usize, code: &mut Vec<Ir>) {
 	code.push(Ir::new(IrOp::IrLoad(ctype.size), dst, src));
 }
 
+fn store(ctype: &Type, dst: usize, src: usize, code: &mut Vec<Ir>) {
+	code.push(Ir::new(IrOp::IrStore(ctype.size), dst, src));
+}
+
 fn gen_binop(irop: IrOp, lhs: &Node, rhs: &Node, code: &mut Vec<Ir>) -> usize {
 	let r1 = gen_expr(lhs, code);
 	let r2 = gen_expr(rhs, code);
@@ -239,7 +244,7 @@ fn gen_pre_inc(ctype: &Type, lhs: &Node, code: &mut Vec<Ir>, num: i32) -> usize 
 	let r2 = new_regno();
 	load(ctype, r2, r1, code);
 	code.push(Ir::new(IrAddImm, r2, num as usize * gen_inc_scale(ctype)));
-	code.push(Ir::new(ctype.store_insn(), r1, r2));
+	store(ctype, r1, r2, code);
 	kill(r1, code);
 	return r2;
 }
@@ -365,7 +370,7 @@ fn gen_expr(node: &Node, code: &mut Vec<Ir>) -> usize {
 		NodeType::EqTree(ctype, lhs, rhs) => {
 			let lhi = gen_lval(lhs, code);
 			let rhi = gen_expr(rhs, code);
-			code.push(Ir::new(ctype.store_insn(), lhi, rhi));
+			store(ctype, lhi, rhi, code);
 			kill(rhi, code);
 			return lhi;
 		},
@@ -555,7 +560,7 @@ fn gen_stmt(node: &Node, code: &mut Vec<Ir>) {
 				let r2 = gen_expr(rhs, code);
 				let r1 = new_regno();
 				code.push(Ir::new(IrBpRel, r1, *off));
-				code.push(Ir::new(ctype.store_insn(), r1, r2));
+				store(ctype, r1, r2, code);
 				kill(r1, code);
 				kill(r2, code);
 			}

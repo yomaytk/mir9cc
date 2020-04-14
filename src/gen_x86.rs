@@ -137,14 +137,8 @@ pub fn gen(fun: &Function, label: usize) {
 				emit!("mov rax, {}", REG64[lhs]);
 				emit!("jmp {}", ret);
 			}
-			IrStore8 => {
-				emit!("mov [{}], {}", REG64[lhs], REG8[rhs]);
-			}
-			IrStore32 => {
-				emit!("mov [{}], {}", REG64[lhs], REG32[rhs]);
-			}
-			IrStore64 => {
-				emit!("mov [{}], {}", REG64[lhs], REG64[rhs]);
+			IrStore(size) => {
+				emit!("mov [{}], {}", REG64[lhs], reg(*size, rhs));
 			}
 			IrLoad(size) => {
 				emit!("mov {}, [{}]", reg(*size, lhs), REG64[rhs]);
