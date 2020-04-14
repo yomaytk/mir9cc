@@ -1,1 +1,1 @@
-Since function definitions are allowed only at the toplevel,
+Since function definitions are allowed only at the toplevel, we don't have to handle it in walk().
