@@ -917,7 +917,7 @@ fn assign(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 	let mut lhs = conditional(tokens, pos);
 
 	if let Some(op) = assignment_op(tokens, pos) {
-		let rhs = logor(tokens, pos);
+		let rhs = assign(tokens, pos);
 		match op {
 			TokenEq => {
 				lhs = Node::new_eq(NULL_TY.clone(), lhs, rhs);

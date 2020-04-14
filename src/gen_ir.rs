@@ -396,8 +396,8 @@ fn gen_expr(node: &Node, code: &mut Vec<Ir>) -> usize {
 			let lhi = gen_lval(lhs, code);
 			let rhi = gen_expr(rhs, code);
 			store(ctype, lhi, rhi, code);
-			kill(rhi, code);
-			return lhi;
+			kill(lhi, code);
+			return rhi;
 		},
 		NodeType::Call(ident, callarg) => {
 			let mut args = vec![];
