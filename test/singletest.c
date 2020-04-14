@@ -1,11 +1,3 @@
 int main() {
-	int a = 0;
-	for (int i = 0;i < 10;i++) {
-		for(int j = 0;j < 10;j++) {
-			if(j == 5) {
-				break;
-			}
-			a++;
-		}
-	}
+	int ary[2]; ary[0]=1; ary[1]=2; int *p=ary; return *++p;
 }

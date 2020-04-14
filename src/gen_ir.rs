@@ -463,9 +463,7 @@ fn gen_expr(node: &Node, code: &mut Vec<Ir>) -> usize {
 			return r;
 		}
 		NodeType::IncDec(ctype, selector, lhs) => {
-			if *selector == 1 { return gen_pre_inc(ctype, lhs, code, 1); }
-			else if *selector == 2 { return gen_pre_inc(ctype, lhs, code, -1); }
-			else if *selector == 3 { return gen_post_inc(ctype, lhs, code, 1); }
+			if *selector == 1 { return gen_post_inc(ctype, lhs, code, 1); }
 			else { return gen_post_inc(ctype, lhs, code, -1); }
 		}
 		NodeType::StmtExpr(_, body) => {

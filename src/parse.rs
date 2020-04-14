@@ -337,7 +337,8 @@ impl Node {
 			| NodeType::Deref(ctype,..) | NodeType::Addr(ctype, ..) 
 			| NodeType::Sizeof(ctype, ..) | NodeType::Str(ctype, ..)
 			| NodeType::Gvar(ctype,..) | NodeType::Dot(ctype, ..) 
-			| NodeType::Ternary(ctype, ..) | NodeType::IncDec(ctype, ..) => { 
+			| NodeType::Ternary(ctype, ..) | NodeType::IncDec(ctype, ..) 
+			| NodeType::EqTree(ctype, ..) => { 
 				return ctype.clone(); 
 			}
 			_ => { 
@@ -724,10 +725,10 @@ fn postfix(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 
 	loop {
 		if tokens[*pos].consume_ty(TokenInc, pos) {
-			lhs = Node::new_incdec(NULL_TY.clone(), 3, lhs);
+			lhs = Node::new_incdec(NULL_TY.clone(), 1, lhs);
 		}
 		if tokens[*pos].consume_ty(TokenDec, pos) {
-			lhs = Node::new_incdec(NULL_TY.clone(), 4, lhs);
+			lhs = Node::new_incdec(NULL_TY.clone(), 2, lhs);
 		}
 		// struct member
 		if tokens[*pos].consume_ty(TokenDot, pos) {
@@ -753,10 +754,14 @@ fn postfix(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 fn unary(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 	
 	if tokens[*pos].consume_ty(TokenInc, pos) {
-		return Node::new_incdec(NULL_TY.clone(), 1, unary(tokens, pos));
+		let lhs = unary(tokens, pos);
+		let rhs = Node::new_bit(NULL_TY.clone(), TokenAdd, lhs.clone(), Node::new_num(1));
+		return Node::new_eq(NULL_TY.clone(), lhs, rhs);
 	}
 	if tokens[*pos].consume_ty(TokenDec, pos) {
-		return Node::new_incdec(NULL_TY.clone(), 2, unary(tokens, pos));
+		let lhs = unary(tokens, pos);
+		let rhs = Node::new_bit(NULL_TY.clone(), TokenSub, lhs.clone(), Node::new_num(1));
+		return Node::new_eq(NULL_TY.clone(), lhs, rhs);
 	}
 	if tokens[*pos].consume_ty(TokenSub, pos) {
 		return Node::new_neg(unary(tokens, pos));
