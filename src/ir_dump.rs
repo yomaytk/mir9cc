@@ -16,12 +16,12 @@ macro_rules! hash {
 
 lazy_static! {
     pub static ref IRINFO: Mutex<HashMap<IrOp, IrInfo>> = Mutex::new(hash![
-		(IrOp::IrAdd, IrInfo::new("ADD", IrType::RegReg)),
-		(IrOp::IrAddImm, IrInfo::new("ADDIMM", IrType::Reg)),
-		(IrOp::IrSub, IrInfo::new("SUB", IrType::RegReg)),
-		(IrOp::IrSubImm, IrInfo::new("SUBIMM", IrType::Reg)),
-		(IrOp::IrMul, IrInfo::new("MUL", IrType::RegReg)),
-		(IrOp::IrMulImm, IrInfo::new("MULIMM", IrType::Reg)),
+		(IrOp::IrAdd(false), IrInfo::new("ADD", IrType::RegReg)),
+		(IrOp::IrAdd(true), IrInfo::new("ADD", IrType::Binary)),
+		(IrOp::IrSub(false), IrInfo::new("SUB", IrType::RegReg)),
+		(IrOp::IrSub(true), IrInfo::new("SUB", IrType::Binary)),
+		(IrOp::IrMul(false), IrInfo::new("MUL", IrType::RegReg)),
+		(IrOp::IrMul(true), IrInfo::new("MUL", IrType::Binary)),
 		(IrOp::IrDiv, IrInfo::new("DIV", IrType::RegReg)),
 		(IrOp::IrLt, IrInfo::new("LT", IrType::RegReg)),
 		(IrOp::IrLe, IrInfo::new("LE", IrType::RegReg)),

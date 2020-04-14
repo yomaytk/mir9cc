@@ -31,13 +31,10 @@ lazy_static! {
 pub enum IrOp {
 	IrImm,
 	IrMov,
-	IrAdd,
-	IrAddImm,
+	IrAdd(bool),
 	IrBpRel,
-	IrSub,
-	IrSubImm,
-	IrMul,
-	IrMulImm,
+	IrSub(bool),
+	IrMul(bool),
 	IrDiv,
 	IrRet,
 	IrExpr,
@@ -82,9 +79,9 @@ impl Ir {
 	}
 	fn bittype(ty: TokenType) -> IrOp {
 		match ty {
-			TokenAdd => { IrAdd },
-			TokenSub => { IrSub },
-			TokenStar => { IrMul },
+			TokenAdd => { IrAdd(false) },
+			TokenSub => { IrSub(false) },
+			TokenStar => { IrMul(false) },
 			TokenDiv => { IrDiv },
 			TokenLt => { IrLt },
 			TokenLe => { IrLe },
@@ -114,6 +111,15 @@ impl Ir {
 			}
 			IrStoreArg(_) => {
 				return IRINFO.lock().unwrap().get(&IrOp::IrStoreArg(0)).unwrap().clone();
+			}
+			IrAdd(is_imm) => {
+				return IRINFO.lock().unwrap().get(&IrOp::IrAdd(*is_imm)).unwrap().clone();
+			}
+			IrSub(is_imm) => {
+				return IRINFO.lock().unwrap().get(&IrOp::IrSub(*is_imm)).unwrap().clone();
+			}
+			IrMul(is_imm) => {
+				return IRINFO.lock().unwrap().get(&IrOp::IrMul(*is_imm)).unwrap().clone();
 			}
 			_ => {
 				return IRINFO.lock().unwrap().get(&self.op).unwrap().clone();
@@ -146,11 +152,20 @@ impl Ir {
 			Imm => { format!("{} {}", irinfo.name, self.lhs) },
 			ImmImm => { format!("{} {} {}", irinfo.name, self.lhs, self.rhs) }
 			LabelAddr => { format!("{} r{} .L.str{}", irinfo.name, self.lhs, self.rhs) }
-			IrMem => { 
+			Mem => { 
 				match self.op {
-					IrLoad(size) => { format!("{}{} r{} r{}", irinfo.name, size, self.lhs, self.rhs) }
-					_ => { panic!("tostr IrMem error."); }
+					IrLoad(size) | IrStore(size) | IrStoreArg(size) => { format!("{}{} r{} r{}", irinfo.name, size, self.lhs, self.rhs) }
+					_ => { panic!("tostr Mem error."); }
 				} 
+			}
+			Binary => {
+				match self.op {
+					IrAdd(is_imm) | IrSub(is_imm) | IrMul(is_imm) => {
+						if is_imm { format!("{} r{}, {}", irinfo.name, self.lhs, self.rhs) }
+						else { format!("{} r{}, r{}", irinfo.name, self.lhs, self.rhs) }
+					}
+					_ => { panic!("tostr IrBinary error."); }
+				}
 			}
 		}
 	}
@@ -168,7 +183,8 @@ pub enum IrType {
 	Imm,
 	ImmImm,
 	LabelAddr,
-	IrMem,
+	Mem,
+	Binary,
 }
 
 impl fmt::Display for IrType {
@@ -184,7 +200,8 @@ impl fmt::Display for IrType {
 			Imm => { write!(f, "Imm") },
 			ImmImm => { write!(f, "ImmImm") },
 			LabelAddr => { write!(f, "LabelAddr") },
-			IrMem => { write!(f, "IrMem") },
+			Mem => { write!(f, "Mem") },
+			Binary => { write!(f, "Binary") },
 		}
 	}
 }
@@ -248,7 +265,7 @@ fn gen_pre_inc(ctype: &Type, lhs: &Node, code: &mut Vec<Ir>, num: i32) -> usize 
 	let r1 = gen_lval(lhs, code);
 	let r2 = new_regno();
 	load(ctype, r2, r1, code);
-	code.push(Ir::new(IrAddImm, r2, num as usize * gen_inc_scale(ctype)));
+	code.push(Ir::new(IrAdd(true), r2, num as usize * gen_inc_scale(ctype)));
 	store(ctype, r1, r2, code);
 	kill(r1, code);
 	return r2;
@@ -256,7 +273,7 @@ fn gen_pre_inc(ctype: &Type, lhs: &Node, code: &mut Vec<Ir>, num: i32) -> usize 
 
 fn gen_post_inc(ctype: &Type, lhs: &Node, code: &mut Vec<Ir>, num: i32) -> usize {
 	let r = gen_pre_inc(ctype, lhs, code, num);
-	code.push(Ir::new(IrSubImm, r, num as usize * gen_inc_scale(ctype)));
+	code.push(Ir::new(IrSub(true), r, num as usize * gen_inc_scale(ctype)));
 	return r;
 }
 
@@ -306,7 +323,7 @@ fn gen_lval(node: &Node, code: &mut Vec<Ir>) -> usize {
 		}
 		NodeType::Dot(_, expr, _, offset) => {
 			let r1 = gen_lval(expr, code);
-			code.push(Ir::new(IrAddImm, r1, *offset));
+			code.push(Ir::new(IrAdd(true), r1, *offset));
 			return r1;
 		}
 		_ => { panic!("not an lvalue")}
@@ -358,7 +375,7 @@ fn gen_expr(node: &Node, code: &mut Vec<Ir>) -> usize {
 				TokenAdd | TokenSub => {
 					if let Ty::PTR = ctype.ty {
 						let size_of = ctype.ptr_to.as_ref().unwrap().size;
-						code.push(Ir::new(IrMulImm, rhi, size_of));
+						code.push(Ir::new(IrMul(true), rhi, size_of));
 					}
 				}
 				_ => {}

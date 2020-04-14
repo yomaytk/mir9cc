@@ -103,34 +103,37 @@ pub fn gen(fun: &Function, label: usize) {
 			IrMov => {
 				emit!("mov {}, {}", REG64[lhs], REG64[rhs]);
 			}
-			IrAdd => {
-				emit!("add {}, {}", REG64[lhs], REG64[rhs]);
+			IrAdd(is_imm) => {
+				if *is_imm {
+					emit!("add {}, {}", REG64[lhs], rhs);
+				} else {
+					emit!("add {}, {}", REG64[lhs], REG64[rhs]);
+				}
 			}
-			IrAddImm => {
-				emit!("add {}, {}", REG64[lhs], rhs);
-			}
-			IrSub => {
-				emit!("sub {}, {}", REG64[lhs], REG64[rhs]);
-			}
-			IrSubImm => {
-				emit!("sub {}, {}", REG64[lhs], rhs);
+			IrSub(is_imm) => {
+				if *is_imm {
+					emit!("sub {}, {}", REG64[lhs], rhs);
+				} else {
+					emit!("sub {}, {}", REG64[lhs], REG64[rhs]);
+				}
 			}
 			IrBpRel => {
 				emit!("lea {}, [rbp-{}]", REG64[lhs], rhs);
 			}
-			IrMul => {
-				emit!("mov rax, {}", REG64[rhs]);
-				emit!("mul {}", REG64[lhs]);
-				emit!("mov {}, rax", REG64[lhs]);
-			}
-			IrMulImm => {
-				if rhs < 256 && rhs.count_ones() == 1 {
-					emit!("shl {}, {}", REG64[lhs], rhs.trailing_zeros());
-					continue;
+			IrMul(is_imm) => {
+				if !*is_imm {
+					emit!("mov rax, {}", REG64[rhs]);
+					emit!("mul {}", REG64[lhs]);
+					emit!("mov {}, rax", REG64[lhs]);
+				} else {
+					if rhs < 256 && rhs.count_ones() == 1 {
+						emit!("shl {}, {}", REG64[lhs], rhs.trailing_zeros());
+						continue;
+					}
+					emit!("mov rax, {}", rhs);
+					emit!("mul {}", REG64[lhs]);
+					emit!("mov {}, rax", REG64[lhs]);
 				}
-				emit!("mov rax, {}", rhs);
-				emit!("mul {}", REG64[lhs]);
-				emit!("mov {}, rax", REG64[lhs]);
 			}
 			IrDiv => {
 				emit!("mov rax, {}", REG64[lhs]);

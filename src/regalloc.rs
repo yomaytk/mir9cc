@@ -44,10 +44,23 @@ pub fn visit(reg_map: &mut Vec<i32>, used: &mut Vec<bool>, irs: &mut Vec<Ir>) {
 	for ir in irs {
 		let info = ir.get_irinfo();
 		match info.ty {
+			Binary => {
+				match ir.op {
+					IrAdd(is_imm) | IrSub(is_imm) | IrMul(is_imm) => {
+						if is_imm {
+							ir.lhs = alloc(reg_map, used, ir.lhs);
+						} else {
+							ir.lhs = alloc(reg_map, used, ir.lhs);
+							ir.rhs = alloc(reg_map, used, ir.rhs);
+						}
+					}
+					_ => { panic!("binary visit error."); }
+				}
+			}
 			Reg | RegImm | RegLabel | LabelAddr => {
 				ir.lhs = alloc(reg_map, used, ir.lhs);
 			},
-			RegReg | IrMem => {
+			RegReg | Mem => {
 				ir.lhs = alloc(reg_map, used, ir.lhs);
 				ir.rhs = alloc(reg_map, used, ir.rhs);
 			},
