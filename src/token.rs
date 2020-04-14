@@ -195,7 +195,7 @@ impl<'a> Token<'a> {
 	}
 	pub fn assert_ty(&self, ty: TokenType, pos: &mut usize) {
 		if !self.consume_ty(ty, pos) {
-			error(&format!("assertion failed at: {}", &self.input[..self.val as usize]));
+			// error(&format!("assertion failed at: {}", &self.input[..self.val as usize]));
 			// for debug.
 			panic!("assertion failed at: {}", &self.input[..self.val as usize]);
 		}
@@ -259,7 +259,7 @@ fn strtol(p: &mut core::str::Chars, pos: &mut usize, c: char) -> i32 {
 	num_str.parse::<i32>().unwrap()
 }
 
-fn read_string<'a> (p: &mut core::str::Chars, pos: &mut usize, input: &'a String) -> Token<'a> {
+fn read_string<'a> (p: &mut core::str::Chars, pos: &mut usize, input: &'a str) -> Token<'a> {
 
 	let mut len = 0;
 	let start = *pos;
@@ -291,7 +291,7 @@ fn read_string<'a> (p: &mut core::str::Chars, pos: &mut usize, input: &'a String
 	return Token::new(TokenString(sb), len, &input[start..]);
 }
 
-fn read_char<'a> (p: &mut core::str::Chars, pos: &mut usize, input: &'a String) -> Token<'a> {
+fn read_char<'a> (p: &mut core::str::Chars, pos: &mut usize, input: &'a str) -> Token<'a> {
 	
 	let mut val = 0;
 	let start = *pos;
@@ -320,13 +320,95 @@ fn read_char<'a> (p: &mut core::str::Chars, pos: &mut usize, input: &'a String) 
 	return Token::new(TokenNum, val, &input[start..]);
 }
 
-pub fn tokenize(input: &String) -> Vec<Token> {
+fn line_comment(p: &mut core::str::Chars, pos: &mut usize) {
+	let start = *pos;
+	*pos += 2;
+	let mut pp = p.clone();
+	pp.next();
+	while let Some(c) = pp.next() {
+		*pos += 1;
+		if c == '\n' {
+			break;
+		}
+	}
+	for _ in 0..(*pos - start)-1 {
+		p.next();
+	}
+	return;
+}
+
+fn block_comment<'a>(p: &mut core::str::Chars, pos: &mut usize, input: &'a str) {
+	let start = *pos;
+	*pos += 2;
+	let mut pp = p.clone();
+	pp.next();
+	loop {
+		if let Some(c) = pp.next() {
+			*pos += 1;
+			if c == '*' && &input[*pos..*pos+1] == "/" {
+				*pos += 1;
+				break;
+			}
+		} else {
+			error("premature end of input.");
+		}
+	}
+	for _ in 0..(*pos - start)-1 {
+		p.next();
+	}
+	return;
+}
+
+fn signal<'a>(p: &mut core::str::Chars, pos: &mut usize, input: &'a str) -> Option<Token<'a>> {
+	for signal in &SIGNALS[..] {
+		let len = signal.name.len();
+		if input.len() >= *pos+len && *signal.name == input[*pos..*pos+len] {
+			let token = Token::new(signal.ty.clone(), len as i32, &input[*pos..]);
+			*pos += len;
+			for _ in 0..len-1 { p.next(); }
+			return Some(token);
+		}
+	}
+	return None;
+}
+
+fn ident<'a>(p: &mut core::str::Chars, pos: &mut usize, input: &'a str, c: char) -> Token<'a> {
+	let mut ident = String::new();
+	ident.push(c);
+	let mut len = 1;
+	let mut pp = p.clone();
+	let possub = *pos;
+	loop {
+		if let Some(cc) = pp.next() {
+			if !cc.is_alphabetic() && !cc.is_ascii_digit() && cc != '_'{
+				break;
+			}
+			p.next();
+			ident.push(cc);
+			len += 1;
+			*pos += 1;
+		}
+	}
+	let token = Token::new(TokenType::from(ident), len, &input[possub..]);
+	*pos += 1;
+	return token;
+}
+
+fn number<'a>(p: &mut core::str::Chars, pos: &mut usize, input: &'a str, c: char) -> Token<'a> {
+	let possub = *pos;
+	let num = strtol(p, pos, c);
+	let token = Token::new(TokenNum, num, &input[possub..]);
+	*pos += 1;
+	return token;
+}
+
+pub fn tokenize(input: &str) -> Vec<Token> {
 	
 	let mut tokens: Vec<Token> = vec![];
 	let mut pos = 0;
 	let mut p = input.chars();
 
-	'outer: while let Some(c) = p.next() {
+	while let Some(c) = p.next() {
 
 		// space
 		if c.is_whitespace() {
@@ -336,42 +418,13 @@ pub fn tokenize(input: &String) -> Vec<Token> {
 
 		// Line Comment
 		if c == '/' && &input[pos+1..pos+2] == "/" {
-			let start = pos;
-			pos += 2;
-			let mut pp = p.clone();
-			pp.next();
-			while let Some(c) = pp.next() {
-				pos += 1;
-				if c == '\n' {
-					break;
-				}
-			}
-			for _ in 0..(pos - start)-1 {
-				p.next();
-			}
+			line_comment(&mut p, &mut pos);
 			continue;
 		}
 
 		// Block Comment
 		if c == '/' && &input[pos+1..pos+2] == "*" {
-			let start = pos;
-			pos += 2;
-			let mut pp = p.clone();
-			pp.next();
-			loop {
-				if let Some(c) = pp.next() {
-					pos += 1;
-					if c == '*' && &input[pos..pos+1] == "/" {
-						pos += 1;
-						break;
-					}
-				} else {
-					error("premature end of input.");
-				}
-			}
-			for _ in 0..(pos - start)-1 {
-				p.next();
-			}
+			block_comment(&mut p, &mut pos, &input);
 			continue;
 		}
 
@@ -390,50 +443,23 @@ pub fn tokenize(input: &String) -> Vec<Token> {
 		}
 		
 		// signal
-		for signal in &SIGNALS[..] {
-			let len = signal.name.len();
-			if input.len() >= pos+len && *signal.name == input[pos..pos+len] {
-				let token = Token::new(signal.ty.clone(), len as i32, &input[pos..]);
-				tokens.push(token);
-				pos += len;
-				for _ in 0..len-1 { p.next(); }
-				continue 'outer;
-			}
+		if let Some(token) = signal(&mut p, &mut pos, &input) {
+			tokens.push(token);
+			continue;
 		}
 
 		// ident
 		if c.is_alphabetic() || c == '_' {
-			let mut ident = String::new();
-			ident.push(c);
-			let mut len = 1;
-			let mut pp = p.clone();
-			let possub = pos;
-			loop {
-				if let Some(cc) = pp.next() {
-					if !cc.is_alphabetic() && !cc.is_ascii_digit() && cc != '_'{
-						break;
-					}
-					p.next();
-					ident.push(cc);
-					len += 1;
-					pos += 1;
-				}
-			}
-			let token = Token::new(TokenType::from(ident), len, &input[possub..]);
-			tokens.push(token);
-			pos += 1;
+			tokens.push(ident(&mut p, &mut pos, &input, c));
 			continue;
 		}
 		
 		// number
 		if c.is_digit(10) {
-			let possub = pos;
-			let num = strtol(&mut p, &mut pos, c);
-			let token = Token::new(TokenNum, num, &input[possub..]);
-			tokens.push(token);
-			pos += 1;
+			tokens.push(number(&mut p, &mut pos, &input, c));
 			continue;
 		}
+
 		error(&format!("cannot scan at {}", &input[pos..]));
 	}
 

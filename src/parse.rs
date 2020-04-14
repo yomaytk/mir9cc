@@ -1,6 +1,6 @@
 use super::token::*;
 use super::token::TokenType::*;
-use super::lib::*;
+// use super::lib::*;
 use std::collections::HashMap;
 use std::sync::Mutex;
 
@@ -355,7 +355,11 @@ impl Node {
 	pub fn checklval(&self) {
 		match &self.op {
 			NodeType::Lvar(..) | NodeType::Gvar(..) | NodeType::Deref(..) | NodeType::Dot(..) => {}
-			_ => { error("not an lvalue"); }
+			_ => { 
+				// error("not an lvalue");
+				// for debug.
+				panic!("not an lvalue");
+			}
 		}
 	}
 
@@ -620,7 +624,9 @@ pub fn read_type(tokens: &Vec<Token>,  pos: &mut usize) -> Type {
 		}
 		if members.is_empty() {
 			if tag.is_empty() {
-				error("bat struct definition.");
+				// error("bat struct definition.");
+				// for debug.
+				panic!("bat struct definition.");
 			} else {
 				env_find!(tag.clone(), tags, STRUCT_TY.clone());
 			}
@@ -717,7 +723,7 @@ fn primary(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 		*pos += 1;
 		return Node::new_string(cty, strname, 0);
 	}
-	error(&format!("parse.rs: primary parse fail. and got {}", tokens[*pos].input));
+	// error(&format!("parse.rs: primary parse fail. and got {}", tokens[*pos].input));
 	// for debug.
 	panic!("parse.rs: primary parse fail. and got {}", tokens[*pos].input);
 }
@@ -971,7 +977,7 @@ fn read_array(tokens: &Vec<Token>, pos: &mut usize, ty: Type) -> Type {
 			tokens[*pos].assert_ty(TokenLeftmiddleBrace, pos);
 			continue;
 		}
-		error(&format!("array declaration is invalid at {}.", tokens[*pos].input));
+		// error(&format!("array declaration is invalid at {}.", tokens[*pos].input));
 		// for debug.
 		panic!("array declaration is invalid at {}.", tokens[*pos].input);
 	}
@@ -988,7 +994,7 @@ fn read_array(tokens: &Vec<Token>, pos: &mut usize, ty: Type) -> Type {
 fn ident(tokens: &Vec<Token>, pos: &mut usize) -> String {
 	let name = String::from(&tokens[*pos].input[..tokens[*pos].val as usize]);
 	if !tokens[*pos].consume_ty(TokenIdent, pos) {
-		error(&format!("should be identifier at {}", &tokens[*pos].input[*pos..]));
+		// error(&format!("should be identifier at {}", &tokens[*pos].input[*pos..]));
 		// for debug.
 		panic!("should be identifier at {}", &tokens[*pos].input[*pos..]);
 	}
@@ -1006,7 +1012,7 @@ fn decl(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 	ty = read_array(tokens, pos, ty);
 	
 	if let Ty::VOID = ty.ty {
-		error(&format!("void variable. {}", name));
+		// error(&format!("void variable. {}", name));
 		// for debug.
 		panic!("void variable. {}", name);
 	}
@@ -1181,7 +1187,7 @@ pub fn toplevel(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 	// function
 	if tokens[*pos].consume_ty(TokenRightBrac, pos){
 		if is_typedef {
-			error(&format!("typedef {} has function definition.", name));
+			// error(&format!("typedef {} has function definition.", name));
 			// for debug.
 			panic!("typedef {} has function definition.", name);
 		}
