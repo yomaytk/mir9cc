@@ -88,6 +88,9 @@ impl Ir {
 			TokenShl => { IrShl },
 			TokenShr => { IrShr },
 			TokenMod => { IrMod },
+			TokenAmpersand => { IrAnd },
+			TokenOr => { IrOr },
+			TokenXor => { IrXor },
 			TokenEof => { panic!("tokeneof!!!"); }
 			_ => { panic!("bittype error."); }
 		}
@@ -453,15 +456,6 @@ fn gen_expr(node: &Node, code: &mut Vec<Ir>) -> usize {
 		NodeType::TupleExpr(_, lhs, rhs) => {
 			kill(gen_expr(lhs, code), code);
 			return gen_expr(rhs, code);
-		}
-		NodeType::BitOr(_, lhs, rhs) => {
-			return gen_binop(IrOr, lhs, rhs, code);
-		}
-		NodeType::BitXor(_, lhs, rhs) => {
-			return gen_binop(IrXor, lhs, rhs, code);
-		}
-		NodeType::BitAnd(_, lhs, rhs) => {
-			return gen_binop(IrAnd, lhs, rhs, code);
 		}
 		NodeType::Neg(expr) => {
 			let r = gen_expr(expr, code);

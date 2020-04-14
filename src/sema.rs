@@ -325,15 +325,6 @@ pub fn walk(node: &Node, env: &mut Env, decay: bool) -> Node {
 		TupleExpr(_, lhs, rhs) => {
 			return binwalk(Node::new_tuple, lhs, rhs, env, 1);
 		}
-		BitOr(_, lhs, rhs) => {
-			return binwalk(Node::new_bitor, lhs, rhs, env, -1);
-		}
-		BitXor(_, lhs, rhs) => {
-			return binwalk(Node::new_bitxor, lhs, rhs, env, -1);
-		}
-		BitAnd(_, lhs, rhs) => {
-			return binwalk(Node::new_bitand, lhs, rhs, env, -1);
-		}
 		Neg(expr) => {
 			return Node::new_neg(walk(expr, env, true));
 		}

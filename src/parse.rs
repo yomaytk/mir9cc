@@ -172,9 +172,6 @@ pub enum NodeType {
 	Not(Box<Node>),																// Not(expr)
 	Ternary(Type, Box<Node>, Box<Node>, Box<Node>),								// Ternary(ctype, cond, then, els)
 	TupleExpr(Type, Box<Node>, Box<Node>),										// TupleExpr(ctype, lhs, rhs)
-	BitOr(Type, Box<Node>, Box<Node>),											// BitOr(ctype, lhs, rhs)
-	BitXor(Type, Box<Node>, Box<Node>),											// BixXor(ctype, lhs, rhs)
-	BitAnd(Type, Box<Node>, Box<Node>),											// BitAnd(ctype, lhs, rhs)
 	Neg(Box<Node>),																// Neg(expr)
 	IncDec(Type, i32, Box<Node>),												// IncDec(ctype, selector, expr)
 	Break,																		// Break
@@ -313,18 +310,6 @@ impl NodeType {
 		NodeType::TupleExpr(ctype, Box::new(lhs), Box::new(rhs))
 	}
 
-	fn bitor_init(ctype: Type, lhs: Node, rhs: Node) -> Self {
-		NodeType::BitOr(ctype, Box::new(lhs), Box::new(rhs))
-	}
-
-	fn bitxor_init(ctype: Type, lhs: Node, rhs: Node) -> Self {
-		NodeType::BitXor(ctype, Box::new(lhs), Box::new(rhs))
-	}
-
-	fn bitand_init(ctype: Type, lhs: Node, rhs: Node) -> Self {
-		NodeType::BitAnd(ctype, Box::new(lhs), Box::new(rhs))
-	}
-
 	fn neg_init(expr: Node) -> Self {
 		NodeType::Neg(Box::new(expr))
 	}
@@ -352,9 +337,7 @@ impl Node {
 			| NodeType::Deref(ctype,..) | NodeType::Addr(ctype, ..) 
 			| NodeType::Sizeof(ctype, ..) | NodeType::Str(ctype, ..)
 			| NodeType::Gvar(ctype,..) | NodeType::Dot(ctype, ..) 
-			| NodeType::Ternary(ctype, ..) | NodeType::BitOr(ctype, ..) 
-			| NodeType::BitXor(ctype, ..) | NodeType::BitAnd(ctype, ..) 
-			| NodeType::IncDec(ctype, ..) => { 
+			| NodeType::Ternary(ctype, ..) | NodeType::IncDec(ctype, ..) => { 
 				return ctype.clone(); 
 			}
 			_ => { 
@@ -551,24 +534,6 @@ impl Node {
 	pub fn new_tuple(ctype: Type, lhs: Node, rhs: Node) -> Self {
 		Self {
 			op: NodeType::tuple_init(ctype, lhs, rhs)
-		}
-	}
-
-	pub fn new_bitor(ctype: Type, lhs: Node, rhs: Node) -> Self {
-		Self {
-			op: NodeType::bitor_init(ctype, lhs, rhs)
-		}
-	}
-
-	pub fn new_bitxor(ctype: Type, lhs: Node, rhs: Node) -> Self {
-		Self {
-			op: NodeType::bitxor_init(ctype, lhs, rhs)
-		}
-	}
-
-	pub fn new_bitand(ctype: Type, lhs: Node, rhs: Node) -> Self {
-		Self {
-			op: NodeType::bitand_init(ctype, lhs, rhs)
 		}
 	}
 
@@ -889,7 +854,7 @@ fn bitand(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 	let mut lhs = equarity(tokens, pos);
 
 	while tokens[*pos].consume_ty(TokenAmpersand, pos) {
-		lhs = Node::new_bitand(INT_TY.clone(), lhs, equarity(tokens, pos));
+		lhs = Node::new_bit(INT_TY.clone(), TokenAmpersand, lhs, equarity(tokens, pos));
 	}
 	return lhs;
 }
@@ -898,7 +863,7 @@ fn bitxor(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 	let mut lhs = bitand(tokens, pos);
 
 	while tokens[*pos].consume_ty(TokenXor, pos) {
-		lhs = Node::new_bitxor(INT_TY.clone(), lhs, bitand(tokens, pos));
+		lhs = Node::new_bit(INT_TY.clone(), TokenXor, lhs, bitand(tokens, pos));
 	}
 	return lhs;
 }
@@ -907,7 +872,7 @@ fn bitor(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 	let mut lhs = bitxor(tokens, pos);
 
 	while tokens[*pos].consume_ty(TokenOr, pos) {
-		lhs = Node::new_bitor(INT_TY.clone(), lhs, bitxor(tokens, pos));
+		lhs = Node::new_bit(INT_TY.clone(), TokenOr, lhs, bitxor(tokens, pos));
 	}
 	return lhs;
 }
