@@ -261,20 +261,17 @@ fn strtol(p: &mut core::str::Chars, pos: &mut usize, c: char) -> i32 {
 
 fn read_string<'a> (p: &mut core::str::Chars, pos: &mut usize, input: &'a str) -> Token<'a> {
 
-	let mut len = 0;
 	let start = *pos;
 	let mut sb = String::new();
 
 	while let Some(c) = p.next() {
 		if c == '"'	{
-			len += 1;
 			*pos += 1;
 			break;
 		}
 		if c != '\\' {
 			sb.push(c);
 			*pos += 1;
-			len += 1;
 			continue;
 		}
 		let c2 = p.next().unwrap();
@@ -286,9 +283,8 @@ fn read_string<'a> (p: &mut core::str::Chars, pos: &mut usize, input: &'a str) -
 			sb.push(c2.clone());
 		}
 		*pos += 2;
-		len += 2;
 	}
-	return Token::new(TokenString(sb), len, &input[start..]);
+	return Token::new(TokenString(sb), 0, &input[start..]);
 }
 
 fn read_char<'a> (p: &mut core::str::Chars, pos: &mut usize, input: &'a str) -> Token<'a> {
@@ -438,7 +434,17 @@ pub fn tokenize(input: &str) -> Vec<Token> {
 		// string literal
 		if c == '"' {
 			pos += 1;
-			tokens.push(read_string(&mut p, &mut pos, &input));
+			let mut string_token = read_string(&mut p, &mut pos, &input);
+			if !tokens.is_empty() {
+				if let (TokenString(s1), TokenString(s2)) = (&tokens.last().unwrap().ty, &string_token.ty) {
+					let s = format!("{}{}", s1, s2);
+					tokens.pop();
+					string_token.ty = TokenString(s);
+					tokens.push(string_token);
+					continue;
+				}
+			}
+			tokens.push(string_token);
 			continue;
 		}
 		
