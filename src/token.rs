@@ -398,11 +398,78 @@ fn number<'a>(p: &mut core::str::Chars, pos: &mut usize, input: &'a str, c: char
 		return hexadecimal(p, pos, input);
 	}
 	
-	let possub = *pos;
-	let num = strtol(p, pos, c);
-	let token = Token::new(TokenNum, num, &input[possub..]);
+	if c == '0' {
+		*pos += 1;
+		return octal(p, pos, input);
+	}
+
 	*pos += 1;
-	return token;
+	return decimal(p, pos, input, c);
+	// let possub = *pos;
+	// let num = strtol(p, pos, c);
+	// let token = Token::new(TokenNum, num, &input[possub..]);
+	// *pos += 1;
+	// return token;
+}
+
+fn hexadecimal<'a>(p: &mut core::str::Chars, pos: &mut usize, input: &'a str) -> Token<'a>{
+
+	let mut pp = p.clone();
+	let mut ishex = false;
+	let mut num = 0;
+	let possub = *pos;
+
+	while let Some(c) = pp.next() {
+		match (ishex, c) {
+			(_, '0' ..= '9') => { p.next(); num = num * 16 + c as i32 - '9' as i32; }
+			(_, 'a' ..= 'f') => { p.next(); num = num * 16 + c as i32 - 'a' as i32 + 10; }
+			(_, 'A' ..= 'F') => { p.next(); num = num * 16 + c as i32 - 'A' as i32 + 10; }
+			(true, _) => { break; }
+			(false, _) => { error(&format!("bad hexadecimal number at {}..", &input[*pos..*pos+5])); }
+		}
+		ishex = true;
+		*pos += 1;
+	}
+
+	return Token::new(TokenNum, num, &input[possub..]);
+}
+
+fn decimal<'a>(p: &mut core::str::Chars, pos: &mut usize, input: &'a str, c: char) -> Token<'a>{
+
+	let mut pp = p.clone();
+	let possub = *pos;
+	let mut num = c as i32 - '0' as i32;
+
+	while let Some(c) = pp.next() {
+		if let '0' ..= '9' = c {
+			num = num * 10 + c as i32 - '0' as i32;
+			p.next();
+			*pos += 1;
+			continue;
+		}
+		break;
+	}
+
+	return Token::new(TokenNum, num, &input[possub..]);
+}
+
+fn octal<'a>(p: &mut core::str::Chars, pos: &mut usize, input: &'a str) -> Token<'a>{
+
+	let mut pp = p.clone();
+	let possub = *pos;
+	let mut num = 0;
+
+	while let Some(c) = pp.next() {
+		if let '0' ..= '9' = c {
+			num = num * 8 + c as i32 - '0' as i32;
+			p.next();
+			*pos += 1;
+			continue;
+		}
+		break;
+	}
+
+	return Token::new(TokenNum, num, &input[possub..]);
 }
 
 fn remove_backslash_or_crlf_newline(input: &mut String) {
@@ -428,27 +495,6 @@ fn remove_backslash_or_crlf_newline(input: &mut String) {
 	}
 }
 
-fn hexadecimal<'a>(p: &mut core::str::Chars, pos: &mut usize, input: &'a str) -> Token<'a>{
-
-	let mut pp = p.clone();
-	let mut ishex = false;
-	let mut num = 0;
-	let possub = *pos;
-
-	while let Some(c) = pp.next() {
-		match (ishex, c) {
-			(_, '0' ..= '9') => { p.next(); num = num * 16 + c as i32 - '9' as i32; }
-			(_, 'a' ..= 'f') => { p.next(); num = num * 16 + c as i32 - 'a' as i32 + 10; }
-			(_, 'A' ..= 'F') => { p.next(); num = num * 16 + c as i32 - 'A' as i32 + 10; }
-			(true, _) => { break; }
-			(false, _) => { error(&format!("bad hexadecimal number at {}..", &input[*pos..*pos+5])); }
-		}
-		ishex = true;
-		*pos += 1;
-	}
-
-	return Token::new(TokenNum, num, &input[possub..]);
-}
 
 pub fn scan(input: &str) -> Vec<Token> {
 	

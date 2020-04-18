@@ -249,10 +249,10 @@ pub fn gen(fun: &Function, label: usize) {
 
 pub fn gen_x86(globals: Vec<Var>, funcs: Vec<Function>) {
 	
-	emit!(".intel_syntax noprefix");
+	println!(".intel_syntax noprefix");
 	
 	// global variable
-	emit!(".data");
+	println!(".data");
 	for gvar in &globals {
 		if gvar.is_extern {
 			continue;
