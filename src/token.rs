@@ -398,12 +398,16 @@ fn number<'a>(p: &mut core::str::Chars, pos: &mut usize, input: &'a str, c: char
 	return token;
 }
 
-pub fn remove_backslash_newline(input: &mut String) {
+pub fn remove_backslash_or_crlf_newline(input: &mut String) {
 	let mut i = 0;
 	loop {
 		match (input.get(i..i+1), input.get(i+1..i+2)) {
 			(Some("\\"), Some("\n")) => {
 				input.remove(i);
+				input.remove(i);
+				continue;
+			}
+			(Some("\r"), Some("\n")) => {
 				input.remove(i);
 				continue;
 			}
@@ -496,7 +500,7 @@ pub fn scan(input: &str) -> Vec<Token> {
 }
 
 pub fn tokenize(input: &mut String) -> Vec<Token> {
-	remove_backslash_newline(input);
+	remove_backslash_or_crlf_newline(input);
 	let tokens = scan(&input[..]);
 	return tokens;
 }
