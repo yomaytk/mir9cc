@@ -398,7 +398,26 @@ fn number<'a>(p: &mut core::str::Chars, pos: &mut usize, input: &'a str, c: char
 	return token;
 }
 
-pub fn tokenize(input: &str) -> Vec<Token> {
+pub fn remove_backslash_newline(input: &mut String) {
+	let mut i = 0;
+	loop {
+		match (input.get(i..i+1), input.get(i+1..i+2)) {
+			(Some("\\"), Some("\n")) => {
+				input.remove(i);
+				input.remove(i);
+				continue;
+			}
+			(Some(_), _) => {
+				i += 1;
+			}
+			(None, _) => {
+				break;
+			}
+		}
+	}
+}
+
+pub fn scan(input: &str) -> Vec<Token> {
 	
 	let mut tokens: Vec<Token> = vec![];
 	let mut pos = 0;
@@ -417,7 +436,7 @@ pub fn tokenize(input: &str) -> Vec<Token> {
 			line_comment(&mut p, &mut pos);
 			continue;
 		}
-
+		
 		// Block Comment
 		if c == '/' && &input[pos+1..pos+2] == "*" {
 			block_comment(&mut p, &mut pos, &input);
@@ -473,5 +492,11 @@ pub fn tokenize(input: &str) -> Vec<Token> {
 	let token = Token::new(TokenEof, 0, &input[pos..]);
 	tokens.push(token);
 	
-	tokens
+	return tokens;
+}
+
+pub fn tokenize(input: &mut String) -> Vec<Token> {
+	remove_backslash_newline(input);
+	let tokens = scan(&input[..]);
+	return tokens;
 }
