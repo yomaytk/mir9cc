@@ -240,25 +240,6 @@ impl Signal {
 	}
 }
 
-// return next number
-fn strtol(p: &mut core::str::Chars, pos: &mut usize, c: char) -> i32 {
-
-	let mut pp = p.clone();
-	let mut num_str = String::from("");
-	num_str.push(c);
-
-	while let Some(c) = pp.next() {
-		if c.is_ascii_digit() {
-			num_str.push(c);
-			p.next();
-			*pos += 1;
-			continue;
-		}
-		break;
-	}
-	num_str.parse::<i32>().unwrap()
-}
-
 fn read_string<'a> (p: &mut core::str::Chars, pos: &mut usize, input: &'a str) -> Token<'a> {
 
 	let start = *pos;

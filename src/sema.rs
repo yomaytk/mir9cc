@@ -244,7 +244,7 @@ pub fn walk(node: &Node, env: &mut Env, decay: bool) -> Node {
 				_ => {
 					// error(&format!("operand must be a pointer."));
 					// for debug.
-					panic!("operand must be a pointer."); 
+					panic!("operand must be a pointer.");
 				}
 			}
 		}
