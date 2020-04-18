@@ -1,11 +1,4 @@
 int main() {
-	// Single-line comment test
-
-/***************************
- * Multi-line comment test *
- ***************************/				
-	// int ary[2]; ary[0]=1; ary[1]=2; int *p=ary; return *++p;
-	// int \
-	a = 1;
-	return 0xBEEF;
+	
+	int ary[5][5]; ary[2][3]=3; ary[3][4]=5; return add2(ary);
 }

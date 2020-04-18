@@ -92,16 +92,15 @@ impl Env {
 }
 
 pub fn maybe_decay(node: Node, decay: bool) -> Node {
-	match &node.op {
-		Lvar(ctype, ..) | Gvar(ctype, ..) | Dot(ctype, ..) => {
-			match ctype.ty {
-				Ty::ARY if decay => {
-					return Node::new_addr(ctype.ary_to.as_ref().unwrap().as_ref().clone().ptr_to(), node);
-				}
-				_ => { return node; }
-			}
+	let ctype = node.nodesctype(None);
+	match node.nodesctype(None).ty {
+		Ty::ARY if decay => {
+			return Node::new_addr(ctype.ary_to.as_ref().unwrap().as_ref().clone().ptr_to(), node);
 		}
-		_ => { panic!("maybe_decay type error"); }
+		Ty::NULL => {
+			panic!("maybe_decay type error");
+		}
+		_ => { return node; }
 	}
 }
 
@@ -240,7 +239,7 @@ pub fn walk(node: &Node, env: &mut Env, decay: bool) -> Node {
 						// for debug.
 						panic!("cannot dereference void pointer.");
 					}
-					return Node::new_deref(ctype.ptr_to.as_ref().unwrap().as_ref().clone(), lhs2); 
+					return maybe_decay(Node::new_deref(ctype.ptr_to.as_ref().unwrap().as_ref().clone(), lhs2), decay); 
 				}
 				_ => {
 					// error(&format!("operand must be a pointer."));
