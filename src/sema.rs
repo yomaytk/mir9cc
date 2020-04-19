@@ -98,7 +98,7 @@ pub fn maybe_decay(node: Node, decay: bool) -> Node {
 			return Node::new_addr(ctype.ary_to.as_ref().unwrap().as_ref().clone().ptr_to(), node);
 		}
 		Ty::NULL => {
-			panic!("maybe_decay type error");
+			panic!("maybe_decay type error {:#?}", node);
 		}
 		_ => { return node; }
 	}
@@ -367,6 +367,7 @@ pub fn sema(nodes: &Vec<Node>) -> (Vec<Node>, Vec<Var>) {
 
 		match &topnode.op {
 			Func(name, is_extern, args, body, _) => {
+				*STACKSIZE.lock().unwrap() = 0;
 				let mut argv = vec![];
 				for arg in args {
 					argv.push(walk(arg, &mut topenv, true));

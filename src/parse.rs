@@ -339,7 +339,7 @@ impl Node {
 			| NodeType::Sizeof(ctype, ..) | NodeType::Str(ctype, ..)
 			| NodeType::Gvar(ctype,..) | NodeType::Dot(ctype, ..) 
 			| NodeType::Ternary(ctype, ..) | NodeType::IncDec(ctype, ..) 
-			| NodeType::EqTree(ctype, ..) => { 
+			| NodeType::EqTree(ctype, ..) | NodeType::VarDef(ctype, ..) => { 
 				return ctype.clone(); 
 			}
 			_ => { 
@@ -594,7 +594,7 @@ pub fn roundup(x: usize, align: usize) -> usize {
 	return (x + align - 1) & !(align - 1);
 }
 
-pub fn read_type(tokens: &Vec<Token>,  pos: &mut usize) -> Type {
+pub fn decl_specifiers(tokens: &Vec<Token>,  pos: &mut usize) -> Type {
 	if tokens[*pos].consume_ty(TokenIdent, pos) {
 		*pos -= 1;
 		let name = ident(tokens, pos);
@@ -619,23 +619,25 @@ pub fn read_type(tokens: &Vec<Token>,  pos: &mut usize) -> Type {
 		// struct member
 		if tokens[*pos].consume_ty(TokenRightCurlyBrace, pos) {
 			while !tokens[*pos].consume_ty(TokenLeftCurlyBrace, pos) {
-				members.push(decl(tokens, pos));
+				members.push(declaration(tokens, pos));
 			}
 		}
-		if members.is_empty() {
-			if tag.is_empty() {
+		match (members.is_empty(), tag.is_empty()) {
+			(true, true) => {
 				// error("bat struct definition.");
 				// for debug.
 				panic!("bat struct definition.");
-			} else {
+			}
+			(true, false) => {
 				env_find!(tag.clone(), tags, STRUCT_TY.clone());
 			}
-		} else {
-			let struct_type = new_struct(members);
-			if !tag.is_empty() {
-				ENV.lock().unwrap().tags.insert(tag, struct_type.clone());
+			(false, c) => {
+				let struct_type = new_struct(members);
+				if !c {
+					ENV.lock().unwrap().tags.insert(tag, struct_type.clone());
+				}
+				return struct_type;
 			}
-			return struct_type;
 		}
 	}
 	if tokens[*pos].consume_ty(TokenVoid, pos) {
@@ -956,14 +958,14 @@ fn expr(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 	return lhs;
 }
 
-fn ctype(tokens: &Vec<Token>, pos: &mut usize) -> Type {
+fn declarator(tokens: &Vec<Token>, pos: &mut usize, mut ty: Type) -> Node {
 	
-	let mut ty = read_type(tokens, pos);
-
 	while tokens[*pos].consume_ty(TokenStar, pos) {
 		ty = ty.ptr_to();
 	}
-	return ty;
+	
+	return direct_decl(tokens, pos, ty);
+
 }
 
 fn read_array(tokens: &Vec<Token>, pos: &mut usize, ty: Type) -> Type {
@@ -996,35 +998,81 @@ fn ident(tokens: &Vec<Token>, pos: &mut usize) -> String {
 	if !tokens[*pos].consume_ty(TokenIdent, pos) {
 		// error(&format!("should be identifier at {}", &tokens[*pos].input[*pos..]));
 		// for debug.
-		panic!("should be identifier at {}", &tokens[*pos].input[*pos..]);
+		panic!("should be identifier at {}", &tokens[*pos].input[..]);
 	}
 	return name;
 }
 
-fn decl(tokens: &Vec<Token>, pos: &mut usize) -> Node {
-	// declaration type
-	let mut ty = ctype(tokens, pos);
+fn decl_init(tokens: &Vec<Token>, pos: &mut usize, node: &mut Node) {
+	if let NodeType::VarDef(_, _, _, _, ref mut init) = node.op {
+		if tokens[*pos].consume_ty(TokenEq, pos) {
+			let rhs = assign(tokens, pos);
+			std::mem::replace(init, Some(Box::new(rhs)));
+		}
+	}
+	return;
+}
 
-	// identifier
-	let name = ident(tokens, pos);
+fn new_ptr_to_replace_type(ctype: &Type, true_ty: Type) -> Type {
+	match ctype.ty {
+		Ty::NULL => {
+			return true_ty;
+		}
+		_ => {
+			return Type::new(
+				ctype.ty.clone(),
+				Some(Box::new(new_ptr_to_replace_type(ctype.ptr_to.as_ref().unwrap().as_ref(), true_ty))),
+				ctype.ary_to.clone(),
+				ctype.size,
+				ctype.align,
+				ctype.offset,
+				ctype.len
+			)
+		}
+	}
+}
 
-	// array decralation
-	ty = read_array(tokens, pos, ty);
+fn direct_decl(tokens: &Vec<Token>, pos: &mut usize, mut ty: Type) -> Node {
+
+	let mut ident_node;
 	
-	if let Ty::VOID = ty.ty {
-		// error(&format!("void variable. {}", name));
-		// for debug.
-		panic!("void variable. {}", name);
-	}
+	if tokens[*pos].consume_ty(TokenIdent, pos) {
+		*pos -= 1;
+		let name = ident(tokens, pos);
+		ty = read_array(tokens, pos, ty);
+		ident_node = Node::new_vardef(ty, false, name, 0, None);
+	} else if tokens[*pos].consume_ty(TokenRightBrac, pos) {
+		ident_node = declarator(tokens, pos, NULL_TY.clone());
+		tokens[*pos].assert_ty(TokenLeftBrac, pos);
+		
+		let true_ty = read_array(tokens, pos, ty);
+		let ident_node_true_ty = new_ptr_to_replace_type(&ident_node.nodesctype(None), true_ty);
 
-	if tokens[*pos].consume_ty(TokenEq, pos) {
-		let rhs = assign(tokens, pos);
-		tokens[*pos].assert_ty(TokenSemi, pos);
-		return Node::new_vardef(ty, false, name, 0, Some(rhs));
+		if let NodeType::VarDef(_, false, name, offset, init) = ident_node.op {
+			let op = NodeType::VarDef(ident_node_true_ty, false, name, offset, init);
+			return Node { op };
+		} else {
+			panic!("direct_decl fun error.");
+		}
 	} else {
-		tokens[*pos].assert_ty(TokenSemi, pos);
-		return Node::new_vardef(ty, false, name, 0, None);
+		// for debug
+		panic!("bad direct declarator at {}", &tokens[*pos].input[..]);
+		// error(&format!("bad direct declarator at {}", &tokens[*pos].input[..]));
 	}
+	
+	decl_init(tokens, pos, &mut ident_node);
+	return ident_node;
+}
+
+fn declaration(tokens: &Vec<Token>, pos: &mut usize) -> Node {
+
+	// declaration type
+	let ty = decl_specifiers(tokens, pos);
+
+	let ident_node = declarator(tokens, pos, ty);
+	tokens[*pos].assert_ty(TokenSemi, pos);
+	// panic!("{:#?}", ident_node);
+	return ident_node;
 }
 
 fn expr_stmt(tokens: &Vec<Token>, pos: &mut usize) -> Node {
@@ -1061,7 +1109,7 @@ pub fn stmt(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 			let init;
 			if tokens[*pos].is_typename(pos) {
 				*pos -= 1;
-				init = decl(tokens, pos);
+				init = declaration(tokens, pos);
 			} else if tokens[*pos].consume_ty(TokenSemi, pos) {
 				init = Node::new_null();
 			} else {
@@ -1109,7 +1157,7 @@ pub fn stmt(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 			return Node::new_stmt(compstmts);
 		}
 		TokenInt | TokenChar | TokenStruct => {
-			return decl(tokens, pos);
+			return declaration(tokens, pos);
 		}
 		TokenSemi => {
 			*pos += 1;
@@ -1117,7 +1165,7 @@ pub fn stmt(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 		}
 		TokenTypedef => {
 			*pos += 1;
-			let lhs = decl(tokens, pos);
+			let lhs = declaration(tokens, pos);
 			if let NodeType::VarDef(ctype, _, name, _, None) = lhs.op {
 				ENV.lock().unwrap().typedefs.insert(name, ctype);
 				return Node::new_null();
@@ -1132,7 +1180,7 @@ pub fn stmt(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 			if tokens[*pos].consume_ty(TokenIdent, pos) {
 				if tokens[*pos].consume_ty(TokenIdent, pos) {
 					*pos -= 2;
-					return decl(tokens, pos);
+					return declaration(tokens, pos);
 				}
 				*pos -= 1;
 			}
@@ -1161,14 +1209,12 @@ pub fn compound_stmt(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 	return Node::new_stmt(compstmts);
 }
 
-pub fn param(tokens: &Vec<Token>, pos: &mut usize) -> Node {
+pub fn param_declaration(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 	
 	// type
-	let ty = ctype(tokens, pos);
+	let ty = decl_specifiers(tokens, pos);
+	return declarator(tokens, pos, ty);
 
-	// identifier
-	let name = ident(tokens, pos);
-	return Node::new_vardef(ty, false, name, 0, None);
 }
 
 pub fn toplevel(tokens: &Vec<Token>, pos: &mut usize) -> Node {
@@ -1179,7 +1225,11 @@ pub fn toplevel(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 	let is_typedef = tokens[*pos].consume_ty(TokenTypedef, pos);
 
 	// Ctype
-	let mut ctype = ctype(tokens, pos);
+	let mut ctype = decl_specifiers(tokens, pos);
+	
+	while tokens[*pos].consume_ty(TokenStar, pos) {
+		ctype = ctype.ptr_to();
+	}
 	
 	// identifier
 	let name = ident(tokens, pos);
@@ -1194,7 +1244,7 @@ pub fn toplevel(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 		// argument
 		if !tokens[*pos].consume_ty(TokenLeftBrac, pos) {
 			loop {
-				args.push(param(tokens, pos));
+				args.push(param_declaration(tokens, pos));
 				if tokens[*pos].consume_ty(TokenLeftBrac, pos){ break; }
 				tokens[*pos].assert_ty(TokenComma, pos);
 			}

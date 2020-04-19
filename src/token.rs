@@ -386,11 +386,6 @@ fn number<'a>(p: &mut core::str::Chars, pos: &mut usize, input: &'a str, c: char
 
 	*pos += 1;
 	return decimal(p, pos, input, c);
-	// let possub = *pos;
-	// let num = strtol(p, pos, c);
-	// let token = Token::new(TokenNum, num, &input[possub..]);
-	// *pos += 1;
-	// return token;
 }
 
 fn hexadecimal<'a>(p: &mut core::str::Chars, pos: &mut usize, input: &'a str) -> Token<'a>{
