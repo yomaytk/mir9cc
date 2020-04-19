@@ -352,6 +352,20 @@ impl Node {
 		} 
 	}
 
+	fn ctype_replace(&mut self, new_ty: Type) {
+		match &mut self.op {
+			NodeType::Lvar(ref mut ctype, ..) | NodeType::BinaryTree(ref mut ctype, ..) 
+			| NodeType::Deref(ref mut ctype,..) | NodeType::Addr(ref mut ctype, ..) 
+			| NodeType::Sizeof(ref mut ctype, ..) | NodeType::Str(ref mut ctype, ..)
+			| NodeType::Gvar(ref mut ctype,..) | NodeType::Dot(ref mut ctype, ..) 
+			| NodeType::Ternary(ref mut ctype, ..) | NodeType::IncDec(ref mut ctype, ..) 
+			| NodeType::EqTree(ref mut ctype, ..) | NodeType::VarDef(ref mut ctype, ..) => { 
+				std::mem::replace(ctype, new_ty);
+			}
+			_ => {}
+		}
+	}
+
 	pub fn checklval(&self) {
 		match &self.op {
 			NodeType::Lvar(..) | NodeType::Gvar(..) | NodeType::Deref(..) | NodeType::Dot(..) => {}
@@ -973,6 +987,10 @@ fn read_array(tokens: &Vec<Token>, pos: &mut usize, ty: Type) -> Type {
 	let mut ty = ty.clone();
 
 	while tokens[*pos].consume_ty(TokenRightmiddleBrace, pos) {
+		if tokens[*pos].consume_ty(TokenLeftmiddleBrace, pos) {
+			ary_size.push(0);
+			continue;
+		}
 		let len = expr(tokens, pos);
 		if let NodeType::Num(val) = &len.op {
 			ary_size.push(*val as usize);
@@ -1213,8 +1231,14 @@ pub fn param_declaration(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 	
 	// type
 	let ty = decl_specifiers(tokens, pos);
-	return declarator(tokens, pos, ty);
+	let mut node = declarator(tokens, pos, ty);
+	let ctype = node.nodesctype(None);
+	if let Ty::ARY = &ctype.ty {
+		let new_ty = ctype.ary_to.unwrap().clone().ptr_to();
+		node.ctype_replace(new_ty);
+	}
 
+	return node;
 }
 
 pub fn toplevel(tokens: &Vec<Token>, pos: &mut usize) -> Node {
