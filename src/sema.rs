@@ -194,12 +194,19 @@ pub fn walk(node: &Node, env: &mut Env, decay: bool) -> Node {
 				_ => { return Node::new_if(walk(cond, env, true), walk(then, env, true), None); }
 			}
 		}
-		Call(name, args) => {
+		Call(_, name, args) => {
+			let ctype;
+			if let Some(var) = env.find(name.clone()) {
+				ctype = var.ctype.clone();
+			} else {
+				eprintln!("bad function: {}", name.clone());
+				ctype = INT_TY.clone();
+			}
 			let mut v = vec![];
 			for arg in args {
 				v.push(walk(arg, env, true));
 			}
-			return Node::new_call(name.clone(), v);
+			return Node::new_call(ctype, name.clone(), v);
 		}
 		LogAnd(lhs, rhs) => { return Node::new_and(walk(lhs, env, true), walk(rhs, env, true)); }
 		LogOr(lhs, rhs) => { return Node::new_or(walk(lhs, env, true), walk(rhs, env, true)); }
@@ -356,7 +363,6 @@ pub fn sema(nodes: &Vec<Node>) -> (Vec<Node>, Vec<Var>) {
 	let mut topenv = Env::new(None);
 	
 	for topnode in nodes {
-		let node;
 
 		if let VarDef(ctype, is_extern, ident, ..) = &topnode.op {
 			let var = new_global(&ctype, ident.clone(), None, *is_extern);
@@ -366,19 +372,30 @@ pub fn sema(nodes: &Vec<Node>) -> (Vec<Node>, Vec<Var>) {
 		}
 
 		match &topnode.op {
-			Func(name, is_extern, args, body, _) => {
+			Func(ctype, ident, is_extern, args, body, _) => {
 				*STACKSIZE.lock().unwrap() = 0;
+				// eval args
 				let mut argv = vec![];
 				for arg in args {
 					argv.push(walk(arg, &mut topenv, true));
 				}
+				// eval body
 				let body = walk(body, &mut topenv, true);
-				node = Node::new_func(name.clone(), *is_extern, argv, body, *STACKSIZE.lock().unwrap());
+				let node = Node::new_func(ctype.clone(), ident.clone(), *is_extern, argv, body, *STACKSIZE.lock().unwrap());
+				// add to var env
+				let var = Var::new(ctype.clone(), 0, false, ident.clone(), String::new(), *is_extern);
+				topenv.vars.insert(ident.clone(), var);
+				
+				funcv.push(node);
+			}
+			Decl(ctype, ident, _, is_extern) => {
+				// add to global
+				let var = Var::new(ctype.clone(), 0, false, ident.clone(), String::new(), *is_extern);
+				topenv.vars.insert(ident.clone(), var);
 			}
 			NULL => { continue; }
 			_ => { panic!("funode should be NodeType::Func. "); }
 		}
-		funcv.push(node);
 	}
 
 	return (funcv, GVARS.lock().unwrap().clone());

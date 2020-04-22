@@ -408,7 +408,7 @@ fn gen_expr(node: &Node, code: &mut Vec<Ir>) -> usize {
 			kill(lhi, code);
 			return rhi;
 		},
-		NodeType::Call(ident, callarg) => {
+		NodeType::Call(_, ident, callarg) => {
 			let mut args = vec![];
 			for arg in callarg {
 				args.push(gen_expr(arg, code));
@@ -611,7 +611,7 @@ pub fn gen_ir(funcs: &Vec<Node>) -> Vec<Function> {
 		*REGNO.lock().unwrap() = 1;
 		
 		match &funode.op {
-			NodeType::Func(name, is_extern, args, body, stacksize) => {
+			NodeType::Func(_, name, is_extern, args, body, stacksize) => {
 				if *is_extern {
 					continue;
 				}
@@ -631,7 +631,6 @@ pub fn gen_ir(funcs: &Vec<Node>) -> Vec<Function> {
 				let func = Function::new(name.clone(), code, *stacksize);
 				v.push(func);
 			}
-			NodeType::VarDef(..) => {}
 			_ => { panic!(" should be func node at gen_ir: {:?}", funode); }
 		}
 	}

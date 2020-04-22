@@ -13,6 +13,10 @@ extern void *stderr;
 	}                                                           \
 } while (0)
 
+int printf();
+int fprintf();
+int exit();
+
 int one() { return 1; }
 int two() { return 2; }
 int plus(int x, int y) { return x + y; }
@@ -21,6 +25,7 @@ int add(int a, int b, int c, int d, int e, int f) { return a+b+c+d+e+f; }
 int add2(int (*a)[2]) { return a[0][0] + a[0][1]; }
 int add3(int a[][2]) { return a[0][0] + a[1][0]; }
 int add4(int a[2][2]) { return a[0][0] + a[1][0]; }
+void nop() {}
 
 int var1;
 int var2[5];
@@ -114,6 +119,7 @@ int main() {
 	EXPECT(8, ({ int ary[2][2]; ary[0][0]=3; ary[0][1]=5; return add2(ary);}));
 	EXPECT(8, ({ int ary[2][2]; ary[0][0]=3; ary[1][0]=5; return add3(ary);}));
 	EXPECT(8, ({ int ary[2][2]; ary[0][0]=3; ary[1][0]=5; return add4(ary);}));
+	EXPECT(8, ({ int ary[2][2]; ary[0][0]=3; ary[1][0]=5; return ary[0][0]+ary[1][0];}));
 
 	EXPECT(3, ({ int ary[2]; ary[0]=1; ary[1]=2; return ary[0] + ary[0+1];}));
 	EXPECT(5, ({ int x; int *p = &x; x = 5; return p[0];}));

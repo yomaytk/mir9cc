@@ -153,8 +153,8 @@ pub enum NodeType {
 	Ident(String),																// Ident(s)
 	EqTree(Type, Box<Node>, Box<Node>),											// EqTree(ctype, lhs, rhs)
 	IfThen(Box<Node>, Box<Node>, Option<Box<Node>>),							// IfThen(cond, then, elthen)
-	Call(String, Vec<Node>),													// Call(ident, args)
-	Func(String, bool, Vec<Node>, Box<Node>, usize),							// Func(ident, is_extern, args, body, stacksize)
+	Call(Type, String, Vec<Node>),												// Call(ctype, ident, args)
+	Func(Type, String, bool, Vec<Node>, Box<Node>, usize),						// Func(ctype, ident, is_extern, args, body, stacksize)
 	LogAnd(Box<Node>, Box<Node>),												// LogAnd(lhs, rhs)
 	LogOr(Box<Node>, Box<Node>),												// LogOr(lhs, rhs)
 	For(Box<Node>, Box<Node>, Box<Node>, Box<Node>),							// For(init, cond, inc, body)
@@ -175,6 +175,7 @@ pub enum NodeType {
 	TupleExpr(Type, Box<Node>, Box<Node>),										// TupleExpr(ctype, lhs, rhs)
 	Neg(Box<Node>),																// Neg(expr)
 	IncDec(Type, i32, Box<Node>),												// IncDec(ctype, selector, expr)
+	Decl(Type, String, Vec<Node>, bool),										// Decl(ctype, ident)
 	Break,																		// Break
 	NULL,																		// NULL
 }
@@ -220,12 +221,12 @@ impl NodeType {
 		}
 	}
 
-	fn call_init(ident: String, args: Vec<Node>) -> Self {
-		NodeType::Call(ident, args)
+	fn call_init(ctype: Type, ident: String, args: Vec<Node>) -> Self {
+		NodeType::Call(ctype, ident, args)
 	}
 
-	fn func_init(ident: String, is_extern: bool, args: Vec<Node>, body: Node, stacksize: usize) -> Self {
-		NodeType::Func(ident, is_extern, args, Box::new(body), stacksize)
+	fn func_init(ctype: Type, ident: String, is_extern: bool, args: Vec<Node>, body: Node, stacksize: usize) -> Self {
+		NodeType::Func(ctype, ident, is_extern, args, Box::new(body), stacksize)
 	}
 
 	fn logand_init(lhs: Node, rhs: Node) -> Self {
@@ -287,40 +288,45 @@ impl NodeType {
 		NodeType::StmtExpr(ctype, Box::new(body))
 	}
 
-	fn null_init() -> Self {
-		NodeType::NULL
-	}
-
+	
 	fn alignof_init(expr: Node) -> Self {
 		NodeType::Alignof(Box::new(expr))
 	}
-
+	
 	fn dot_init(ctype: Type, expr: Node, member: String, offset: usize) -> Self {
 		NodeType::Dot(ctype, Box::new(expr), member, offset)
 	}
-
+	
 	fn not_init(expr: Node) -> Self {
 		NodeType::Not(Box::new(expr))
 	}
-
+	
 	fn ternary_init(ctype: Type, cond: Node, then: Node, els: Node) -> Self {
 		NodeType::Ternary(ctype, Box::new(cond), Box::new(then), Box::new(els))
 	}
-
+	
 	fn tuple_init(ctype: Type, lhs: Node, rhs: Node) -> Self {
 		NodeType::TupleExpr(ctype, Box::new(lhs), Box::new(rhs))
 	}
-
+	
 	fn neg_init(expr: Node) -> Self {
 		NodeType::Neg(Box::new(expr))
 	}
-
+	
 	fn incdec_init(ctype: Type, selector: i32, expr: Node) -> Self {
 		NodeType::IncDec(ctype, selector, Box::new(expr))
 	}
 
+	fn decl_init(ctype: Type, ident: String, args: Vec<Node>, is_extern: bool) -> Self {
+		NodeType::Decl(ctype, ident, args, is_extern)
+	}
+	
 	fn break_init() -> Self {
 		NodeType::Break
+	}
+	
+	fn null_init() -> Self {
+		NodeType::NULL
 	}
 }
 
@@ -425,15 +431,15 @@ impl Node {
 		}
 	}
 
-	pub fn new_call(ident: String, args: Vec<Node>) -> Self {
+	pub fn new_call(ctype: Type, ident: String, args: Vec<Node>) -> Self {
 		Self {
-			op: NodeType::call_init(ident, args)
+			op: NodeType::call_init(ctype, ident, args)
 		}
 	}
 
-	pub fn new_func(ident: String, is_extern: bool, args: Vec<Node>, body: Node, stacksize: usize) -> Self {
+	pub fn new_func(ctype: Type, ident: String, is_extern: bool, args: Vec<Node>, body: Node, stacksize: usize) -> Self {
 		Self {
-			op: NodeType::func_init(ident, is_extern, args, body, stacksize)
+			op: NodeType::func_init(ctype, ident, is_extern, args, body, stacksize)
 		}
 	}
 
@@ -521,57 +527,64 @@ impl Node {
 		}
 	}
 
-	pub fn new_null() -> Self {
-		Self {
-			op: NodeType::null_init()
-		}
-	}
-
+	
 	pub fn new_alignof(expr: Node) -> Self {
 		Self {
 			op: NodeType::alignof_init(expr)
 		}
 	}
-
+	
 	pub fn new_dot(ctype: Type, expr: Node, name: String, offset: usize) -> Self {
 		Self {
 			op: NodeType::dot_init(ctype, expr, name, offset)
 		}
 	}
-
+	
 	pub fn new_not(expr: Node) -> Self {
 		Self {
 			op: NodeType::not_init(expr)
 		}
 	}
-
+	
 	pub fn new_ternary(ctype: Type, cond: Node, then: Node, els: Node) -> Self {
 		Self {
 			op: NodeType::ternary_init(ctype, cond, then, els)
 		}
 	}
-
+	
 	pub fn new_tuple(ctype: Type, lhs: Node, rhs: Node) -> Self {
 		Self {
 			op: NodeType::tuple_init(ctype, lhs, rhs)
 		}
 	}
-
+	
 	pub fn new_neg(expr: Node) -> Self {
 		Self {
 			op: NodeType::neg_init(expr)
 		}
 	}
-
+	
 	pub fn new_incdec(ctype: Type, selector: i32, expr: Node) -> Self {
 		Self {
 			op: NodeType::incdec_init(ctype, selector, expr)
 		}
 	}
 
+	pub fn new_decl(ctype: Type, ident: String, args: Vec<Node>, is_extern: bool) -> Self {
+		Self {
+			op: NodeType::decl_init(ctype, ident, args, is_extern)
+		}
+	}
+	
 	pub fn new_break() -> Self {
 		Self {
 			op: NodeType::break_init()
+		}
+	}
+	
+	pub fn new_null() -> Self {
+		Self {
+			op: NodeType::null_init()
 		}
 	}
 }
@@ -721,7 +734,7 @@ fn primary(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 		let mut args = vec![];
 		//// arity = 0;
 		if tokens[*pos].consume_ty(TokenLeftBrac, pos){
-			return Node::new_call(name, args);
+			return Node::new_call(NULL_TY.clone(), name, args);
 		}
 		//// arity > 0;
 		let arg1 = assign(tokens, pos);
@@ -731,7 +744,7 @@ fn primary(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 			args.push(argv);
 		}
 		tokens[*pos].assert_ty(TokenLeftBrac, pos);
-		return Node::new_call(name, args);
+		return Node::new_call(NULL_TY.clone(), name, args);
 	}
 	if tokens[*pos].consume_ty(TokenString(String::new()), pos) {
 		let strname = tokens[*pos].getstring();
@@ -1256,14 +1269,14 @@ pub fn toplevel(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 	}
 	
 	// identifier
-	let name = ident(tokens, pos);
+	let ident = ident(tokens, pos);
 	
 	// function
 	if tokens[*pos].consume_ty(TokenRightBrac, pos){
 		if is_typedef {
 			// error(&format!("typedef {} has function definition.", name));
 			// for debug.
-			panic!("typedef {} has function definition.", name);
+			panic!("typedef {} has function definition.", ident);
 		}
 		// argument
 		if !tokens[*pos].consume_ty(TokenLeftBrac, pos) {
@@ -1273,20 +1286,24 @@ pub fn toplevel(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 				tokens[*pos].assert_ty(TokenComma, pos);
 			}
 		}
+		// function decl
+		if tokens[*pos].consume_ty(TokenSemi, pos) {
+			return Node::new_decl(ctype, ident, args, is_extern);
+		}
 		// body
 		let body = compound_stmt(tokens, pos);
-		return Node::new_func(name, is_extern, args, body, 0);
+		return Node::new_func(ctype, ident, is_extern, args, body, 0);
 	}
 
 	ctype = read_array(tokens, pos, ctype);
 	tokens[*pos].assert_ty(TokenSemi, pos);
 	// typedef
 	if is_typedef {
-		ENV.lock().unwrap().typedefs.insert(name, ctype);
+		ENV.lock().unwrap().typedefs.insert(ident, ctype);
 		return Node::new_null();
 	}
 	// global variable
-	return Node::new_vardef(ctype, is_extern, name, 0, None);
+	return Node::new_vardef(ctype, is_extern, ident, 0, None);
 
 }
 
