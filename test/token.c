@@ -5,8 +5,7 @@
 // tokenize this file or not.
 // This file contains tests for the tokenizer and the preprocessor.
 
-// a line comment
-\
+// a line comment\
 continues\
 to this line
 

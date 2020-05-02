@@ -49,36 +49,36 @@ fn main() {
 	add_program(args.pop().unwrap());
 	// lexical analysis
 	let tokens = tokenize(0, true);
-	for token in &tokens {
-		println!("{:?}", token);
-	}
+	// for token in &tokens {
+	// 	println!("{:?}", token);
+	// }
 
 	// parsing analysis
-	// let nodes = parse(&tokens, &mut 0);
-	// // println!("{:#?}", &nodes);
-	// let (nodes, globals) = sema(&nodes);
-	// // println!("{:#?}", &nodes);
+	let nodes = parse(&tokens, &mut 0);
+	// println!("{:#?}", &nodes);
+	let (nodes, globals) = sema(&nodes);
+	// println!("{:#?}", &nodes);
 
-	// // alloc index for register
-	// let mut funcs = gen_ir(&nodes);
-	// if dump_ir1 {
-	// 	IrInfo::dump_ir(&funcs, "-dump-ir1");
+	// alloc index for register
+	let mut funcs = gen_ir(&nodes);
+	if dump_ir1 {
+		IrInfo::dump_ir(&funcs, "-dump-ir1");
+	}
+	// for func in &funcs {
+	// 	for ir in &func.irs{
+	// 		println!("{:?}", ir);
+	// 	}
 	// }
-	// // for func in &funcs {
-	// // 	for ir in &func.irs{
-	// // 		println!("{:?}", ir);
-	// // 	}
-	// // }
-	// alloc_regs(&mut funcs);
-	// if dump_ir2 {
-	// 	IrInfo::dump_ir(&funcs, "-dump-ir2");
+	alloc_regs(&mut funcs);
+	if dump_ir2 {
+		IrInfo::dump_ir(&funcs, "-dump-ir2");
+	}
+	// for func in &funcs {
+	// 	for ir in &func.irs{
+	// 		println!("{:?}", ir);
+	// 	}
 	// }
-	// // for func in &funcs {
-	// // 	for ir in &func.irs{
-	// // 		println!("{:?}", ir);
-	// // 	}
-	// // }
 	
-	// // code generator
-	// gen_x86(globals, funcs);
+	// code generator
+	gen_x86(globals, funcs);
 }
