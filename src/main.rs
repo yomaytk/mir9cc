@@ -1,5 +1,4 @@
 use std::env;
-use std::fs;
 
 pub mod token;
 pub mod parse;
@@ -9,6 +8,7 @@ pub mod gen_x86;
 pub mod sema;
 pub mod ir_dump;
 pub mod lib;
+pub mod preprocess;
 
 use token::*;
 use parse::*;
@@ -17,6 +17,7 @@ use regalloc::*;
 use gen_x86::*;
 use sema::*;
 use ir_dump::*;
+use preprocess::*;
 
 #[macro_use]
 extern crate lazy_static;
@@ -26,13 +27,8 @@ fn print_typename<T>(_: T) {
     println!("{}", std::any::type_name::<T>());
 }
 
-fn read_file(filename: &str) -> Result<String, Box<dyn std::error::Error>>{
-	let content = fs::read_to_string(filename)?;
-	return Ok(content);
-}
-
 fn main() {
-	let args: Vec<String> = env::args().collect();
+	let mut args: Vec<String> = env::args().collect();
 	
 	let mut dump_ir1 = false;
 	let mut dump_ir2 = false;
@@ -50,18 +46,9 @@ fn main() {
 		std::process::exit(1);
 	}
 
-	// input program
-	let mut p;
-	match read_file(&args[args.len()-1][..]) {
-		Ok(content) => { p = content; }
-		Err(_) => { 
-			println!("failed to read file.");
-			std::process::exit(1);
-		}
-	}
-
+	add_program(args.pop().unwrap());
 	// lexical analysis
-	let tokens = tokenize(&mut p);
+	let tokens = tokenize(0, true);
 	// for token in &tokens {
 	// 	println!("{:?}", token);
 	// }

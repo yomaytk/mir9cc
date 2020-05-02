@@ -723,8 +723,7 @@ fn primary(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 	}
 	if tokens[*pos].consume_ty(TokenIdent, pos) {
 
-		let name = String::from(&tokens[*pos-1].input[..tokens[*pos-1].val as usize]);
-		
+		let name = String::from(&PROGRAMS.lock().unwrap()[tokens[*pos-1].program_id][tokens[*pos-1].pos..tokens[*pos-1].pos+tokens[*pos-1].val as usize]);
 		// variable
 		if !tokens[*pos].consume_ty(TokenRightBrac, pos){
 			return Node::new_ident(name);
@@ -754,7 +753,7 @@ fn primary(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 	}
 	// error(&format!("parse.rs: primary parse fail. and got {}", tokens[*pos].input));
 	// for debug.
-	panic!("parse.rs: primary parse fail. and got {}", tokens[*pos].input);
+	panic!("parse.rs: primary parse fail. and got {}", &PROGRAMS.lock().unwrap()[tokens[*pos].program_id][tokens[*pos].pos..]);
 }
 
 fn postfix(tokens: &Vec<Token>, pos: &mut usize) -> Node {
@@ -1012,7 +1011,7 @@ fn read_array(tokens: &Vec<Token>, pos: &mut usize, ty: Type) -> Type {
 		}
 		// error(&format!("array declaration is invalid at {}.", tokens[*pos].input));
 		// for debug.
-		panic!("array declaration is invalid at {}.", tokens[*pos].input);
+		panic!("array declaration is invalid at {}.", &PROGRAMS.lock().unwrap()[tokens[*pos].program_id][tokens[*pos].pos..]);
 	}
 
 	if ary_size.len() > 0 {
@@ -1025,11 +1024,12 @@ fn read_array(tokens: &Vec<Token>, pos: &mut usize, ty: Type) -> Type {
 }
 
 fn ident(tokens: &Vec<Token>, pos: &mut usize) -> String {
-	let name = String::from(&tokens[*pos].input[..tokens[*pos].val as usize]);
+	// panic!("{}, {}, {}", tokens[*pos].program_id, tokens[*pos].pos, tokens[*pos].val);
+	let name = String::from(&PROGRAMS.lock().unwrap()[tokens[*pos].program_id][tokens[*pos].pos..tokens[*pos].pos+tokens[*pos].val as usize]);
 	if !tokens[*pos].consume_ty(TokenIdent, pos) {
 		// error(&format!("should be identifier at {}", &tokens[*pos].input[*pos..]));
 		// for debug.
-		panic!("should be identifier at {}", &tokens[*pos].input[..]);
+		panic!("should be identifier at {}", &PROGRAMS.lock().unwrap()[tokens[*pos].program_id][tokens[*pos].pos..]);
 	}
 	return name;
 }
@@ -1087,7 +1087,7 @@ fn direct_decl(tokens: &Vec<Token>, pos: &mut usize, mut ty: Type) -> Node {
 		}
 	} else {
 		// for debug
-		panic!("bad direct declarator at {}", &tokens[*pos].input[..]);
+		panic!("bad direct declarator at {}", &PROGRAMS.lock().unwrap()[tokens[*pos].program_id][tokens[*pos].pos..]);
 		// error(&format!("bad direct declarator at {}", &tokens[*pos].input[..]));
 	}
 	

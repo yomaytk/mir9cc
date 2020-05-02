@@ -2,6 +2,7 @@ use TokenType::*;
 use std::collections::HashMap;
 use std::sync::Mutex;
 use super::lib::*;
+use super::preprocess::*;
 
 // Atomic unit in the grammar is called "token".
 // For example, `123`, `"abc"` and `while` are tokens.
@@ -22,13 +23,15 @@ macro_rules! hash {
 
 
 lazy_static! {
+	pub static ref PROGRAMS: Mutex<Vec<String>> = Mutex::new(Vec::new());
 	pub static ref ESCAPED: Mutex<HashMap<char, char>> = Mutex::new(hash![
 		// ('a', "\\a"), ('b', "\\b"), ('f', "\\f"),
 		('n', '\n'), ('r', '\r'), // ('v', "\\v"),
 		('t', '\t') // ('e', '\033'), ('E', '\033')
-	]); 
+	]);
 }
 
+pub static NONE_STR: &'static str = "substitution";
 
 pub static SIGNALS: &[Signal] = &[
 	Signal::new("<<=", TokenShlEq),
@@ -76,6 +79,7 @@ pub static SIGNALS: &[Signal] = &[
 	Signal::new("^", TokenXor),
 	Signal::new("%", TokenMod),
 	Signal::new("~", TokenTilde),
+	Signal::new("#", TokenSharp),
 ];
 
 #[derive(Debug, PartialEq, Clone)]
@@ -144,6 +148,8 @@ pub enum TokenType {
 	TokenOrEq,
 	TokenXorEq,
 	TokenTilde,
+	TokenSharp,
+	TokenInclude,
 	TokenNoSignal,
 	TokenEof,
 }
@@ -166,38 +172,34 @@ impl From<String> for TokenType {
 			"typedef" => { TokenTypedef }
 			"void" => { TokenVoid }
 			"break" => { TokenBreak }
+			"include" => { TokenInclude }
 			_ => { TokenIdent }
 		}
 	}
 }
 
-#[derive(Debug)]
-pub struct Token<'a> {
+#[derive(Debug, Clone)]
+pub struct Token {
 	pub ty: TokenType,
 	pub val: i32,
-	pub input: &'a str,
+	pub program_id: usize,
+	pub pos: usize,
 }
 
-impl<'a> Token<'a> {
-	pub fn new(ty: TokenType, val: i32, input: &'a str) -> Token<'a> {
+impl Token {
+	pub fn new(ty: TokenType, val: i32, program_id: usize, pos: usize) -> Token {
 		Token {
-			ty: ty,
-			val: val,
-			input: input,
+			ty,
+			val,
+			program_id,
+			pos,
 		}
-	}
-	pub fn consume(&self, c: &str, pos: &mut usize) -> bool {
-		if self.input[..self.val as usize] == *c {
-			*pos += 1;
-			return true;
-		}
-		return false;
 	}
 	pub fn assert_ty(&self, ty: TokenType, pos: &mut usize) {
 		if !self.consume_ty(ty, pos) {
 			// error(&format!("assertion failed at: {}", &self.input[..self.val as usize]));
 			// for debug.
-			panic!("assertion failed at: {}", &self.input[..self.val as usize]);
+			panic!("assertion failed at: {}", &PROGRAMS.lock().unwrap()[self.program_id][self.pos..self.pos+self.val as usize]);
 		}
 	}
 	pub fn consume_ty(&self, ty: TokenType, pos: &mut usize) -> bool {
@@ -240,7 +242,12 @@ impl Signal {
 	}
 }
 
-fn read_string<'a> (p: &mut core::str::Chars, pos: &mut usize, input: &'a str) -> Token<'a> {
+pub fn read_file(filename: &str) -> Result<String, Box<dyn std::error::Error>>{
+	let content = std::fs::read_to_string(filename)?;
+	return Ok(content);
+}
+
+fn read_string (p: &mut core::str::Chars, program_id: usize, pos: &mut usize) -> Token {
 
 	let start = *pos;
 	let mut sb = String::new();
@@ -265,10 +272,10 @@ fn read_string<'a> (p: &mut core::str::Chars, pos: &mut usize, input: &'a str) -
 		}
 		*pos += 2;
 	}
-	return Token::new(TokenString(sb), 0, &input[start..]);
+	return Token::new(TokenString(sb), 0, program_id, start);
 }
 
-fn read_char<'a> (p: &mut core::str::Chars, pos: &mut usize, input: &'a str) -> Token<'a> {
+fn read_char (p: &mut core::str::Chars, program_id: usize, pos: &mut usize) -> Token {
 	
 	let mut val = 0;
 	let start = *pos;
@@ -294,7 +301,7 @@ fn read_char<'a> (p: &mut core::str::Chars, pos: &mut usize, input: &'a str) -> 
 	}
 	assert!(p.next().unwrap() == '\'');
 	*pos += 1;
-	return Token::new(TokenNum, val, &input[start..]);
+	return Token::new(TokenNum, val, program_id, start);
 }
 
 fn line_comment(p: &mut core::str::Chars, pos: &mut usize) {
@@ -314,7 +321,7 @@ fn line_comment(p: &mut core::str::Chars, pos: &mut usize) {
 	return;
 }
 
-fn block_comment<'a>(p: &mut core::str::Chars, pos: &mut usize, input: &'a str) {
+fn block_comment(p: &mut core::str::Chars, program_id: usize, pos: &mut usize) {
 	let start = *pos;
 	*pos += 2;
 	let mut pp = p.clone();
@@ -322,7 +329,7 @@ fn block_comment<'a>(p: &mut core::str::Chars, pos: &mut usize, input: &'a str) 
 	loop {
 		if let Some(c) = pp.next() {
 			*pos += 1;
-			if c == '*' && &input[*pos..*pos+1] == "/" {
+			if c == '*' && &PROGRAMS.lock().unwrap()[program_id][*pos..*pos+1] == "/" {
 				*pos += 1;
 				break;
 			}
@@ -336,11 +343,11 @@ fn block_comment<'a>(p: &mut core::str::Chars, pos: &mut usize, input: &'a str) 
 	return;
 }
 
-fn signal<'a>(p: &mut core::str::Chars, pos: &mut usize, input: &'a str) -> Option<Token<'a>> {
+fn signal(p: &mut core::str::Chars, program_id: usize, pos: &mut usize, input: &str) -> Option<Token> {
 	for signal in &SIGNALS[..] {
 		let len = signal.name.len();
 		if input.len() >= *pos+len && *signal.name == input[*pos..*pos+len] {
-			let token = Token::new(signal.ty.clone(), len as i32, &input[*pos..]);
+			let token = Token::new(signal.ty.clone(), len as i32, program_id, *pos);
 			*pos += len;
 			for _ in 0..len-1 { p.next(); }
 			return Some(token);
@@ -349,7 +356,7 @@ fn signal<'a>(p: &mut core::str::Chars, pos: &mut usize, input: &'a str) -> Opti
 	return None;
 }
 
-fn ident<'a>(p: &mut core::str::Chars, pos: &mut usize, input: &'a str, c: char) -> Token<'a> {
+fn ident(p: &mut core::str::Chars, program_id: usize, pos: &mut usize, c: char) -> Token {
 	let mut ident = String::new();
 	ident.push(c);
 	let mut len = 1;
@@ -366,29 +373,29 @@ fn ident<'a>(p: &mut core::str::Chars, pos: &mut usize, input: &'a str, c: char)
 			*pos += 1;
 		}
 	}
-	let token = Token::new(TokenType::from(ident), len, &input[possub..]);
+	let token = Token::new(TokenType::from(ident), len, program_id, possub);
 	*pos += 1;
 	return token;
 }
 
-fn number<'a>(p: &mut core::str::Chars, pos: &mut usize, input: &'a str, c: char) -> Token<'a> {
+fn number(p: &mut core::str::Chars, program_id: usize, pos: &mut usize, input: &str, c: char) -> Token {
 
 	if c == '0' && (&input[*pos+1..*pos+2] == "X" || &input[*pos+1..*pos+2] == "x") {
 		*pos += 2;
 		p.next();
-		return hexadecimal(p, pos, input);
+		return hexadecimal(p, program_id, pos, input);
 	}
 	
 	if c == '0' {
 		*pos += 1;
-		return octal(p, pos, input);
+		return octal(p, program_id, pos);
 	}
 
 	*pos += 1;
-	return decimal(p, pos, input, c);
+	return decimal(p, program_id, pos, c);
 }
 
-fn hexadecimal<'a>(p: &mut core::str::Chars, pos: &mut usize, input: &'a str) -> Token<'a>{
+fn hexadecimal(p: &mut core::str::Chars, program_id: usize, pos: &mut usize, input: &str) -> Token{
 
 	let mut pp = p.clone();
 	let mut ishex = false;
@@ -407,10 +414,10 @@ fn hexadecimal<'a>(p: &mut core::str::Chars, pos: &mut usize, input: &'a str) ->
 		*pos += 1;
 	}
 
-	return Token::new(TokenNum, num, &input[possub..]);
+	return Token::new(TokenNum, num, program_id, possub);
 }
 
-fn decimal<'a>(p: &mut core::str::Chars, pos: &mut usize, input: &'a str, c: char) -> Token<'a>{
+fn decimal(p: &mut core::str::Chars, program_id: usize, pos: &mut usize, c: char) -> Token{
 
 	let mut pp = p.clone();
 	let possub = *pos;
@@ -426,10 +433,10 @@ fn decimal<'a>(p: &mut core::str::Chars, pos: &mut usize, input: &'a str, c: cha
 		break;
 	}
 
-	return Token::new(TokenNum, num, &input[possub..]);
+	return Token::new(TokenNum, num, program_id, possub);
 }
 
-fn octal<'a>(p: &mut core::str::Chars, pos: &mut usize, input: &'a str) -> Token<'a>{
+fn octal(p: &mut core::str::Chars, program_id: usize, pos: &mut usize) -> Token{
 
 	let mut pp = p.clone();
 	let possub = *pos;
@@ -445,10 +452,10 @@ fn octal<'a>(p: &mut core::str::Chars, pos: &mut usize, input: &'a str) -> Token
 		break;
 	}
 
-	return Token::new(TokenNum, num, &input[possub..]);
+	return Token::new(TokenNum, num, program_id, possub);
 }
 
-fn remove_backslash_or_crlf_newline(input: &mut String) {
+pub fn remove_backslash_or_crlf_newline(input: &mut String) {
 	let mut i = 0;
 	loop {
 		match (input.get(i..i+1), input.get(i+1..i+2)) {
@@ -472,10 +479,11 @@ fn remove_backslash_or_crlf_newline(input: &mut String) {
 }
 
 
-pub fn scan(input: &str) -> Vec<Token> {
+pub fn scan(program_id: usize, add_eof: bool) -> Vec<Token> {
 	
 	let mut tokens: Vec<Token> = vec![];
 	let mut pos = 0;
+	let input = PROGRAMS.lock().unwrap()[program_id].clone();
 	let mut p = input.chars();
 
 	while let Some(c) = p.next() {
@@ -494,21 +502,21 @@ pub fn scan(input: &str) -> Vec<Token> {
 		
 		// Block Comment
 		if c == '/' && &input[pos+1..pos+2] == "*" {
-			block_comment(&mut p, &mut pos, &input);
+			block_comment(&mut p, program_id, &mut pos);
 			continue;
 		}
 
 		// char literal
 		if c == '\'' {
 			pos += 1;
-			tokens.push(read_char(&mut p, &mut pos, &input));
+			tokens.push(read_char(&mut p, program_id, &mut pos));
 			continue;
 		}
 
 		// string literal
 		if c == '"' {
 			pos += 1;
-			let mut string_token = read_string(&mut p, &mut pos, &input);
+			let mut string_token = read_string(&mut p, program_id, &mut pos);
 			if !tokens.is_empty() {
 				if let (TokenString(s1), TokenString(s2)) = (&tokens.last().unwrap().ty, &string_token.ty) {
 					let s = format!("{}{}", s1, s2);
@@ -523,20 +531,20 @@ pub fn scan(input: &str) -> Vec<Token> {
 		}
 		
 		// signal
-		if let Some(token) = signal(&mut p, &mut pos, &input) {
+		if let Some(token) = signal(&mut p, program_id, &mut pos, &input) {
 			tokens.push(token);
 			continue;
 		}
 
 		// ident
 		if c.is_alphabetic() || c == '_' {
-			tokens.push(ident(&mut p, &mut pos, &input, c));
+			tokens.push(ident(&mut p, program_id, &mut pos, c));
 			continue;
 		}
 		
 		// number
 		if c.is_digit(10) {
-			tokens.push(number(&mut p, &mut pos, &input, c));
+			tokens.push(number(&mut p, program_id, &mut pos, &input, c));
 			continue;
 		}
 
@@ -544,14 +552,16 @@ pub fn scan(input: &str) -> Vec<Token> {
 	}
 
 	// guard
-	let token = Token::new(TokenEof, 0, &input[pos..]);
-	tokens.push(token);
+	if add_eof {
+		let token = Token::new(TokenEof, 0, program_id, pos);
+		tokens.push(token);
+	}
 	
 	return tokens;
 }
 
-pub fn tokenize(input: &mut String) -> Vec<Token> {
-	remove_backslash_or_crlf_newline(input);
-	let tokens = scan(&input[..]);
-	return tokens;
+pub fn tokenize(program_id: usize, add_eof: bool) -> Vec<Token> {
+	let tokens = scan(program_id, add_eof);
+	let new_tokens = preprocess(program_id, tokens);
+	return new_tokens;
 }
