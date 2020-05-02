@@ -199,7 +199,7 @@ impl Token {
 		if !self.consume_ty(ty, pos) {
 			// error(&format!("assertion failed at: {}", &self.input[..self.val as usize]));
 			// for debug.
-			panic!("assertion failed at: {}", &PROGRAMS.lock().unwrap()[self.program_id][self.pos..self.pos+self.val as usize]);
+			panic!("assertion failed at: {}..", &PROGRAMS.lock().unwrap()[self.program_id][self.pos..self.pos+self.val as usize]);
 		}
 	}
 	pub fn consume_ty(&self, ty: TokenType, pos: &mut usize) -> bool {
