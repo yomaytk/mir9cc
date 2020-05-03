@@ -9,12 +9,80 @@ pub static NONE_TOKEN: Token = Token {
 	pos: 0,
 };
 
+struct Context {
+	pub input: Vec<Token>,
+	pub output: Vec<Token>,
+	pub pos: usize,
+	pub defined: HashMap<String, Vec<Token>>,
+	pub next: Option<Box<Context>>,
+}
+
+impl Context {
+	fn new(input: Vec<Token>, next: Option<Box<Context>>) -> Self {
+		Context {
+			input: input,
+			output: vec![],
+			pos: 0,
+			defined: HashMap::new(),
+			next: next,
+		}
+	}
+	fn eof(&self) -> bool {
+		return self.pos == self.input.len();
+	}
+	fn add_ident(&mut self, token: Token) {
+		let name = String::from(&PROGRAMS.lock().unwrap()[token.program_id][token.pos..token.pos+token.val as usize]);
+		if let Some(tokens) = self.defined.get(&name) {
+			self.output.append(&mut tokens.clone());
+		} else {
+			self.output.push(token);
+		}
+		self.pos += 1;
+	}
+	fn define(&mut self) {
+		if let TokenIdent = self.input[self.pos].ty {
+			let name = String::from(&PROGRAMS.lock().unwrap()[self.input[self.pos].program_id][self.input[self.pos].pos..self.input[self.pos].pos+self.input[self.pos].val as usize]);
+			let mut v3 = vec![];
+			self.pos += 1;
+			loop {
+				if let TokenNewLine = self.input[self.pos].ty {
+					self.pos += 1;
+					break;
+				} else {
+					let token = self.input[self.pos].clone();
+					v3.push(token);
+					self.pos += 1;
+				}
+			}
+			self.defined.insert(name, v3);
+		} else {
+			error(&format!("identifier expected after #define"));
+		}
+	}
+	fn include(&mut self) {
+		match self.input[self.pos].ty {
+			TokenString(_) => {
+				let path = self.input[self.pos].getstring();
+				self.pos += 1;
+				// input program
+				add_program(path);
+				let new_id = PROGRAMS.lock().unwrap().len()-1;
+				let mut nv = tokenize(new_id, false);
+				self.output.append(&mut nv);
+			}
+			_ => {
+				error(&format!("string expected after #include"));
+			}
+		}
+	}
+}
+
 pub fn add_program(path: String) {
 	match read_file(&path[..]) {
 		Ok(content) => {
 			let mut program = content;
 			remove_backslash_or_crlf_newline(&mut program);
-			PROGRAMS.lock().unwrap().push(program); 
+			PROGRAMS.lock().unwrap().push(program);
 		}
 		Err(_) => {
 			println!("failed to read file.");
@@ -23,56 +91,42 @@ pub fn add_program(path: String) {
 	}
 }
 
-pub fn preprocess(mut tokens: Vec<Token>) -> Vec<Token> {
-
-	let mut poss = 0;
-	let pos = &mut poss;
-	let mut v = vec![];
-	let mut v2:HashMap<String, Vec<Token>> = HashMap::new();
+pub fn preprocess(tokens: Vec<Token>) -> Vec<Token> {
 	
-	while *pos < tokens.len() {
+	let mut ctx = Context::new(tokens, None);
+
+	while !ctx.eof() {
+		
+		// ident
+		if let TokenIdent = ctx.input[ctx.pos].ty {
+			let token = ctx.input[ctx.pos].clone();
+			ctx.add_ident(token);
+			continue;
+		}
 		// #
-		if !tokens[*pos].consume_ty(TokenSharp, pos) {
-			let token = std::mem::replace(&mut tokens[*pos], NONE_TOKEN.clone());
-			*pos += 1;
-			if let TokenIdent = token.ty {
-				let name = String::from(&PROGRAMS.lock().unwrap()[token.program_id][token.pos..token.pos+token.val as usize]);
-				if let Some(tks) = v2.get(&name) {
-					v.append(&mut tks.clone());
-					continue;
-				}
-			}
-			v.push(token);
+		if let TokenSharp = ctx.input[ctx.pos].ty {
+			ctx.pos += 1;
+		} else {
+			let token = ctx.input[ctx.pos].clone();
+			ctx.pos += 1;
+			ctx.output.push(token);
 			continue;
 		}
 		// define
-		if tokens[*pos].consume_ty(TokenDefine, pos) {
-			tokens[*pos].assert_ty(TokenIdent, pos);
-			let name = String::from(&PROGRAMS.lock().unwrap()[tokens[*pos-1].program_id][tokens[*pos-1].pos..tokens[*pos-1].pos+tokens[*pos-1].val as usize]);
-			let mut v3 = vec![];
-			while !tokens[*pos].consume_ty(TokenNewLine, pos) {
-				let token = std::mem::replace(&mut tokens[*pos], NONE_TOKEN.clone());
-				v3.push(token);
-				*pos += 1;
-			}
-			v2.insert(name, v3);
+		if let TokenDefine = ctx.input[ctx.pos].ty {
+			ctx.pos += 1;
+			ctx.define();
 			continue;
 		}
 		// include
-		if tokens[*pos].consume_ty(TokenInclude, pos) {
-			tokens[*pos].assert_ty(TokenString(String::new()), pos);
-			let path = tokens[*pos].getstring();
-			*pos += 1;
-			// input program
-			add_program(path);
-			let new_id = PROGRAMS.lock().unwrap().len()-1;
-			let mut nv = tokenize(new_id, false);
-			v.append(&mut nv);
+		if let TokenInclude = ctx.input[ctx.pos].ty {
+			ctx.pos += 1;
+			ctx.include();
 			continue;
 		}
 		
-		error(&format!("macro expected at {}...", &PROGRAMS.lock().unwrap()[tokens[*pos].program_id][tokens[*pos].pos..tokens[*pos].pos+5]));
+		error(&format!("macro expected at {}...", &PROGRAMS.lock().unwrap()[ctx.input[ctx.pos].program_id][ctx.input[ctx.pos].pos..ctx.input[ctx.pos].pos+5]));
 	}
 	
-	return v;
+	return ctx.output;
 }
