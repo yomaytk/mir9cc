@@ -31,8 +31,6 @@ lazy_static! {
 	]);
 }
 
-pub static NONE_STR: &'static str = "substitution";
-
 pub static SIGNALS: &[Signal] = &[
 	Signal::new("<<=", TokenShlEq),
 	Signal::new(">>=", TokenShrEq),
@@ -150,6 +148,8 @@ pub enum TokenType {
 	TokenTilde,
 	TokenSharp,
 	TokenInclude,
+	TokenDefine,
+	TokenNewLine,
 	TokenNoSignal,
 	TokenEof,
 }
@@ -173,6 +173,7 @@ impl From<String> for TokenType {
 			"void" => { TokenVoid }
 			"break" => { TokenBreak }
 			"include" => { TokenInclude }
+			"define" => { TokenDefine }
 			_ => { TokenIdent }
 		}
 	}
@@ -464,7 +465,7 @@ pub fn remove_backslash_or_crlf_newline(input: &mut String) {
 				input.remove(i);
 				continue;
 			}
-			(Some("\r"), Some("\n")) => {
+			(Some("\r"), Some("\\")) => {
 				input.remove(i);
 				continue;
 			}
@@ -478,6 +479,17 @@ pub fn remove_backslash_or_crlf_newline(input: &mut String) {
 	}
 }
 
+fn strip_newline_tokens(tokens: Vec<Token>) -> Vec<Token> {
+	let mut v = Vec::new();
+	for ref mut token in tokens {
+		let token = std::mem::replace(token, NONE_TOKEN.clone());
+		if let TokenNewLine = token.ty {
+			continue;
+		}
+		v.push(token);
+	}
+	return v;
+}
 
 pub fn scan(program_id: usize, add_eof: bool) -> Vec<Token> {
 	
@@ -485,8 +497,15 @@ pub fn scan(program_id: usize, add_eof: bool) -> Vec<Token> {
 	let mut pos = 0;
 	let input = PROGRAMS.lock().unwrap()[program_id].clone();
 	let mut p = input.chars();
-
+	
 	while let Some(c) = p.next() {
+
+		// \n
+		if c == '\n' {
+			tokens.push(Token::new(TokenNewLine, 0, program_id, pos));
+			pos += 1;
+			continue;
+		}
 
 		// space
 		if c.is_whitespace() {
@@ -562,6 +581,7 @@ pub fn scan(program_id: usize, add_eof: bool) -> Vec<Token> {
 
 pub fn tokenize(program_id: usize, add_eof: bool) -> Vec<Token> {
 	let tokens = scan(program_id, add_eof);
-	let new_tokens = preprocess(program_id, tokens);
-	return new_tokens;
+	let tokens = preprocess(tokens);
+	let tokens = strip_newline_tokens(tokens);
+	return tokens;
 }
