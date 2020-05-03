@@ -405,7 +405,7 @@ fn hexadecimal(p: &mut core::str::Chars, program_id: usize, pos: &mut usize, inp
 
 	while let Some(c) = pp.next() {
 		match (ishex, c) {
-			(_, '0' ..= '9') => { p.next(); num = num * 16 + c as i32 - '9' as i32; }
+			(_, '0' ..= '9') => { p.next(); num = num * 16 + c as i32 - '0' as i32; }
 			(_, 'a' ..= 'f') => { p.next(); num = num * 16 + c as i32 - 'a' as i32 + 10; }
 			(_, 'A' ..= 'F') => { p.next(); num = num * 16 + c as i32 - 'A' as i32 + 10; }
 			(true, _) => { break; }
@@ -415,7 +415,7 @@ fn hexadecimal(p: &mut core::str::Chars, program_id: usize, pos: &mut usize, inp
 		*pos += 1;
 	}
 
-	return Token::new(TokenNum, num, program_id, possub);
+	return Token::new(TokenNum, num, program_id, possub-2);
 }
 
 fn decimal(p: &mut core::str::Chars, program_id: usize, pos: &mut usize, c: char) -> Token{
@@ -434,7 +434,7 @@ fn decimal(p: &mut core::str::Chars, program_id: usize, pos: &mut usize, c: char
 		break;
 	}
 
-	return Token::new(TokenNum, num, program_id, possub);
+	return Token::new(TokenNum, num, program_id, possub-1);
 }
 
 fn octal(p: &mut core::str::Chars, program_id: usize, pos: &mut usize) -> Token{
@@ -453,7 +453,7 @@ fn octal(p: &mut core::str::Chars, program_id: usize, pos: &mut usize) -> Token{
 		break;
 	}
 
-	return Token::new(TokenNum, num, program_id, possub);
+	return Token::new(TokenNum, num, program_id, possub-1);
 }
 
 pub fn remove_backslash_or_crlf_newline(input: &mut String) {
