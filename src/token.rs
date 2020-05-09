@@ -150,6 +150,7 @@ pub enum TokenType {
 	TokenInclude,
 	TokenDefine,
 	TokenNewLine,
+	TokenParam(bool),	// TokenParam(stringize)
 	TokenNoSignal,
 	TokenEof,
 }
