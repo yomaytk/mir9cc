@@ -210,13 +210,17 @@ impl Token {
 		}
 	}
 	pub fn consume_ty(&self, ty: TokenType, pos: &mut usize) -> bool {
-		if self.ty == ty { 
-			*pos += 1; 
-			return true; 
-		} else {
-			match (&self.ty, ty) {
-				(TokenString(_), TokenString(_))  => { return true; }
-				_ => { return false; }
+		match (&self.ty, &ty) {
+			(TokenString(_), TokenString(_)) => {
+				return true;
+			}
+			_ => {
+				if self.ty == ty {
+					*pos += 1;
+					return true;
+				} else {
+					return false;
+				}
 			}
 		}
 	}

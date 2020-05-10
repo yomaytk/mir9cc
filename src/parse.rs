@@ -745,7 +745,7 @@ fn primary(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 		tokens[*pos].assert_ty(TokenLeftBrac, pos);
 		return Node::new_call(NULL_TY.clone(), name, args);
 	}
-	if tokens[*pos].consume_ty(TokenString(String::from("rerer")), pos) {
+	if tokens[*pos].consume_ty(TokenString(String::new()), pos) {
 		let strname = tokens[*pos].getstring();
 		let cty = CHAR_TY.clone().ary_of(strname.len() + 1);
 		*pos += 1;

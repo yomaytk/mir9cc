@@ -271,26 +271,23 @@ impl Macro {
 		}
 		let mut v = vec![];
 		// Process '#' followed by a macro parameter
-		let mut last = false;
 		let mut i = 0;
 		loop {
-			if i == self.body.len()-1 {
+			if i >= self.body.len()-1 {
 				break;
 			}
 			match (&self.body[i].ty, &self.body[i+1].ty) {
 				(TokenSharp, TokenParam(_)) => {
-					last = true;
 					v.push(Macro::new_param(self.body[i+1].val, true, self.body[i+1].program_id, self.body[i+1].pos, self.body[i+1].end, self.body[i+1].line));
 					i += 1;
 				}
 				_ => {
-					last = false;
 					v.push(self.body[i].clone());
 				}
 			}
 			i += 1;
 		}
-		if !last {
+		if i == self.body.len()-1 {
 			v.push(self.body.last().unwrap().clone());
 		}
 		self.body = v;
