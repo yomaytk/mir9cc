@@ -723,7 +723,7 @@ fn primary(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 	}
 	if tokens[*pos].consume_ty(TokenIdent, pos) {
 
-		let name = String::from(&PROGRAMS.lock().unwrap()[tokens[*pos-1].program_id][tokens[*pos-1].pos..tokens[*pos-1].pos+tokens[*pos-1].val as usize]);
+		let name = String::from(&PROGRAMS.lock().unwrap()[tokens[*pos-1].program_id][tokens[*pos-1].pos..tokens[*pos-1].end]);
 		// variable
 		if !tokens[*pos].consume_ty(TokenRightBrac, pos){
 			return Node::new_ident(name);
@@ -745,7 +745,7 @@ fn primary(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 		tokens[*pos].assert_ty(TokenLeftBrac, pos);
 		return Node::new_call(NULL_TY.clone(), name, args);
 	}
-	if tokens[*pos].consume_ty(TokenString(String::new()), pos) {
+	if tokens[*pos].consume_ty(TokenString(String::from("rerer")), pos) {
 		let strname = tokens[*pos].getstring();
 		let cty = CHAR_TY.clone().ary_of(strname.len() + 1);
 		*pos += 1;
@@ -753,7 +753,7 @@ fn primary(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 	}
 	// error(&format!("parse.rs: primary parse fail. and got {}", tokens[*pos].input));
 	// for debug.
-	panic!("parse.rs: primary parse fail. and got {}", &PROGRAMS.lock().unwrap()[tokens[*pos].program_id][tokens[*pos].pos..]);
+	panic!("parse.rs: primary parse fail. and got rerere{:?}rererer {}", tokens[*pos], &PROGRAMS.lock().unwrap()[tokens[*pos].program_id][tokens[*pos].pos..]);
 }
 
 fn postfix(tokens: &Vec<Token>, pos: &mut usize) -> Node {
@@ -1025,7 +1025,7 @@ fn read_array(tokens: &Vec<Token>, pos: &mut usize, ty: Type) -> Type {
 
 fn ident(tokens: &Vec<Token>, pos: &mut usize) -> String {
 	// panic!("{}, {}, {}", tokens[*pos].program_id, tokens[*pos].pos, tokens[*pos].val);
-	let name = String::from(&PROGRAMS.lock().unwrap()[tokens[*pos].program_id][tokens[*pos].pos..tokens[*pos].pos+tokens[*pos].val as usize]);
+	let name = String::from(&PROGRAMS.lock().unwrap()[tokens[*pos].program_id][tokens[*pos].pos..tokens[*pos].end]);
 	if !tokens[*pos].consume_ty(TokenIdent, pos) {
 		// error(&format!("should be identifier at {}", &tokens[*pos].input[*pos..]));
 		// for debug.
@@ -1259,6 +1259,9 @@ pub fn toplevel(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 	let mut args = vec![];
 
 	let is_extern = tokens[*pos].consume_ty(TokenExtern, pos);
+	// if is_extern {
+	// 	panic!("rerererererer {}", *pos);
+	// }
 	let is_typedef = tokens[*pos].consume_ty(TokenTypedef, pos);
 
 	// Ctype

@@ -47,10 +47,20 @@ fn main() {
 	}
 
 	add_program(args.pop().unwrap());
+	// let t = Token::new(TokenType::TokenString(String::from("")), 0, 0, 0, 0);
+	// let mut p = 1;
+	// if t.consume_ty(TokenType::TokenString(String::new()), &mut p) {
+	// 	panic!("rererewrwerwerwerwerwerwer {}", p);
+	// }
 	// lexical analysis
 	let tokens = tokenize(0, true);
+	// let mut i = 0;
 	// for token in &tokens {
 	// 	println!("{:?}", token);
+	// 	i += 1;
+	// 	if i > 10 {
+	// 		break;
+	// 	}
 	// }
 
 	// parsing analysis

@@ -7,6 +7,8 @@ pub static NONE_TOKEN: Token = Token {
 	val: 0,
 	program_id: 0,
 	pos: 0,
+	end: 0,
+	line: 0,
 };
 
 struct Context {
@@ -54,7 +56,10 @@ impl Context {
 		}
 	}
 	fn assert_ty(&mut self, ty: TokenType) {
-		assert!(self.consume_ty(ty));
+		// assert!(self.consume_ty(ty));
+		if !self.consume_ty(ty) {
+			panic!("{:?}", self.input[self.pos].ty);
+		}
 	}
 	fn define(&mut self) {
 		let name = self.ident();
@@ -130,7 +135,7 @@ impl Context {
 		}
 		return v;
 	}
-	fn apply(&mut self, mut m: Macro) {
+	fn apply(&mut self, mut m: Macro, name: String) {
 		// OBJLIKE
 		if m.ty == MacroType::ObjLike {
 			let mut body = std::mem::replace(&mut m.body, vec![]);
@@ -139,19 +144,30 @@ impl Context {
 		}
 		// FUNLIKE
 		let mut args;
+		// self.input[self.pos-1] = define identifier
+		let num = self.input[self.pos-1].line;
+		let program_id = self.input[self.pos-1].program_id;
 		self.assert_ty(TokenRightBrac);
 		args = self.read_args();
 		if args.len() != m.params.unwrap().len() {
-			error(&format!("number of parameter does not match."));
+			error(&format!("number of parameter does not match at {}", name));
 		}
 		for token in m.body {
+
+			if is_ident(&token, "__LINE__") {
+				self.output.push(Macro::new_num(num as i32, program_id, token.pos, token.end));
+				continue;
+			}
+
 			if token.ty == TokenParam(false) {
 				self.output.append(&mut args[token.val as usize].clone());
+				continue;
 			} else if token.ty == TokenParam(true) {
 				self.output.push(stringize(args[token.val as usize].clone()));
-			} else {
-				self.output.push(token);
+				continue;
 			}
+
+			self.output.push(token);
 		}
 	}
 }
@@ -183,15 +199,21 @@ impl Macro {
 			body,
 		}
 	}
-	fn new_param(n: i32, stringize: bool) -> Token {
-		return Token::new(TokenParam(stringize), n, 0, 0);
+	fn new_num(num: i32, program_id: usize, pos: usize, end: usize) -> Token {
+		return Token::new(TokenNum, num, program_id, pos, end, num as usize);
+	}
+	fn new_param(n: i32, stringize: bool, program_id: usize, pos: usize, end: usize, line: usize) -> Token {
+		return Token::new(TokenParam(stringize), n, program_id, pos, end, line);
 	}
 	fn funclike_macro(ctx: &mut Context, name: String) {
 
 		let mut params = vec![];
-		while !ctx.consume_ty(TokenLeftBrac) {
+		loop {
 			let name = ctx.ident();
 			params.push(name);
+			if ctx.consume_ty(TokenLeftBrac) {
+				break;
+			}
 			ctx.assert_ty(TokenComma);
 		}
 		let body = ctx.read_until_eol();
@@ -211,7 +233,7 @@ impl Macro {
 			if let TokenIdent = token.ty {
 				let name = String::from(&PROGRAMS.lock().unwrap()[token.program_id][token.pos..token.pos+token.val as usize]);
 				if let Some(parami) = map_params.get(&name) {
-					std::mem::replace(token, Macro::new_param(*parami as i32, false));
+					std::mem::replace(token, Macro::new_param(*parami as i32, false, token.program_id, token.pos, token.end, token.line));
 				}
 			}
 		}
@@ -220,13 +242,13 @@ impl Macro {
 		let mut last = false;
 		let mut i = 0;
 		loop {
-			if i < self.body.len()-1 {
+			if i == self.body.len()-1 {
 				break;
 			}
 			match (&self.body[i].ty, &self.body[i+1].ty) {
 				(TokenSharp, TokenParam(_)) => {
 					last = true;
-					v.push(Macro::new_param(self.body[i+1].val, true));
+					v.push(Macro::new_param(self.body[i+1].val, true, self.body[i+1].program_id, self.body[i+1].pos, self.body[i+1].end, self.body[i+1].line));
 					i += 1;
 				}
 				_ => {
@@ -255,12 +277,21 @@ fn stringize(tokens: Vec<Token>) -> Token {
 	let mut sb = String::new();
 	let start = tokens[0].pos;
 	let program_id = tokens[0].program_id;
+	let line = tokens[0].line;
+	let mut end = start;
 	for token in tokens {
-		sb.push_str(&String::from(&PROGRAMS.lock().unwrap()[program_id][token.pos..token.pos+token.val as usize]));
+		sb.push_str(&String::from(&PROGRAMS.lock().unwrap()[program_id][token.pos..token.end]));
 		sb.push(' ');
+		end += token.end-token.pos+1;
 	}
 	sb.pop();
-	return Token::new(TokenString(sb), 0, program_id, start);
+	end -= 1;
+	return Token::new(TokenString(sb), 0, program_id, start, end, line);
+}
+
+fn is_ident(token: &Token, s: &str) -> bool {
+	let name = String::from(&PROGRAMS.lock().unwrap()[token.program_id][token.pos..token.pos+token.val as usize]);
+	return token.ty == TokenIdent && &name == s;
 }
 
 pub fn add_program(path: String) {
@@ -288,15 +319,15 @@ pub fn preprocess(tokens: Vec<Token>) -> Vec<Token> {
 			let token = ctx.input[ctx.pos].clone();
 			let name = String::from(&PROGRAMS.lock().unwrap()[token.program_id][token.pos..token.pos+token.val as usize]);
 			let mut m: Macro = Default::default();
+			ctx.pos += 1;
 			if let Some(m2) = ctx.defined.get(&name) {
 				m = m2.clone();
 			}
 			if m.default_judge() {
 				ctx.output.push(token);
 			} else {
-				ctx.apply(m);
+				ctx.apply(m, name);
 			}
-			ctx.pos += 1;
 			continue;
 		}
 		// #

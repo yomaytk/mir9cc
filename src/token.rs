@@ -29,6 +29,7 @@ lazy_static! {
 		('n', '\n'), ('r', '\r'), // ('v', "\\v"),
 		('t', '\t') // ('e', '\033'), ('E', '\033')
 	]);
+	pub static ref LINE: Mutex<usize> = Mutex::new(1);
 }
 
 pub static SIGNALS: &[Signal] = &[
@@ -186,15 +187,19 @@ pub struct Token {
 	pub val: i32,
 	pub program_id: usize,
 	pub pos: usize,
+	pub end: usize,
+	pub line: usize,
 }
 
 impl Token {
-	pub fn new(ty: TokenType, val: i32, program_id: usize, pos: usize) -> Token {
+	pub fn new(ty: TokenType, val: i32, program_id: usize, pos: usize, end: usize, line: usize) -> Token {
 		Token {
 			ty,
 			val,
 			program_id,
 			pos,
+			end,
+			line
 		}
 	}
 	pub fn assert_ty(&self, ty: TokenType, pos: &mut usize) {
@@ -274,7 +279,7 @@ fn read_string (p: &mut core::str::Chars, program_id: usize, pos: &mut usize) ->
 		}
 		*pos += 2;
 	}
-	return Token::new(TokenString(sb), 0, program_id, start);
+	return Token::new(TokenString(sb), 0, program_id, start, *pos, *LINE.lock().unwrap());
 }
 
 fn read_char (p: &mut core::str::Chars, program_id: usize, pos: &mut usize) -> Token {
@@ -303,7 +308,7 @@ fn read_char (p: &mut core::str::Chars, program_id: usize, pos: &mut usize) -> T
 	}
 	assert!(p.next().unwrap() == '\'');
 	*pos += 1;
-	return Token::new(TokenNum, val, program_id, start);
+	return Token::new(TokenNum, val, program_id, start, *pos, *LINE.lock().unwrap());
 }
 
 fn line_comment(p: &mut core::str::Chars, pos: &mut usize) {
@@ -349,7 +354,7 @@ fn signal(p: &mut core::str::Chars, program_id: usize, pos: &mut usize, input: &
 	for signal in &SIGNALS[..] {
 		let len = signal.name.len();
 		if input.len() >= *pos+len && *signal.name == input[*pos..*pos+len] {
-			let token = Token::new(signal.ty.clone(), len as i32, program_id, *pos);
+			let token = Token::new(signal.ty.clone(), len as i32, program_id, *pos, *pos+len, *LINE.lock().unwrap());
 			*pos += len;
 			for _ in 0..len-1 { p.next(); }
 			return Some(token);
@@ -375,8 +380,8 @@ fn ident(p: &mut core::str::Chars, program_id: usize, pos: &mut usize, c: char) 
 			*pos += 1;
 		}
 	}
-	let token = Token::new(TokenType::from(ident), len, program_id, possub);
 	*pos += 1;
+	let token = Token::new(TokenType::from(ident), len, program_id, possub, *pos, *LINE.lock().unwrap());
 	return token;
 }
 
@@ -416,7 +421,7 @@ fn hexadecimal(p: &mut core::str::Chars, program_id: usize, pos: &mut usize, inp
 		*pos += 1;
 	}
 
-	return Token::new(TokenNum, num, program_id, possub-2);
+	return Token::new(TokenNum, num, program_id, possub-2, *pos, *LINE.lock().unwrap());
 }
 
 fn decimal(p: &mut core::str::Chars, program_id: usize, pos: &mut usize, c: char) -> Token{
@@ -435,7 +440,7 @@ fn decimal(p: &mut core::str::Chars, program_id: usize, pos: &mut usize, c: char
 		break;
 	}
 
-	return Token::new(TokenNum, num, program_id, possub-1);
+	return Token::new(TokenNum, num, program_id, possub-1, *pos, *LINE.lock().unwrap());
 }
 
 fn octal(p: &mut core::str::Chars, program_id: usize, pos: &mut usize) -> Token{
@@ -454,7 +459,7 @@ fn octal(p: &mut core::str::Chars, program_id: usize, pos: &mut usize) -> Token{
 		break;
 	}
 
-	return Token::new(TokenNum, num, program_id, possub-1);
+	return Token::new(TokenNum, num, program_id, possub-1, *pos, *LINE.lock().unwrap());
 }
 
 pub fn remove_backslash_or_crlf_newline(input: &mut String) {
@@ -503,8 +508,9 @@ pub fn scan(program_id: usize, add_eof: bool) -> Vec<Token> {
 
 		// \n
 		if c == '\n' {
-			tokens.push(Token::new(TokenNewLine, 0, program_id, pos));
+			tokens.push(Token::new(TokenNewLine, 0, program_id, pos, pos+1, *LINE.lock().unwrap()));
 			pos += 1;
+			*LINE.lock().unwrap() += 1;
 			continue;
 		}
 
@@ -573,7 +579,7 @@ pub fn scan(program_id: usize, add_eof: bool) -> Vec<Token> {
 
 	// guard
 	if add_eof {
-		let token = Token::new(TokenEof, 0, program_id, pos);
+		let token = Token::new(TokenEof, 0, program_id, pos, pos, *LINE.lock().unwrap());
 		tokens.push(token);
 	}
 	
@@ -581,6 +587,7 @@ pub fn scan(program_id: usize, add_eof: bool) -> Vec<Token> {
 }
 
 pub fn tokenize(program_id: usize, add_eof: bool) -> Vec<Token> {
+	*LINE.lock().unwrap() = 1;
 	let tokens = scan(program_id, add_eof);
 	let tokens = preprocess(tokens);
 	let tokens = strip_newline_tokens(tokens);

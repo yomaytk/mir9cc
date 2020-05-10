@@ -7,8 +7,7 @@ run:
 test: mir9cc test/test.c test/token.c
 	make mir9cc
 	@# ./test.sh
-	@gcc -E -P test/test.c > tmp-test.tmp
-	@./target/debug/mir9cc tmp-test.tmp > compile1.s
+	@./target/debug/mir9cc test/test.c > compile1.s
 	@gcc -c -o tmp-test2.o test/gcc.c
 	@gcc -static -o compile compile1.s tmp-test2.o
 	@echo -e "\n\e[32m*** test.c TEST start ***\e[m\n"
