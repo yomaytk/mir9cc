@@ -69,9 +69,9 @@ impl Context {
 	fn define(&mut self) {
 		let name = self.ident();
 		if self.consume_ty(TokenRightBrac) {
-			Macro::funclike_macro(self, name);
+			Macro::define_funclike(self, name);
 		} else {
-			Macro::objlike_macro(self, name);
+			Macro::define_objlike(self, name);
 		}
 	}
 	fn include(&mut self) {
@@ -237,7 +237,7 @@ impl Macro {
 	fn new_param(n: i32, stringize: bool, program_id: usize, pos: usize, end: usize, line: usize) -> Token {
 		return Token::new(TokenParam(stringize), n, program_id, pos, end, line);
 	}
-	fn funclike_macro(ctx: &mut Context, name: String) {
+	fn define_funclike(ctx: &mut Context, name: String) {
 
 		let mut params = vec![];
 		loop {
@@ -250,10 +250,12 @@ impl Macro {
 		}
 		let body = ctx.read_until_eol();
 		let mut m = Macro::new(MacroType::FunLike, Some(params), body);
-		m.replace_params();
+		m.replace_macro_params();
+		m.replace_hash_ident();
 		ctx.defined.insert(name, m);
 	}
-	fn replace_params(&mut self) {
+	// Replaces macro parameter tokens with TK_PARAM tokens.
+	fn replace_macro_params(&mut self) {
 		// Associate argument with index
 		let mut map_params = HashMap::new();
 		let params_len = self.params.as_ref().unwrap().len();
@@ -269,8 +271,10 @@ impl Macro {
 				}
 			}
 		}
+	}
+	// Process '#' followed by a macro parameter
+	fn replace_hash_ident(&mut self) {
 		let mut v = vec![];
-		// Process '#' followed by a macro parameter
 		let mut i = 0;
 		loop {
 			if i >= self.body.len()-1 {
@@ -292,7 +296,7 @@ impl Macro {
 		}
 		self.body = v;
 	}
-	fn objlike_macro(ctx: &mut Context, name: String) {
+	fn define_objlike(ctx: &mut Context, name: String) {
 		let body = ctx.read_until_eol();
 		let m = Macro::new(MacroType::ObjLike, None, body);
 		ctx.defined.insert(name, m);
