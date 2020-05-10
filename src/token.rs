@@ -271,7 +271,7 @@ fn read_string (p: &mut core::str::Chars, program_id: usize, pos: &mut usize) ->
 		}
 		let c2 = p.next().unwrap();
 		if c2 == '\0' {
-			error("premature end of input.");
+			error(get_path(program_id), *LINE.lock().unwrap(), "premature end of input.");
 		} else if let Some(c3) = ESCAPED.lock().unwrap().get(&c2) {
 			sb.push(*c3);
 		} else {
@@ -300,11 +300,11 @@ fn read_char (p: &mut core::str::Chars, program_id: usize, pos: &mut usize) -> T
 					val = c2 as i32;
 				}
 			} else {
-				error("premature end of input.");
+				error(get_path(program_id), *LINE.lock().unwrap(), "premature end of input.");
 			}
 		}
 	} else {
-		error("unclosed char literal.");
+		error(get_path(program_id), *LINE.lock().unwrap(), "unclosed char literal.");
 	}
 	assert!(p.next().unwrap() == '\'');
 	*pos += 1;
@@ -341,7 +341,7 @@ fn block_comment(p: &mut core::str::Chars, program_id: usize, pos: &mut usize) {
 				break;
 			}
 		} else {
-			error("premature end of input.");
+			error(get_path(program_id), *LINE.lock().unwrap(), "premature end of input.");
 		}
 	}
 	for _ in 0..(*pos - start)-1 {
@@ -415,7 +415,7 @@ fn hexadecimal(p: &mut core::str::Chars, program_id: usize, pos: &mut usize, inp
 			(_, 'a' ..= 'f') => { p.next(); num = num * 16 + c as i32 - 'a' as i32 + 10; }
 			(_, 'A' ..= 'F') => { p.next(); num = num * 16 + c as i32 - 'A' as i32 + 10; }
 			(true, _) => { break; }
-			(false, _) => { error(&format!("bad hexadecimal number at {}..", &input[*pos..*pos+5])); }
+			(false, _) => { error(get_path(program_id), *LINE.lock().unwrap(), &format!("bad hexadecimal number at {}..", &input[*pos..*pos+5])); }
 		}
 		ishex = true;
 		*pos += 1;
@@ -574,7 +574,7 @@ pub fn scan(program_id: usize, add_eof: bool) -> Vec<Token> {
 			continue;
 		}
 
-		error(&format!("cannot scan at {}", &input[pos..]));
+		error(get_path(program_id), *LINE.lock().unwrap(), &format!("cannot scan at {}", &input[pos..]));
 	}
 
 	// guard

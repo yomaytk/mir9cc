@@ -1,6 +1,7 @@
 use super::token::{*, TokenType::*};
 use super::lib::*;
 use std::collections::HashMap;
+use std::sync::Mutex;
 
 pub static NONE_TOKEN: Token = Token {
 	ty: TokenNoSignal,
@@ -10,6 +11,10 @@ pub static NONE_TOKEN: Token = Token {
 	end: 0,
 	line: 0,
 };
+
+lazy_static! {
+	pub static ref PATH: Mutex<HashMap<usize, String>> = Mutex::new(HashMap::new());
+}
 
 struct Context {
 	pub input: Vec<Token>,
@@ -75,13 +80,14 @@ impl Context {
 				let path = self.input[self.pos].getstring();
 				self.pos += 1;
 				// input program
-				add_program(path);
-				let new_id = PROGRAMS.lock().unwrap().len()-1;
-				let mut nv = tokenize(new_id, false);
+				add_program(path.clone());
+				let program_id = PROGRAMS.lock().unwrap().len()-1;
+				PATH.lock().unwrap().insert(program_id, path);
+				let mut nv = tokenize(program_id, false);
 				self.output.append(&mut nv);
 			}
 			_ => {
-				error(&format!("string expected after #include"));
+				error(None, 0, &format!("string expected after #include"));
 			}
 		}
 	}
@@ -93,7 +99,7 @@ impl Context {
 				return name;
 			}
 			_ => {
-				error(&format!("macro name expected."));
+				error(get_path(self.input[self.pos].program_id), self.input[self.pos].line, &format!("macro name expected."));
 				panic!("macro name expected.");
 			}
 		}
@@ -104,7 +110,9 @@ impl Context {
 	fn read_arg(&mut self) -> Vec<Token> {
 		let mut v = vec![];
 		let mut level = 0;
-		let mut token;
+		let mut token = self.peek();
+		let program_id = token.program_id;
+		let line = token.line;
 		while !self.eof() {
 			token = self.peek();
 			if level == 0 {
@@ -120,7 +128,7 @@ impl Context {
 			}
 			v.push(token);
 		}
-		error(&format!("unclonsed macro arguments at {:?}...", &self.input[self.pos..self.pos+5]));
+		error(get_path(program_id), line, &format!("unclonsed macro arguments at {:?}...", &self.input[self.pos..self.pos+5]));
 		panic!("");
 	}
 	fn read_args(&mut self) -> Vec<Vec<Token>> {
@@ -150,7 +158,7 @@ impl Context {
 		self.assert_ty(TokenRightBrac);
 		args = self.read_args();
 		if args.len() != m.params.unwrap().len() {
-			error(&format!("number of parameter does not match at {}", name));
+			error(get_path(program_id), num, &format!("number of parameter does not match at {}", name));
 		}
 		for token in m.body {
 
@@ -294,12 +302,16 @@ fn is_ident(token: &Token, s: &str) -> bool {
 	return token.ty == TokenIdent && &name == s;
 }
 
+pub fn get_path(program_id: usize) -> Option<String> {
+	return Some(PATH.lock().unwrap().get(&program_id).unwrap().clone());
+}
+
 pub fn add_program(path: String) {
 	match read_file(&path[..]) {
 		Ok(content) => {
 			let mut program = content;
 			remove_backslash_or_crlf_newline(&mut program);
-			PROGRAMS.lock().unwrap().push(program);
+			PROGRAMS.lock().unwrap().push(program.clone());
 		}
 		Err(_) => {
 			println!("failed to read file.");
@@ -351,8 +363,10 @@ pub fn preprocess(tokens: Vec<Token>) -> Vec<Token> {
 			ctx.include();
 			continue;
 		}
-		
-		error(&format!("macro expected at {}...", &PROGRAMS.lock().unwrap()[ctx.input[ctx.pos].program_id][ctx.input[ctx.pos].pos..ctx.input[ctx.pos].pos+5]));
+		let token = &ctx.input[ctx.pos];
+		let program_id = token.program_id;
+		let line = token.line;
+		error(get_path(program_id), line, &format!("macro expected at {}...", &PROGRAMS.lock().unwrap()[ctx.input[ctx.pos].program_id][ctx.input[ctx.pos].pos..ctx.input[ctx.pos].pos+5]));
 	}
 	
 	return ctx.output;
