@@ -180,156 +180,6 @@ pub enum NodeType {
 	NULL,																		// NULL
 }
 
-#[allow(dead_code)]
-impl NodeType {
-	fn num_init(val: i32) -> Self {
-		NodeType::Num(val)
-	}
-
-	fn bit_init(ctype: Type, tk_ty: TokenType, lhs: Node, rhs: Node) -> Self {
-		NodeType::BinaryTree(ctype, tk_ty, Box::new(lhs), Box::new(rhs))
-	}
-
-	fn ret_init(lhs: Node) -> Self {
-		NodeType::Ret(Box::new(lhs))
-	}
-
-	fn expr_init(lhs: Node) -> Self {
-		NodeType::Expr(Box::new(lhs))
-	}
-
-	fn stmt_init(stmts: Vec<Node>) -> Self {
-		NodeType::CompStmt(stmts)
-	}
-
-	fn ident_init(ident: String) -> Self {
-		NodeType::Ident(ident)
-	}
-
-	fn eq_init(ctype: Type, lhs: Node, rhs: Node) -> Self {
-		NodeType::EqTree(ctype, Box::new(lhs), Box::new(rhs))
-	}
-	
-	fn if_init(cond: Node, then: Node, elthen: Option<Node>) -> Self {
-		match elthen {
-			Some(node) => {
-				NodeType::IfThen(Box::new(cond), Box::new(then), Some(Box::new(node)))
-			}
-			None => {
-				NodeType::IfThen(Box::new(cond), Box::new(then), None)
-			}
-		}
-	}
-
-	fn call_init(ctype: Type, ident: String, args: Vec<Node>) -> Self {
-		NodeType::Call(ctype, ident, args)
-	}
-
-	fn func_init(ctype: Type, ident: String, is_extern: bool, args: Vec<Node>, body: Node, stacksize: usize) -> Self {
-		NodeType::Func(ctype, ident, is_extern, args, Box::new(body), stacksize)
-	}
-
-	fn logand_init(lhs: Node, rhs: Node) -> Self {
-		NodeType::LogAnd(Box::new(lhs), Box::new(rhs))
-	}
-
-	fn logor_init(lhs: Node, rhs: Node) -> Self {
-		NodeType::LogOr(Box::new(lhs), Box::new(rhs))
-	}
-
-	fn for_init(init: Node, cond: Node, inc: Node, body: Node) -> Self {
-		NodeType::For(Box::new(init), Box::new(cond), Box::new(inc), Box::new(body))
-	}
-
-	fn vardef_init(ty: Type, is_extern: bool, name: String, off: usize, rhs: Option<Node>) -> Self {
-		match rhs {
-			Some(node) => { NodeType::VarDef(ty, is_extern, name, off, Some(Box::new(node))) }
-			_ => { NodeType::VarDef(ty, is_extern, name, off, None)}
-		}
-	}
-
-	fn lvar_init(ty: Type, stacksize: usize) -> Self {
-		NodeType::Lvar(ty, stacksize)
-	}
-
-	fn deref_init(ctype: Type, lhs: Node) -> Self {
-		NodeType::Deref(ctype, Box::new(lhs))
-	}
-
-	fn addr_init(ctype: Type, lhs: Node) -> Self {
-		NodeType::Addr(ctype, Box::new(lhs))
-	}
-
-	fn sizeof_init(ctype: Type, val: usize, lhs: Node) -> Self {
-		NodeType::Sizeof(ctype, val, Box::new(lhs))
-	}
-
-	fn string_init(ctype: Type, strname: String, label: usize) -> Self {
-		NodeType::Str(ctype, strname, label)
-	}
-
-	fn gvar_init(ctype: Type, label: String) -> Self {
-		NodeType::Gvar(ctype, label)
-	}
-
-	fn eqeq_init(lhs: Node, rhs: Node) -> Self {
-		NodeType::EqEq(Box::new(lhs), Box::new(rhs))
-	}
-
-	fn neq_init(lhs: Node, rhs: Node) -> Self {
-		NodeType::Ne(Box::new(lhs), Box::new(rhs))
-	}
-
-	fn dowhile_init(body: Node, cond: Node) -> Self {
-		NodeType::DoWhile(Box::new(body), Box::new(cond))
-	}
-
-	fn stmtexpr_init(ctype: Type, body: Node) -> Self {
-		NodeType::StmtExpr(ctype, Box::new(body))
-	}
-
-	
-	fn alignof_init(expr: Node) -> Self {
-		NodeType::Alignof(Box::new(expr))
-	}
-	
-	fn dot_init(ctype: Type, expr: Node, member: String, offset: usize) -> Self {
-		NodeType::Dot(ctype, Box::new(expr), member, offset)
-	}
-	
-	fn not_init(expr: Node) -> Self {
-		NodeType::Not(Box::new(expr))
-	}
-	
-	fn ternary_init(ctype: Type, cond: Node, then: Node, els: Node) -> Self {
-		NodeType::Ternary(ctype, Box::new(cond), Box::new(then), Box::new(els))
-	}
-	
-	fn tuple_init(ctype: Type, lhs: Node, rhs: Node) -> Self {
-		NodeType::TupleExpr(ctype, Box::new(lhs), Box::new(rhs))
-	}
-	
-	fn neg_init(expr: Node) -> Self {
-		NodeType::Neg(Box::new(expr))
-	}
-	
-	fn incdec_init(ctype: Type, selector: i32, expr: Node) -> Self {
-		NodeType::IncDec(ctype, selector, Box::new(expr))
-	}
-
-	fn decl_init(ctype: Type, ident: String, args: Vec<Node>, is_extern: bool) -> Self {
-		NodeType::Decl(ctype, ident, args, is_extern)
-	}
-	
-	fn break_init() -> Self {
-		NodeType::Break
-	}
-	
-	fn null_init() -> Self {
-		NodeType::NULL
-	}
-}
-
 #[derive(Debug, Clone)]
 pub struct Node {
 	pub op: NodeType,
@@ -383,208 +233,184 @@ impl Node {
 		}
 	}
 
-	pub fn new_bit(ctype: Type, tk_ty: TokenType, lhs: Node, rhs: Node) -> Self {
-		Self {
-			op: NodeType::bit_init(ctype, tk_ty, lhs, rhs),
-		}
-	}
-	
 	pub fn new_num(val: i32) -> Self {
 		Self {
-			op: NodeType::num_init(val),
+			op: NodeType::Num(val),
 		}
 	}
-
+	pub fn new_bit(ctype: Type, tk_ty: TokenType, lhs: Node, rhs: Node) -> Self {
+		Self {
+			op: NodeType::BinaryTree(ctype, tk_ty, Box::new(lhs), Box::new(rhs))
+		}
+	}
 	pub fn new_ret(lhs: Node) -> Self {
 		Self {
-			op: NodeType::ret_init(lhs)
+			op: NodeType::Ret(Box::new(lhs))
 		}
 	}
-
 	pub fn new_expr(lhs: Node) -> Self {
 		Self {
-			op: NodeType::expr_init(lhs)
+			op: NodeType::Expr(Box::new(lhs))
 		}
 	}
-
 	pub fn new_stmt(stmts: Vec<Node>) -> Self {
 		Self {
-			op: NodeType::stmt_init(stmts)
+			op: NodeType::CompStmt(stmts)
 		}
 	}
-
 	pub fn new_ident(ident: String) -> Self {
 		Self {
-			op: NodeType::ident_init(ident)
+			op: NodeType::Ident(ident)
 		}
 	}
-
 	pub fn new_eq(ctype: Type, lhs: Node, rhs: Node) -> Self {
 		Self {
-			op: NodeType::eq_init(ctype, lhs, rhs)
+			op: NodeType::EqTree(ctype, Box::new(lhs), Box::new(rhs))
 		}
 	}
-
 	pub fn new_if(cond: Node, then: Node, elthen: Option<Node>) -> Self {
 		Self {
-			op: NodeType::if_init(cond, then, elthen)
+			op: match elthen {
+				Some(node) => {
+					NodeType::IfThen(Box::new(cond), Box::new(then), Some(Box::new(node)))
+				}
+				None => {
+					NodeType::IfThen(Box::new(cond), Box::new(then), None)
+				}
+			}
 		}
 	}
-
 	pub fn new_call(ctype: Type, ident: String, args: Vec<Node>) -> Self {
 		Self {
-			op: NodeType::call_init(ctype, ident, args)
+			op: NodeType::Call(ctype, ident, args)
 		}
 	}
-
 	pub fn new_func(ctype: Type, ident: String, is_extern: bool, args: Vec<Node>, body: Node, stacksize: usize) -> Self {
 		Self {
-			op: NodeType::func_init(ctype, ident, is_extern, args, body, stacksize)
+			op: NodeType::Func(ctype, ident, is_extern, args, Box::new(body), stacksize)
 		}
 	}
-
 	pub fn new_and(lhs: Node, rhs: Node) -> Self {
 		Self {
-			op: NodeType::logand_init(lhs, rhs)
+			op: NodeType::LogAnd(Box::new(lhs), Box::new(rhs))
 		}
 	}
-
 	pub fn new_or(lhs: Node, rhs: Node) -> Self {
 		Self {
-			op: NodeType::logor_init(lhs, rhs)
+			op: NodeType::LogOr(Box::new(lhs), Box::new(rhs))
 		}
 	}
-
 	pub fn new_for(init: Node, cond: Node, inc: Node, body: Node) -> Self {
 		Self {
-			op: NodeType::for_init(init, cond, inc, body)
+			op: NodeType::For(Box::new(init), Box::new(cond), Box::new(inc), Box::new(body))
 		}
 	}
-
 	pub fn new_vardef(ty: Type, is_extern: bool, name: String, off: usize, rhs: Option<Node>) -> Self {
 		Self {
-			op: NodeType::vardef_init(ty, is_extern, name, off, rhs)
+			op: match rhs {
+				Some(node) => { NodeType::VarDef(ty, is_extern, name, off, Some(Box::new(node))) }
+				_ => { NodeType::VarDef(ty, is_extern, name, off, None)}
+			}
 		}
 	}
-
 	pub fn new_lvar(ty: Type, stacksize: usize) -> Self {
 		Self {
-			op: NodeType::lvar_init(ty, stacksize)
+			op: NodeType::Lvar(ty, stacksize)
 		}
 	}
-
 	pub fn new_deref(ctype: Type, lhs: Node) -> Self {
 		Self {
-			op: NodeType::deref_init(ctype, lhs)
+			op: NodeType::Deref(ctype, Box::new(lhs))
 		}
 	}
-
 	pub fn new_addr(ctype: Type, lhs: Node) -> Self {
 		Self {
-			op: NodeType::addr_init(ctype, lhs)
+			op: NodeType::Addr(ctype, Box::new(lhs))
 		}
 	}
-
 	pub fn new_sizeof(ctype: Type, val: usize, lhs: Node) -> Self {
 		Self {
-			op: NodeType::sizeof_init(ctype, val, lhs)
+			op: NodeType::Sizeof(ctype, val, Box::new(lhs))
 		}
 	}
-
 	pub fn new_string(ctype: Type, strname: String, label: usize) -> Self {
 		Self {
-			op: NodeType::string_init(ctype, strname, label)
+			op: NodeType::Str(ctype, strname, label)
 		}
 	}
-
 	pub fn new_gvar(ctype: Type, label: String) -> Self {
 		Self {
-			op: NodeType::gvar_init(ctype, label)
+			op: NodeType::Gvar(ctype, label)
 		}
 	}
-
 	pub fn new_eqeq(lhs: Node, rhs: Node) -> Self {
 		Self {
-			op: NodeType::eqeq_init(lhs, rhs)
+			op: NodeType::EqEq(Box::new(lhs), Box::new(rhs))
 		}
 	}
-
 	pub fn new_neq(lhs: Node, rhs: Node) -> Self {
 		Self {
-			op: NodeType::neq_init(lhs, rhs)
+			op: NodeType::Ne(Box::new(lhs), Box::new(rhs))
 		}
 	}
-
 	pub fn new_dowhile(body: Node, cond: Node) -> Self {
 		Self {
-			op: NodeType::dowhile_init(body, cond)
+			op: NodeType::DoWhile(Box::new(body), Box::new(cond))
 		}
 	}
-
 	pub fn new_stmtexpr(ctype: Type, body: Node) -> Self {
 		Self {
-			op: NodeType::stmtexpr_init(ctype, body)
+			op: NodeType::StmtExpr(ctype, Box::new(body))
 		}
 	}
-
-	
 	pub fn new_alignof(expr: Node) -> Self {
 		Self {
-			op: NodeType::alignof_init(expr)
+			op: NodeType::Alignof(Box::new(expr))
 		}
 	}
-	
-	pub fn new_dot(ctype: Type, expr: Node, name: String, offset: usize) -> Self {
+	pub fn new_dot(ctype: Type, expr: Node, member: String, offset: usize) -> Self {
 		Self {
-			op: NodeType::dot_init(ctype, expr, name, offset)
+			op: NodeType::Dot(ctype, Box::new(expr), member, offset)
 		}
 	}
-	
 	pub fn new_not(expr: Node) -> Self {
 		Self {
-			op: NodeType::not_init(expr)
+			op: NodeType::Not(Box::new(expr))
 		}
 	}
-	
 	pub fn new_ternary(ctype: Type, cond: Node, then: Node, els: Node) -> Self {
 		Self {
-			op: NodeType::ternary_init(ctype, cond, then, els)
+			op: NodeType::Ternary(ctype, Box::new(cond), Box::new(then), Box::new(els))
 		}
 	}
-	
 	pub fn new_tuple(ctype: Type, lhs: Node, rhs: Node) -> Self {
 		Self {
-			op: NodeType::tuple_init(ctype, lhs, rhs)
+			op: NodeType::TupleExpr(ctype, Box::new(lhs), Box::new(rhs))
 		}
 	}
-	
 	pub fn new_neg(expr: Node) -> Self {
 		Self {
-			op: NodeType::neg_init(expr)
+			op: NodeType::Neg(Box::new(expr))
 		}
 	}
-	
 	pub fn new_incdec(ctype: Type, selector: i32, expr: Node) -> Self {
 		Self {
-			op: NodeType::incdec_init(ctype, selector, expr)
+			op: NodeType::IncDec(ctype, selector, Box::new(expr))
 		}
 	}
-
 	pub fn new_decl(ctype: Type, ident: String, args: Vec<Node>, is_extern: bool) -> Self {
 		Self {
-			op: NodeType::decl_init(ctype, ident, args, is_extern)
+			op: NodeType::Decl(ctype, ident, args, is_extern)
 		}
 	}
-	
 	pub fn new_break() -> Self {
 		Self {
-			op: NodeType::break_init()
+			op: NodeType::Break
 		}
 	}
-	
 	pub fn new_null() -> Self {
 		Self {
-			op: NodeType::null_init()
+			op: NodeType::NULL
 		}
 	}
 }
