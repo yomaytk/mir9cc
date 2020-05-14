@@ -121,8 +121,8 @@ pub fn new_global(ctype: &Type, ident: String, strname: Option<String>, is_exter
 }
 
 pub fn binwalk(f: fn(Type, lhs: Node, rhs: Node) -> Node, lhs: &Node, rhs: &Node, env: &mut Env, lhs_or_rhs: i32) -> Node {
-	let lhs2 = walk(lhs, env, true);
-	let rhs2 = walk(rhs, env, true);
+	let lhs2 = walk(lhs, env);
+	let rhs2 = walk(rhs, env);
 	if lhs_or_rhs == -1 {
 		return f(lhs2.nodesctype(Some(INT_TY.clone())), lhs2, rhs2);
 	} else {
@@ -130,12 +130,20 @@ pub fn binwalk(f: fn(Type, lhs: Node, rhs: Node) -> Node, lhs: &Node, rhs: &Node
 	}
 }
 
-pub fn walk(node: &Node, env: &mut Env, decay: bool) -> Node {
+pub fn walk(node: &Node, env: &mut Env) -> Node {
+	return do_walk(node, env, true)
+}
+
+pub fn walk_noconv(node: &Node, env: &mut Env) -> Node {
+	return do_walk(node, env, false)
+}
+
+pub fn do_walk(node: &Node, env: &mut Env, decay: bool) -> Node {
 	match &node.op {
 		Num(val) => { return Node::new_num(*val); }
 		BinaryTree(_ctype, op, lhs, rhs)  => {
-			let lhs2 = walk(lhs, env, true);
-			let rhs2 = walk(rhs, env, true);
+			let lhs2 = walk(lhs, env);
+			let rhs2 = walk(rhs, env);
 			let mut ctype = INT_TY.clone();
 			ctype = lhs2.nodesctype(Some(ctype));
 			match op {
@@ -150,18 +158,18 @@ pub fn walk(node: &Node, env: &mut Env, decay: bool) -> Node {
 			}
 			return Node::new_bit(ctype, op.clone(), lhs2, rhs2);
 		}
-		Ret(lhs) => { return Node::new_ret(walk(lhs, env, true)); }
-		Expr(lhs) => { return Node::new_expr(walk(lhs, env, true)); }
+		Ret(lhs) => { return Node::new_ret(walk(lhs, env)); }
+		Expr(lhs) => { return Node::new_expr(walk(lhs, env)); }
 		CompStmt(lhsv) => {
 			let mut v = vec![];
 			let mut newenv = Env::new(Some(env.clone()));
 			for lhs in lhsv {
-				v.push(walk(lhs, &mut newenv, true));
+				v.push(walk(lhs, &mut newenv));
 			}
 			return Node::new_stmt(v);
 		}
 		StmtExpr(ctype, body) => {
-			return Node::new_stmtexpr(ctype.clone(), walk(body, env, true));
+			return Node::new_stmtexpr(ctype.clone(), walk(body, env));
 		}
 		Ident(name) => {
 			if let Some(var) = env.find(name.clone()) {
@@ -181,17 +189,17 @@ pub fn walk(node: &Node, env: &mut Env, decay: bool) -> Node {
 			panic!("\"{}\" is not defined.", name);
 		}
 		EqTree(_, lhs, rhs) => {
-			let lhs2 = walk(lhs, env, false);
+			let lhs2 = walk_noconv(lhs, env);
 			lhs2.checklval();
-			let rhs2 = walk(rhs, env, true);
+			let rhs2 = walk(rhs, env);
 			return Node::new_eq(lhs2.nodesctype(None).clone(), lhs2, rhs2);
 		}
 		IfThen(cond, then, elthen) => {
 			match elthen {
 				Some(elth) => { 
-					return Node::new_if(walk(cond, env, true), walk(then, env, true), Some(walk(elth, env, true)));
+					return Node::new_if(walk(cond, env), walk(then, env), Some(walk(elth, env)));
 				}
-				_ => { return Node::new_if(walk(cond, env, true), walk(then, env, true), None); }
+				_ => { return Node::new_if(walk(cond, env), walk(then, env), None); }
 			}
 		}
 		Call(_, name, args) => {
@@ -204,20 +212,20 @@ pub fn walk(node: &Node, env: &mut Env, decay: bool) -> Node {
 			}
 			let mut v = vec![];
 			for arg in args {
-				v.push(walk(arg, env, true));
+				v.push(walk(arg, env));
 			}
 			return Node::new_call(ctype, name.clone(), v);
 		}
-		LogAnd(lhs, rhs) => { return Node::new_and(walk(lhs, env, true), walk(rhs, env, true)); }
-		LogOr(lhs, rhs) => { return Node::new_or(walk(lhs, env, true), walk(rhs, env, true)); }
+		LogAnd(lhs, rhs) => { return Node::new_and(walk(lhs, env), walk(rhs, env)); }
+		LogOr(lhs, rhs) => { return Node::new_or(walk(lhs, env), walk(rhs, env)); }
 		For(init, cond, inc, body) => {
 			let mut newenv = Env::new(Some(env.clone()));
-			return Node::new_for(walk(init, &mut newenv,  true), walk(cond, &mut newenv, true), walk(inc, &mut newenv, true), walk(body, &mut newenv, true));
+			return Node::new_for(walk(init, &mut newenv), walk(cond, &mut newenv), walk(inc, &mut newenv), walk(body, &mut newenv));
 		}
 		VarDef(ctype, is_extern, ident, _, init) => {
 			let mut rexpr = None;
 			if let Some(rhs) = init {
-				rexpr = Some(walk(rhs, env, true));
+				rexpr = Some(walk(rhs, env));
 			}
 			let stacksize = *STACKSIZE.lock().unwrap();
 			*STACKSIZE.lock().unwrap() = roundup(stacksize, ctype.align);
@@ -237,7 +245,7 @@ pub fn walk(node: &Node, env: &mut Env, decay: bool) -> Node {
 			return Node::new_vardef(ctype.clone(), *is_extern, ident.clone(), offset, rexpr)
 		}
 		Deref(_, lhs) => {
-			let lhs2 = walk(lhs, env, true);
+			let lhs2 = walk(lhs, env);
 			let ctype = lhs2.nodesctype(None);
 			match ctype.ty {
 				Ty::PTR => { 
@@ -256,12 +264,12 @@ pub fn walk(node: &Node, env: &mut Env, decay: bool) -> Node {
 			}
 		}
 		Addr(_, lhs) => {
-			let lhs2 = walk(lhs, env, true);
+			let lhs2 = walk(lhs, env);
 			lhs2.checklval();
 			return Node::new_addr(lhs2.nodesctype(None).ptr_to(), lhs2);
 		}
 		Sizeof(.., lhs) => {
-			let lhs2 = walk(lhs, env, false);
+			let lhs2 = walk_noconv(lhs, env);
 			let ctype = lhs2.nodesctype(None);
 			match ctype.ty {
 				Ty::NULL => { panic!("The size of an untyped value cannot be calculated."); }
@@ -282,16 +290,16 @@ pub fn walk(node: &Node, env: &mut Env, decay: bool) -> Node {
 			return maybe_decay(lhs, decay);
 		}
 		EqEq(lhs, rhs) => {
-			return Node::new_eqeq(walk(lhs, env, true), walk(rhs, env, true));
+			return Node::new_eqeq(walk(lhs, env), walk(rhs, env));
 		}
 		Ne(lhs, rhs) => {
-			return Node::new_neq(walk(lhs, env, true), walk(rhs, env, true));
+			return Node::new_neq(walk(lhs, env), walk(rhs, env));
 		}
 		DoWhile(body, cond) => {
-			return Node::new_dowhile(walk(body, env, true), walk(cond, env, true));
+			return Node::new_dowhile(walk(body, env), walk(cond, env));
 		}
 		Alignof(expr) => {
-			let expr2 = walk(expr, env, false);
+			let expr2 = walk_noconv(expr, env);
 			let ctype = expr2.nodesctype(None);
 			match ctype.ty {
 				Ty::NULL => { panic!("_Alignof should be used for Node has Ctype."); }
@@ -299,7 +307,7 @@ pub fn walk(node: &Node, env: &mut Env, decay: bool) -> Node {
 			}
 		}
 		Dot(_, expr, name, _) => {
-			let expr2 = walk(expr, env, true);
+			let expr2 = walk(expr, env);
 			match expr2.nodesctype(None).ty {
 				Ty::STRUCT(members) => {
 					if members.is_empty() {
@@ -327,23 +335,23 @@ pub fn walk(node: &Node, env: &mut Env, decay: bool) -> Node {
 			}
 		}
 		Not(expr) => {
-			let expr2 = walk(expr, env, true);
+			let expr2 = walk(expr, env);
 			return Node::new_not(expr2);
 		}
 		Ternary(_, cond, then, els) => {
-			let cond2 = walk(cond, env, true);
-			let then2 = walk(then, env, true);
-			let els2 = walk(els, env, true);
+			let cond2 = walk(cond, env);
+			let then2 = walk(then, env);
+			let els2 = walk(els, env);
 			return Node::new_ternary(then2.nodesctype(Some(INT_TY.clone())), cond2, then2, els2);
 		}
 		TupleExpr(_, lhs, rhs) => {
 			return binwalk(Node::new_tuple, lhs, rhs, env, 1);
 		}
 		Neg(expr) => {
-			return Node::new_neg(walk(expr, env, true));
+			return Node::new_neg(walk(expr, env));
 		}
 		IncDec(_, selector, expr) => {
-			let lhs = walk(expr, env, true);
+			let lhs = walk(expr, env);
 			lhs.checklval();
 			return Node::new_incdec(lhs.nodesctype(None), *selector, lhs);
 		}
@@ -377,10 +385,10 @@ pub fn sema(nodes: &Vec<Node>) -> (Vec<Node>, Vec<Var>) {
 				// eval args
 				let mut argv = vec![];
 				for arg in args {
-					argv.push(walk(arg, &mut topenv, true));
+					argv.push(walk(arg, &mut topenv));
 				}
 				// eval body
-				let body = walk(body, &mut topenv, true);
+				let body = walk(body, &mut topenv);
 				let node = Node::new_func(ctype.clone(), ident.clone(), *is_extern, argv, body, *STACKSIZE.lock().unwrap());
 				// add to var env
 				let var = Var::new(ctype.clone(), 0, false, ident.clone(), String::new(), *is_extern);
