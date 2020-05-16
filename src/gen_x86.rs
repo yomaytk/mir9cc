@@ -123,7 +123,7 @@ pub fn gen(fun: &Function, label: usize) {
 			IrMul(is_imm) => {
 				if !*is_imm {
 					emit!("mov rax, {}", REG64[rhs]);
-					emit!("mul {}", REG64[lhs]);
+					emit!("imul {}", REG64[lhs]);
 					emit!("mov {}, rax", REG64[lhs]);
 				} else {
 					if rhs < 256 && rhs.count_ones() == 1 {
@@ -131,14 +131,14 @@ pub fn gen(fun: &Function, label: usize) {
 						continue;
 					}
 					emit!("mov rax, {}", rhs);
-					emit!("mul {}", REG64[lhs]);
+					emit!("imul {}", REG64[lhs]);
 					emit!("mov {}, rax", REG64[lhs]);
 				}
 			}
 			IrDiv => {
 				emit!("mov rax, {}", REG64[lhs]);
 				emit!("cqo");
-				emit!("div {}", REG64[rhs]);
+				emit!("idiv {}", REG64[rhs]);
 				emit!("mov {}, rax", REG64[lhs]);
 			}
 			IrRet => {
@@ -226,7 +226,7 @@ pub fn gen(fun: &Function, label: usize) {
 			IrMod => {
 				emit!("mov rax, {}", REG64[lhs]);
 				emit!("cqo");
-				emit!("div {}", REG64[rhs]);
+				emit!("idiv {}", REG64[rhs]);
 				emit!("mov {}, rdx", REG64[lhs]);
 			}
 			IrNeg => {

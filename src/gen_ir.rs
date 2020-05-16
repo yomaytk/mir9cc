@@ -375,22 +375,13 @@ fn gen_expr(node: &Node, code: &mut Vec<Ir>) -> usize {
 			label(y, code);
 			return r1;
 		}
-		NodeType::BinaryTree(ctype, ty, lhs, rhs) => {
+		NodeType::BinaryTree(_, ty, lhs, rhs) => {
 			let lhi = gen_expr(lhs, code);
 			let rhi = gen_expr(rhs, code);
-			match ty {
-				TokenAdd | TokenSub => {
-					if let Ty::PTR = ctype.ty {
-						let size_of = ctype.ptr_to.as_ref().unwrap().size;
-						code.push(Ir::new(IrMul(true), rhi, size_of));
-					}
-				}
-				TokenTilde => {
-					kill(rhi, code);
-					code.push(Ir::new(IrXor(true, -1), lhi, 1));
-					return lhi;
-				}
-				_ => {}
+			if let TokenTilde = ty {
+				kill(rhi, code);
+				code.push(Ir::new(IrXor(true, -1), lhi, 1));
+				return lhi;
 			}
 			code.push(Ir::new(Ir::bittype(ty.clone()), lhi, rhi));
 			kill(rhi, code);

@@ -138,23 +138,50 @@ pub fn walk_noconv(node: &Node, env: &mut Env) -> Node {
 	return do_walk(node, env, false)
 }
 
+fn bin_ptr_swap(ctype: &mut Type, mut lhs: Node, mut rhs: Node) -> (Node, Node) {
+	match (lhs.nodesctype(None).ty, rhs.nodesctype(None).ty) {
+		(Ty::PTR, _) => {}
+		(_, Ty::PTR) => {
+			*ctype = rhs.nodesctype(None);
+			lhs = std::mem::replace(&mut rhs, lhs);
+		}
+		_ => { 
+			return (lhs, rhs); 
+		}
+	}
+	let scale_ptr = ctype.ptr_to.as_ref().unwrap().size as i32;
+	rhs = Node::new_bit(INT_TY.clone(), TokenStar, rhs, Node::new_num(scale_ptr));
+	return (lhs, rhs);
+}
+
 pub fn do_walk(node: &Node, env: &mut Env, decay: bool) -> Node {
 	match &node.op {
 		Num(val) => { return Node::new_num(*val); }
-		BinaryTree(_ctype, op, lhs, rhs)  => {
-			let lhs2 = walk(lhs, env);
-			let rhs2 = walk(rhs, env);
+		BinaryTree(_, op, lhs, rhs)  => {
+			let mut lhs2 = walk(lhs, env);
+			let mut rhs2 = walk(rhs, env);
 			let mut ctype = INT_TY.clone();
 			ctype = lhs2.nodesctype(Some(ctype));
-			match op {
-				TokenAdd | TokenSub => {
-					match (lhs2.nodesctype(None).ty, rhs2.nodesctype(None).ty) {
-						(Ty::NULL, Ty::PTR) => { ctype = rhs2.nodesctype(None); }
-						(Ty::PTR, Ty::PTR) => { panic!("pointer +- pointer is not defined."); }
-						_ => {}
+			if let TokenAdd = op {
+				let (lhs2_, rhs2_) = bin_ptr_swap(&mut ctype, lhs2, rhs2);
+				lhs2 = lhs2_;
+				rhs2 = rhs2_;
+				if let Ty::PTR = rhs2.nodesctype(None).ty {
+					panic!("pointer + pointer is not defined.");
+				}
+			} else if let TokenSub = op {
+				match (lhs2.nodesctype(None).ty, rhs2.nodesctype(None).ty) {
+					(Ty::PTR, Ty::PTR) => {
+						let node = Node::new_bit(ctype.clone(), TokenSub, lhs2, rhs2);
+						let scale_ptr = ctype.ptr_to.as_ref().unwrap().size as i32;
+						return Node::new_bit(ctype, TokenDiv, node, Node::new_num(scale_ptr));
+					}
+					_ => {
+						let (lhs2_, rhs2_) = bin_ptr_swap(&mut ctype, lhs2, rhs2);
+						lhs2 = lhs2_;
+						rhs2 = rhs2_;
 					}
 				}
-				_ => {}
 			}
 			return Node::new_bit(ctype, op.clone(), lhs2, rhs2);
 		}
