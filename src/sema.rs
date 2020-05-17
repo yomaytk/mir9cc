@@ -353,7 +353,7 @@ pub fn do_walk(node: &Node, env: &mut Env, decay: bool) -> Node {
 				_ => { return Node::new_num(ctype.align as i32); }
 			}
 		}
-		Dot(_, expr, name, _) => {
+		Dot(_, expr, name) => {
 			let expr2 = walk(expr, env);
 			match expr2.nodesctype(None).ty {
 				Ty::STRUCT(_, members) => {
@@ -367,7 +367,7 @@ pub fn do_walk(node: &Node, env: &mut Env, decay: bool) -> Node {
 							if &name[..] != &name2[..] {
 								continue;
 							}
-							let lhs = Node::new_dot(ctype.clone(), expr2, name2, ctype.offset);
+							let lhs = Node::new_dot(ctype.clone(), expr2, name2);
 							return maybe_decay(lhs, decay);
 						}
 					}

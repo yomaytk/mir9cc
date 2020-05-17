@@ -190,7 +190,7 @@ pub enum NodeType {
 	Ne(Box<Node>, Box<Node>),													// Ne(lhs, rhs)
 	DoWhile(Box<Node>, Box<Node>),												// Dowhile(boyd, cond)
 	Alignof(Box<Node>),															// Alignof(expr)
-	Dot(Type, Box<Node>, String, usize),										// Dot(ctype, expr, name, offset)
+	Dot(Type, Box<Node>, String),												// Dot(ctype, expr, name)
 	Not(Box<Node>),																// Not(expr)
 	Ternary(Type, Box<Node>, Box<Node>, Box<Node>),								// Ternary(ctype, cond, then, els)
 	TupleExpr(Type, Box<Node>, Box<Node>),										// TupleExpr(ctype, lhs, rhs)
@@ -389,9 +389,9 @@ impl Node {
 			op: NodeType::Alignof(Box::new(expr))
 		}
 	}
-	pub fn new_dot(ctype: Type, expr: Node, member: String, offset: usize) -> Self {
+	pub fn new_dot(ctype: Type, expr: Node, member: String) -> Self {
 		Self {
-			op: NodeType::Dot(ctype, Box::new(expr), member, offset)
+			op: NodeType::Dot(ctype, Box::new(expr), member)
 		}
 	}
 	pub fn new_not(expr: Node) -> Self {
@@ -617,12 +617,12 @@ fn postfix(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 		// struct member
 		if tokens[*pos].consume_ty(TokenDot, pos) {
 			let name = ident(tokens, pos);
-			lhs = Node::new_dot(NULL_TY.clone(), lhs, name, 0);
+			lhs = Node::new_dot(NULL_TY.clone(), lhs, name);
 		// struct member arrow
 		} else if tokens[*pos].consume_ty(TokenArrow, pos) {
 			let name = ident(tokens, pos);
 			let expr = Node::new_deref(INT_TY.clone(), lhs);
-			lhs = Node::new_dot(NULL_TY.clone(), expr, name, 0);
+			lhs = Node::new_dot(NULL_TY.clone(), expr, name);
 		// array
 		} else if tokens[*pos].consume_ty(TokenRightmiddleBrace, pos)  {
 			let id = assign(tokens, pos);

@@ -328,9 +328,9 @@ fn gen_lval(node: &Node, code: &mut Vec<Ir>) -> usize {
 			code.push(Ir::new(IrLabelAddr(label.clone()), r, 0));
 			return r;
 		}
-		NodeType::Dot(_, expr, _, offset) => {
+		NodeType::Dot(ctype, expr, _) => {
 			let r1 = gen_lval(expr, code);
-			code.push(Ir::new(IrAdd(true), r1, *offset));
+			code.push(Ir::new(IrAdd(true), r1, ctype.offset));
 			return r1;
 		}
 		_ => { panic!("not an lvalue")}
