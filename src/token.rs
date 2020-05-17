@@ -202,21 +202,43 @@ impl Token {
 			line
 		}
 	}
-	pub fn assert_ty(&self, ty: TokenType, pos: &mut usize) {
-		if !self.consume_ty(ty, pos) {
-			// error(&format!("assertion failed at: {}", &self.input[..self.val as usize]));
-			// for debug.
-			panic!("assertion failed at: {}..", &PROGRAMS.lock().unwrap()[self.program_id][self.pos..self.pos+self.val as usize]);
+	pub fn getstring(&self) -> String {
+		match &self.ty {
+			TokenString(sb) => { return sb.clone(); }
+			_ => { panic!("{:?}", self); }
 		}
 	}
-	pub fn consume_ty(&self, ty: TokenType, pos: &mut usize) -> bool {
-		match (&self.ty, &ty) {
+}
+
+pub struct Tokens {
+	pub tokens: Vec<Token>,
+	pub pos: usize
+}
+
+impl Tokens {
+	pub fn new(tokens: Vec<Token>) -> Self {
+		Self {
+			tokens,
+			pos: 0
+		}
+	}
+	pub fn assert_ty(&mut self, ty: TokenType) {
+		let pos = self.pos;
+		if !self.consume_ty(ty) {
+			// error(&format!("assertion failed at: {}", &self.input[..self.val as usize]));
+			// for debug.
+			panic!("assertion failed at: {}..", &PROGRAMS.lock().unwrap()[self.tokens[pos].program_id][pos..pos+self.tokens[pos].val as usize]);
+		}
+	}
+	pub fn consume_ty(&mut self, ty: TokenType) -> bool {
+		let token = &self.tokens[self.pos];
+		match (&token.ty, &ty) {
 			(TokenString(_), TokenString(_)) => {
 				return true;
 			}
 			_ => {
-				if self.ty == ty {
-					*pos += 1;
+				if token.ty == ty {
+					self.pos += 1;
 					return true;
 				} else {
 					return false;
@@ -224,17 +246,19 @@ impl Token {
 			}
 		}
 	}
-	pub fn is_typename(&self, pos: &mut usize) -> bool {
-		if self.ty == TokenInt {
-			*pos += 1;
+	pub fn is_typename(&mut self) -> bool {
+		let token = &self.tokens[self.pos];
+		if token.ty == TokenInt {
+			self.pos += 1;
 			return true;
 		}
 		return false;
 	}
 	pub fn getstring(&self) -> String {
-		match &self.ty {
+		let token = &self.tokens[self.pos];
+		match &token.ty {
 			TokenString(sb) => { return sb.clone(); }
-			_ => { panic!("{:?}", self); }
+			_ => { panic!("{:?}", token); }
 		}
 	}
 }

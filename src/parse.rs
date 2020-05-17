@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use std::sync::Mutex;
 
 // This is a recursive-descendent parser which constructs abstract
-// syntax tree from input tokens.
+// syntax tree from input tokenset.
 //
 // This parser knows only about BNF of the C grammer and doesn't care
 // about its semantics. Therefore, some invalid expressions, such as
@@ -470,32 +470,32 @@ pub fn roundup(x: usize, align: usize) -> usize {
 	return (x + align - 1) & !(align - 1);
 }
 
-pub fn decl_specifiers(tokens: &Vec<Token>,  pos: &mut usize) -> Type {
-	if tokens[*pos].consume_ty(TokenIdent, pos) {
-		*pos -= 1;
-		let name = ident(tokens, pos);
+pub fn decl_specifiers(tokenset: &mut Tokens) -> Type {
+	if tokenset.consume_ty(TokenIdent) {
+		tokenset.pos -= 1;
+		let name = ident(tokenset);
 		env_find!(name, typedefs, NULL_TY.clone());
 	}
-	if tokens[*pos].consume_ty(TokenInt, pos){
+	if tokenset.consume_ty(TokenInt){
 		return INT_TY.clone();
 	}
-	if tokens[*pos].consume_ty(TokenChar, pos){
+	if tokenset.consume_ty(TokenChar){
 		return CHAR_TY.clone();
 	}
-	if tokens[*pos].consume_ty(TokenStruct, pos){
+	if tokenset.consume_ty(TokenStruct){
 		
 		let mut members = vec![];
 		let mut tag = String::new();
 		// tag
-		if tokens[*pos].consume_ty(TokenIdent, pos) {
-			*pos -= 1;
-			tag = ident(tokens, pos);
+		if tokenset.consume_ty(TokenIdent) {
+			tokenset.pos -= 1;
+			tag = ident(tokenset);
 		}
 		
 		// struct member
-		if tokens[*pos].consume_ty(TokenRightCurlyBrace, pos) {
-			while !tokens[*pos].consume_ty(TokenLeftCurlyBrace, pos) {
-				members.push(declaration(tokens, pos));
+		if tokenset.consume_ty(TokenRightCurlyBrace) {
+			while !tokenset.consume_ty(TokenLeftCurlyBrace) {
+				members.push(declaration(tokenset));
 			}
 		}
 		match (members.is_empty(), tag.is_empty()) {
@@ -516,7 +516,7 @@ pub fn decl_specifiers(tokens: &Vec<Token>,  pos: &mut usize) -> Type {
 			}
 		}
 	}
-	if tokens[*pos].consume_ty(TokenVoid, pos) {
+	if tokenset.consume_ty(TokenVoid) {
 		return VOID_TY.clone();
 	}
 	return NULL_TY.clone();
@@ -539,150 +539,152 @@ pub fn new_struct(tag: String, mut members: Vec<Node>) -> Type {
 	return Type::new(Ty::STRUCT(tag, members), None, None, ty_size ,ty_align , 0, 0);
 }
 
-fn assignment_op(tokens: &Vec<Token>, pos: &mut usize) -> Option<TokenType> {
-	if tokens[*pos].consume_ty(TokenAddEq, pos) { return Some(TokenAdd); }
-	else if tokens[*pos].consume_ty(TokenSubEq, pos) { return Some(TokenSub); }
-	else if tokens[*pos].consume_ty(TokenMulEq, pos) { return Some(TokenStar); }
-	else if tokens[*pos].consume_ty(TokenDivEq, pos) { return Some(TokenDiv); }
-	else if tokens[*pos].consume_ty(TokenModEq, pos) { return Some(TokenMod); }
-	else if tokens[*pos].consume_ty(TokenShlEq, pos) { return Some(TokenShl); }
-	else if tokens[*pos].consume_ty(TokenShrEq, pos) { return Some(TokenShr); }
-	else if tokens[*pos].consume_ty(TokenAndEq, pos) { return Some(TokenAmpersand); }
-	else if tokens[*pos].consume_ty(TokenOrEq, pos) { return Some(TokenOr); }
-	else if tokens[*pos].consume_ty(TokenXorEq, pos) { return Some(TokenXor); }
-	else if tokens[*pos].consume_ty(TokenEq, pos) { return Some(TokenEq); }
+fn assignment_op(tokenset: &mut Tokens) -> Option<TokenType> {
+	if tokenset.consume_ty(TokenAddEq) { return Some(TokenAdd); }
+	else if tokenset.consume_ty(TokenSubEq) { return Some(TokenSub); }
+	else if tokenset.consume_ty(TokenMulEq) { return Some(TokenStar); }
+	else if tokenset.consume_ty(TokenDivEq) { return Some(TokenDiv); }
+	else if tokenset.consume_ty(TokenModEq) { return Some(TokenMod); }
+	else if tokenset.consume_ty(TokenShlEq) { return Some(TokenShl); }
+	else if tokenset.consume_ty(TokenShrEq) { return Some(TokenShr); }
+	else if tokenset.consume_ty(TokenAndEq) { return Some(TokenAmpersand); }
+	else if tokenset.consume_ty(TokenOrEq) { return Some(TokenOr); }
+	else if tokenset.consume_ty(TokenXorEq) { return Some(TokenXor); }
+	else if tokenset.consume_ty(TokenEq) { return Some(TokenEq); }
 	else { return None; }
 }
 
-fn primary(tokens: &Vec<Token>, pos: &mut usize) -> Node {
+fn primary(tokenset: &mut Tokens) -> Node {
 	
-	if tokens[*pos].consume_ty(TokenRightBrac, pos) {
-		if tokens[*pos].consume_ty(TokenRightCurlyBrace, pos) {
-			*pos -= 1;
-			let body = Node::new_stmtexpr(INT_TY.clone(), compound_stmt(tokens, pos));
-			tokens[*pos].assert_ty(TokenLeftBrac, pos);
+	if tokenset.consume_ty(TokenRightBrac) {
+		if tokenset.consume_ty(TokenRightCurlyBrace) {
+			tokenset.pos -= 1;
+			let body = Node::new_stmtexpr(INT_TY.clone(), compound_stmt(tokenset));
+			tokenset.assert_ty(TokenLeftBrac);
 			return body;
 		}
-		let lhs = expr(tokens, pos);
-		tokens[*pos].assert_ty(TokenLeftBrac, pos);
+		let lhs = expr(tokenset);
+		tokenset.assert_ty(TokenLeftBrac);
 		return lhs;
 	}
-	if tokens[*pos].consume_ty(TokenNum, pos) {
-		return Node::new_num(tokens[*pos-1].val);
+	if tokenset.consume_ty(TokenNum) {
+		return Node::new_num(tokenset.tokens[tokenset.pos-1].val);
 	}
-	if tokens[*pos].consume_ty(TokenIdent, pos) {
+	if tokenset.consume_ty(TokenIdent) {
 
-		let name = String::from(&PROGRAMS.lock().unwrap()[tokens[*pos-1].program_id][tokens[*pos-1].pos..tokens[*pos-1].end]);
+		let token = &tokenset.tokens[tokenset.pos-1];
+		let name = String::from(&PROGRAMS.lock().unwrap()[token.program_id][token.pos..token.end]);
 		// variable
-		if !tokens[*pos].consume_ty(TokenRightBrac, pos){
+		if !tokenset.consume_ty(TokenRightBrac){
 			return Node::new_ident(name);
 		}
 
 		// function call
 		let mut args = vec![];
 		//// arity = 0;
-		if tokens[*pos].consume_ty(TokenLeftBrac, pos){
+		if tokenset.consume_ty(TokenLeftBrac){
 			return Node::new_call(NULL_TY.clone(), name, args);
 		}
 		//// arity > 0;
-		let arg1 = assign(tokens, pos);
+		let arg1 = assign(tokenset);
 		args.push(arg1);
-		while tokens[*pos].consume_ty(TokenComma, pos) {
-			let argv = assign(tokens, pos);
+		while tokenset.consume_ty(TokenComma) {
+			let argv = assign(tokenset);
 			args.push(argv);
 		}
-		tokens[*pos].assert_ty(TokenLeftBrac, pos);
+		tokenset.assert_ty(TokenLeftBrac);
 		return Node::new_call(NULL_TY.clone(), name, args);
 	}
-	if tokens[*pos].consume_ty(TokenString(String::new()), pos) {
-		let strname = tokens[*pos].getstring();
+	if tokenset.consume_ty(TokenString(String::new())) {
+		let strname = tokenset.getstring();
 		let cty = CHAR_TY.clone().ary_of(strname.len() + 1);
-		*pos += 1;
+		tokenset.pos += 1;
 		return Node::new_string(cty, strname, 0);
 	}
-	// error(&format!("parse.rs: primary parse fail. and got {}", tokens[*pos].input));
+	// error(&format!("parse.rs: primary parse fail. and got {}", tokenset[*pos].input));
 	// for debug.
-	panic!("parse.rs: primary parse fail. and got rerere{:?}rererer {}", tokens[*pos], &PROGRAMS.lock().unwrap()[tokens[*pos].program_id][tokens[*pos].pos..]);
+	let token = &tokenset.tokens[tokenset.pos];
+	panic!("parse.rs: primary parse fail. and got rerere{:?}rererer {}", token, &PROGRAMS.lock().unwrap()[token.program_id][token.pos..]);
 }
 
-fn postfix(tokens: &Vec<Token>, pos: &mut usize) -> Node {
+fn postfix(tokenset: &mut Tokens) -> Node {
 	
-	let mut lhs = primary(tokens, pos);
+	let mut lhs = primary(tokenset);
 
 	loop {
-		if tokens[*pos].consume_ty(TokenInc, pos) {
+		if tokenset.consume_ty(TokenInc) {
 			lhs = Node::new_incdec(NULL_TY.clone(), 1, lhs);
 		}
-		if tokens[*pos].consume_ty(TokenDec, pos) {
+		if tokenset.consume_ty(TokenDec) {
 			lhs = Node::new_incdec(NULL_TY.clone(), 2, lhs);
 		}
 		// struct member
-		if tokens[*pos].consume_ty(TokenDot, pos) {
-			let name = ident(tokens, pos);
+		if tokenset.consume_ty(TokenDot) {
+			let name = ident(tokenset);
 			lhs = Node::new_dot(NULL_TY.clone(), lhs, name);
 		// struct member arrow
-		} else if tokens[*pos].consume_ty(TokenArrow, pos) {
-			let name = ident(tokens, pos);
+		} else if tokenset.consume_ty(TokenArrow) {
+			let name = ident(tokenset);
 			let expr = Node::new_deref(INT_TY.clone(), lhs);
 			lhs = Node::new_dot(NULL_TY.clone(), expr, name);
 		// array
-		} else if tokens[*pos].consume_ty(TokenRightmiddleBrace, pos)  {
-			let id = assign(tokens, pos);
+		} else if tokenset.consume_ty(TokenRightmiddleBrace)  {
+			let id = assign(tokenset);
 			let lhs2 = Node::new_bit(INT_TY.clone(), TokenAdd, lhs, id);
 			lhs = Node::new_deref(INT_TY.clone(), lhs2);
-			tokens[*pos].assert_ty(TokenLeftmiddleBrace, pos);
+			tokenset.assert_ty(TokenLeftmiddleBrace);
 		} else {
 			return lhs;
 		}
 	}
 }
 
-fn unary(tokens: &Vec<Token>, pos: &mut usize) -> Node {
+fn unary(tokenset: &mut Tokens) -> Node {
 	
-	if tokens[*pos].consume_ty(TokenInc, pos) {
-		let lhs = unary(tokens, pos);
+	if tokenset.consume_ty(TokenInc) {
+		let lhs = unary(tokenset);
 		let rhs = Node::new_bit(NULL_TY.clone(), TokenAdd, lhs.clone(), Node::new_num(1));
 		return Node::new_eq(NULL_TY.clone(), lhs, rhs);
 	}
-	if tokens[*pos].consume_ty(TokenDec, pos) {
-		let lhs = unary(tokens, pos);
+	if tokenset.consume_ty(TokenDec) {
+		let lhs = unary(tokenset);
 		let rhs = Node::new_bit(NULL_TY.clone(), TokenSub, lhs.clone(), Node::new_num(1));
 		return Node::new_eq(NULL_TY.clone(), lhs, rhs);
 	}
-	if tokens[*pos].consume_ty(TokenSub, pos) {
-		return Node::new_neg(unary(tokens, pos));
+	if tokenset.consume_ty(TokenSub) {
+		return Node::new_neg(unary(tokenset));
 	}
-	if tokens[*pos].consume_ty(TokenStar, pos) {
-		return Node::new_deref(INT_TY.clone(), unary(tokens, pos));
+	if tokenset.consume_ty(TokenStar) {
+		return Node::new_deref(INT_TY.clone(), unary(tokenset));
 	}
-	if tokens[*pos].consume_ty(TokenAmpersand, pos) {
-		return Node::new_addr(INT_TY.clone(), unary(tokens, pos));
+	if tokenset.consume_ty(TokenAmpersand) {
+		return Node::new_addr(INT_TY.clone(), unary(tokenset));
 	}
-	if tokens[*pos].consume_ty(TokenSizeof, pos) {
-		return Node::new_sizeof(INT_TY.clone(), 0, unary(tokens, pos));
+	if tokenset.consume_ty(TokenSizeof) {
+		return Node::new_sizeof(INT_TY.clone(), 0, unary(tokenset));
 	}
-	if tokens[*pos].consume_ty(TokenAlignof, pos) {
-		return Node::new_alignof(unary(tokens, pos));
+	if tokenset.consume_ty(TokenAlignof) {
+		return Node::new_alignof(unary(tokenset));
 	}
-	if tokens[*pos].consume_ty(TokenNot, pos) {
-		return Node::new_not(unary(tokens, pos));
+	if tokenset.consume_ty(TokenNot) {
+		return Node::new_not(unary(tokenset));
 	}
-	if tokens[*pos].consume_ty(TokenTilde, pos) {
-		return Node::new_bit(NULL_TY.clone(), TokenTilde, unary(tokens, pos), Node::new_num(1));
+	if tokenset.consume_ty(TokenTilde) {
+		return Node::new_bit(NULL_TY.clone(), TokenTilde, unary(tokenset), Node::new_num(1));
 	}
-	return postfix(tokens, pos);
+	return postfix(tokenset);
 }
 
-fn mul(tokens: &Vec<Token>, pos: &mut usize) -> Node {
-	let mut lhs = unary(tokens, pos);
+fn mul(tokenset: &mut Tokens) -> Node {
+	let mut lhs = unary(tokenset);
 	
 	loop {
-		if tokens[*pos].consume_ty(TokenStar, pos) {
-			lhs = Node::new_bit(NULL_TY.clone(), TokenStar, lhs, unary(tokens, pos));
-		} else if tokens[*pos].consume_ty(TokenDiv, pos) {
-			lhs = Node::new_bit(NULL_TY.clone(), TokenDiv, lhs, unary(tokens, pos));
-		} else if tokens[*pos].consume_ty(TokenMod, pos) {
-			lhs = Node::new_bit(NULL_TY.clone(), TokenMod, lhs, unary(tokens, pos));
+		if tokenset.consume_ty(TokenStar) {
+			lhs = Node::new_bit(NULL_TY.clone(), TokenStar, lhs, unary(tokenset));
+		} else if tokenset.consume_ty(TokenDiv) {
+			lhs = Node::new_bit(NULL_TY.clone(), TokenDiv, lhs, unary(tokenset));
+		} else if tokenset.consume_ty(TokenMod) {
+			lhs = Node::new_bit(NULL_TY.clone(), TokenMod, lhs, unary(tokenset));
 		} else {
 			return lhs;
 		}
@@ -690,28 +692,28 @@ fn mul(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 
 }
 
-fn add(tokens: &Vec<Token>, pos: &mut usize) -> Node {
-	let mut lhs = mul(tokens, pos);
+fn add(tokenset: &mut Tokens) -> Node {
+	let mut lhs = mul(tokenset);
 	
 	loop {
-		if !tokens[*pos].consume_ty(TokenAdd, pos) && !tokens[*pos].consume_ty(TokenSub, pos) {
+		if !tokenset.consume_ty(TokenAdd) && !tokenset.consume_ty(TokenSub) {
 			return lhs;
 		}
-		let ty = tokens[*pos-1].ty.clone();
-		let rhs = mul(tokens, pos);
+		let ty = tokenset.tokens[tokenset.pos-1].ty.clone();
+		let rhs = mul(tokenset);
 		lhs = Node::new_bit(NULL_TY.clone(), ty, lhs, rhs);
 	}
 	
 }
 
-fn shift(tokens: &Vec<Token>, pos: &mut usize) -> Node {
-	let mut lhs = add(tokens, pos);
+fn shift(tokenset: &mut Tokens) -> Node {
+	let mut lhs = add(tokenset);
 
 	loop {
-		if tokens[*pos].consume_ty(TokenShl, pos) {
-			lhs = Node::new_bit(NULL_TY.clone(), TokenShl, lhs, add(tokens, pos));
-		} else if tokens[*pos].consume_ty(TokenShr, pos) {
-			lhs = Node::new_bit(NULL_TY.clone(), TokenShr, lhs, add(tokens, pos));
+		if tokenset.consume_ty(TokenShl) {
+			lhs = Node::new_bit(NULL_TY.clone(), TokenShl, lhs, add(tokenset));
+		} else if tokenset.consume_ty(TokenShr) {
+			lhs = Node::new_bit(NULL_TY.clone(), TokenShr, lhs, add(tokenset));
 		} else {
 			return lhs;
 		}
@@ -719,99 +721,99 @@ fn shift(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 
 }
 
-fn relational(tokens: &Vec<Token>, pos: &mut usize) -> Node {
-	let mut lhs = shift(tokens, pos);
+fn relational(tokenset: &mut Tokens) -> Node {
+	let mut lhs = shift(tokenset);
 	
 	loop {
-		if tokens[*pos].consume_ty(TokenLt, pos) {
-			lhs = Node::new_bit(INT_TY.clone(), TokenLt, lhs, shift(tokens, pos));
-		} else if tokens[*pos].consume_ty(TokenRt, pos) {
-			lhs = Node::new_bit(INT_TY.clone(), TokenLt, shift(tokens, pos), lhs);
-		} else if tokens[*pos].consume_ty(TokenLe, pos) {
-			lhs = Node::new_bit(INT_TY.clone(), TokenLe, lhs, shift(tokens, pos));
-		} else if tokens[*pos].consume_ty(TokenGe, pos) {
-			lhs = Node::new_bit(INT_TY.clone(), TokenLe, shift(tokens, pos), lhs);
+		if tokenset.consume_ty(TokenLt) {
+			lhs = Node::new_bit(INT_TY.clone(), TokenLt, lhs, shift(tokenset));
+		} else if tokenset.consume_ty(TokenRt) {
+			lhs = Node::new_bit(INT_TY.clone(), TokenLt, shift(tokenset), lhs);
+		} else if tokenset.consume_ty(TokenLe) {
+			lhs = Node::new_bit(INT_TY.clone(), TokenLe, lhs, shift(tokenset));
+		} else if tokenset.consume_ty(TokenGe) {
+			lhs = Node::new_bit(INT_TY.clone(), TokenLe, shift(tokenset), lhs);
 		} else {
 			return lhs;
 		}
 	}
 }
 
-fn equarity(tokens: &Vec<Token>, pos: &mut usize) -> Node {
-	let mut lhs = relational(tokens, pos);
+fn equarity(tokenset: &mut Tokens) -> Node {
+	let mut lhs = relational(tokenset);
 	
 	loop {
-		if tokens[*pos].consume_ty(TokenEqEq, pos) {
-			lhs = Node::new_eqeq(lhs, relational(tokens, pos));
-		} else if tokens[*pos].consume_ty(TokenNe, pos) {
-			lhs = Node::new_neq(lhs, relational(tokens, pos));
+		if tokenset.consume_ty(TokenEqEq) {
+			lhs = Node::new_eqeq(lhs, relational(tokenset));
+		} else if tokenset.consume_ty(TokenNe) {
+			lhs = Node::new_neq(lhs, relational(tokenset));
 		} else {
 			return lhs;
 		}
 	}
 }
 
-fn bitand(tokens: &Vec<Token>, pos: &mut usize) -> Node {
-	let mut lhs = equarity(tokens, pos);
+fn bitand(tokenset: &mut Tokens) -> Node {
+	let mut lhs = equarity(tokenset);
 
-	while tokens[*pos].consume_ty(TokenAmpersand, pos) {
-		lhs = Node::new_bit(INT_TY.clone(), TokenAmpersand, lhs, equarity(tokens, pos));
+	while tokenset.consume_ty(TokenAmpersand) {
+		lhs = Node::new_bit(INT_TY.clone(), TokenAmpersand, lhs, equarity(tokenset));
 	}
 	return lhs;
 }
 
-fn bitxor(tokens: &Vec<Token>, pos: &mut usize) -> Node {
-	let mut lhs = bitand(tokens, pos);
+fn bitxor(tokenset: &mut Tokens) -> Node {
+	let mut lhs = bitand(tokenset);
 
-	while tokens[*pos].consume_ty(TokenXor, pos) {
-		lhs = Node::new_bit(INT_TY.clone(), TokenXor, lhs, bitand(tokens, pos));
+	while tokenset.consume_ty(TokenXor) {
+		lhs = Node::new_bit(INT_TY.clone(), TokenXor, lhs, bitand(tokenset));
 	}
 	return lhs;
 }
 
-fn bitor(tokens: &Vec<Token>, pos: &mut usize) -> Node {
-	let mut lhs = bitxor(tokens, pos);
+fn bitor(tokenset: &mut Tokens) -> Node {
+	let mut lhs = bitxor(tokenset);
 
-	while tokens[*pos].consume_ty(TokenOr, pos) {
-		lhs = Node::new_bit(INT_TY.clone(), TokenOr, lhs, bitxor(tokens, pos));
+	while tokenset.consume_ty(TokenOr) {
+		lhs = Node::new_bit(INT_TY.clone(), TokenOr, lhs, bitxor(tokenset));
 	}
 	return lhs;
 }
 
-fn logand(tokens: &Vec<Token>, pos: &mut usize) -> Node {
-	let mut lhs = bitor(tokens, pos);
+fn logand(tokenset: &mut Tokens) -> Node {
+	let mut lhs = bitor(tokenset);
 
-	while tokens[*pos].consume_ty(TokenLogAnd, pos) {
-		lhs = Node::new_and(lhs, bitor(tokens, pos));
+	while tokenset.consume_ty(TokenLogAnd) {
+		lhs = Node::new_and(lhs, bitor(tokenset));
 	}
 	return lhs;
 }
 
-fn logor(tokens: &Vec<Token>, pos: &mut usize) -> Node {
-	let mut lhs = logand(tokens, pos);
+fn logor(tokenset: &mut Tokens) -> Node {
+	let mut lhs = logand(tokenset);
 
-	while tokens[*pos].consume_ty(TokenLogOr, pos) {
-		lhs = Node::new_or(lhs, logand(tokens, pos));
+	while tokenset.consume_ty(TokenLogOr) {
+		lhs = Node::new_or(lhs, logand(tokenset));
 	}
 	return lhs;
 }
 
-fn conditional(tokens: &Vec<Token>, pos: &mut usize) -> Node {
-	let cond = logor(tokens, pos);
-	if tokens[*pos].consume_ty(TokenQuestion, pos) {
-		let then = expr(tokens, pos);
-		tokens[*pos].assert_ty(TokenColon, pos);
-		let els = conditional(tokens, pos);
+fn conditional(tokenset: &mut Tokens) -> Node {
+	let cond = logor(tokenset);
+	if tokenset.consume_ty(TokenQuestion) {
+		let then = expr(tokenset);
+		tokenset.assert_ty(TokenColon);
+		let els = conditional(tokenset);
 		return Node::new_ternary(NULL_TY.clone(), cond, then, els);
 	}
 	return cond;
 }
 
-fn assign(tokens: &Vec<Token>, pos: &mut usize) -> Node {
-	let mut lhs = conditional(tokens, pos);
+fn assign(tokenset: &mut Tokens) -> Node {
+	let mut lhs = conditional(tokenset);
 
-	if let Some(op) = assignment_op(tokens, pos) {
-		let rhs = assign(tokens, pos);
+	if let Some(op) = assignment_op(tokenset) {
+		let rhs = assign(tokenset);
 		match op {
 			TokenEq => {
 				lhs = Node::new_eq(NULL_TY.clone(), lhs, rhs);
@@ -825,42 +827,43 @@ fn assign(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 	return lhs;
 }
 
-fn expr(tokens: &Vec<Token>, pos: &mut usize) -> Node {
-	let lhs = assign(tokens, pos);
-	if tokens[*pos].consume_ty(TokenComma, pos) {
-		return Node::new_tuple(NULL_TY.clone(), lhs, expr(tokens, pos));
+fn expr(tokenset: &mut Tokens) -> Node {
+	let lhs = assign(tokenset);
+	if tokenset.consume_ty(TokenComma) {
+		return Node::new_tuple(NULL_TY.clone(), lhs, expr(tokenset));
 	}
 	return lhs;
 }
 
-fn declarator(tokens: &Vec<Token>, pos: &mut usize, mut ty: Type) -> Node {
+fn declarator(tokenset: &mut Tokens, mut ty: Type) -> Node {
 	
-	while tokens[*pos].consume_ty(TokenStar, pos) {
+	while tokenset.consume_ty(TokenStar) {
 		ty = ty.ptr_to();
 	}
 	
-	return direct_decl(tokens, pos, ty);
+	return direct_decl(tokenset, ty);
 
 }
 
-fn read_array(tokens: &Vec<Token>, pos: &mut usize, ty: Type) -> Type {
+fn read_array(tokenset: &mut Tokens, ty: Type) -> Type {
 	let mut ary_size = vec![];
 	let mut ty = ty.clone();
 
-	while tokens[*pos].consume_ty(TokenRightmiddleBrace, pos) {
-		if tokens[*pos].consume_ty(TokenLeftmiddleBrace, pos) {
+	while tokenset.consume_ty(TokenRightmiddleBrace) {
+		if tokenset.consume_ty(TokenLeftmiddleBrace) {
 			ary_size.push(0);
 			continue;
 		}
-		let len = expr(tokens, pos);
+		let len = expr(tokenset);
 		if let NodeType::Num(val) = &len.op {
 			ary_size.push(*val as usize);
-			tokens[*pos].assert_ty(TokenLeftmiddleBrace, pos);
+			tokenset.assert_ty(TokenLeftmiddleBrace);
 			continue;
 		}
-		// error(&format!("array declaration is invalid at {}.", tokens[*pos].input));
+		// error(&format!("array declaration is invalid at {}.", tokenset[*pos].input));
 		// for debug.
-		panic!("array declaration is invalid at {}.", &PROGRAMS.lock().unwrap()[tokens[*pos].program_id][tokens[*pos].pos..]);
+		let token = &tokenset.tokens[tokenset.pos];
+		panic!("array declaration is invalid at {}.", &PROGRAMS.lock().unwrap()[token.program_id][token.pos..]);
 	}
 
 	if ary_size.len() > 0 {
@@ -872,21 +875,22 @@ fn read_array(tokens: &Vec<Token>, pos: &mut usize, ty: Type) -> Type {
 	return ty;
 }
 
-fn ident(tokens: &Vec<Token>, pos: &mut usize) -> String {
-	// panic!("{}, {}, {}", tokens[*pos].program_id, tokens[*pos].pos, tokens[*pos].val);
-	let name = String::from(&PROGRAMS.lock().unwrap()[tokens[*pos].program_id][tokens[*pos].pos..tokens[*pos].end]);
-	if !tokens[*pos].consume_ty(TokenIdent, pos) {
-		// error(&format!("should be identifier at {}", &tokens[*pos].input[*pos..]));
+fn ident(tokenset: &mut Tokens) -> String {
+	// panic!("{}, {}, {}", tokenset[*pos].program_id, tokenset[*pos].pos, tokenset[*pos].val);
+	let token = tokenset.tokens[tokenset.pos].clone();
+	let name = String::from(&PROGRAMS.lock().unwrap()[token.program_id][token.pos..token.end]);
+	if !tokenset.consume_ty(TokenIdent) {
+		// error(&format!("should be identifier at {}", &tokenset[*pos].input[*pos..]));
 		// for debug.
-		panic!("should be identifier at {}", &PROGRAMS.lock().unwrap()[tokens[*pos].program_id][tokens[*pos].pos..]);
+		panic!("should be identifier at {}", &PROGRAMS.lock().unwrap()[token.program_id][token.pos..]);
 	}
 	return name;
 }
 
-fn decl_init(tokens: &Vec<Token>, pos: &mut usize, node: &mut Node) {
+fn decl_init(tokenset: &mut Tokens, node: &mut Node) {
 	if let NodeType::VarDef(_, _, _, _, ref mut init) = node.op {
-		if tokens[*pos].consume_ty(TokenEq, pos) {
-			let rhs = assign(tokens, pos);
+		if tokenset.consume_ty(TokenEq) {
+			let rhs = assign(tokenset);
 			std::mem::replace(init, Some(Box::new(rhs)));
 		}
 	}
@@ -912,20 +916,20 @@ fn new_ptr_to_replace_type(ctype: &Type, true_ty: Type) -> Type {
 	}
 }
 
-fn direct_decl(tokens: &Vec<Token>, pos: &mut usize, mut ty: Type) -> Node {
+fn direct_decl(tokenset: &mut Tokens, mut ty: Type) -> Node {
 
 	let mut ident_node;
 	
-	if tokens[*pos].consume_ty(TokenIdent, pos) {
-		*pos -= 1;
-		let name = ident(tokens, pos);
-		ty = read_array(tokens, pos, ty);
+	if tokenset.consume_ty(TokenIdent) {
+		tokenset.pos -= 1;
+		let name = ident(tokenset);
+		ty = read_array(tokenset, ty);
 		ident_node = Node::new_vardef(ty, false, name, 0, None);
-	} else if tokens[*pos].consume_ty(TokenRightBrac, pos) {
-		ident_node = declarator(tokens, pos, NULL_TY.clone());
-		tokens[*pos].assert_ty(TokenLeftBrac, pos);
+	} else if tokenset.consume_ty(TokenRightBrac) {
+		ident_node = declarator(tokenset, NULL_TY.clone());
+		tokenset.assert_ty(TokenLeftBrac);
 		
-		let true_ty = read_array(tokens, pos, ty);
+		let true_ty = read_array(tokenset, ty);
 		let ident_node_true_ty = new_ptr_to_replace_type(&ident_node.nodesctype(None), true_ty);
 
 		if let NodeType::VarDef(_, false, name, offset, init) = ident_node.op {
@@ -936,116 +940,117 @@ fn direct_decl(tokens: &Vec<Token>, pos: &mut usize, mut ty: Type) -> Node {
 		}
 	} else {
 		// for debug
-		panic!("bad direct declarator at {}", &PROGRAMS.lock().unwrap()[tokens[*pos].program_id][tokens[*pos].pos..]);
-		// error(&format!("bad direct declarator at {}", &tokens[*pos].input[..]));
+		let token = &tokenset.tokens[tokenset.pos];
+		panic!("bad direct declarator at {}", &PROGRAMS.lock().unwrap()[token.program_id][token.pos..]);
+		// error(&format!("bad direct declarator at {}", &tokenset[*pos].input[..]));
 	}
 	
-	decl_init(tokens, pos, &mut ident_node);
+	decl_init(tokenset, &mut ident_node);
 	return ident_node;
 }
 
-fn declaration(tokens: &Vec<Token>, pos: &mut usize) -> Node {
+fn declaration(tokenset: &mut Tokens) -> Node {
 
 	// declaration type
-	let ty = decl_specifiers(tokens, pos);
+	let ty = decl_specifiers(tokenset);
 
-	let ident_node = declarator(tokens, pos, ty);
-	tokens[*pos].assert_ty(TokenSemi, pos);
+	let ident_node = declarator(tokenset, ty);
+	tokenset.assert_ty(TokenSemi);
 	// panic!("{:#?}", ident_node);
 	return ident_node;
 }
 
-fn expr_stmt(tokens: &Vec<Token>, pos: &mut usize) -> Node {
-	let lhs = expr(tokens, pos);
-	tokens[*pos].consume_ty(TokenSemi, pos);
+fn expr_stmt(tokenset: &mut Tokens) -> Node {
+	let lhs = expr(tokenset);
+	tokenset.consume_ty(TokenSemi);
 	return Node::new_expr(lhs);
 }
 
-pub fn stmt(tokens: &Vec<Token>, pos: &mut usize) -> Node {
+pub fn stmt(tokenset: &mut Tokens) -> Node {
 	
-	match tokens[*pos].ty {
+	match tokenset.tokens[tokenset.pos].ty {
 		TokenRet => {
-			*pos += 1;
-			let lhs = expr(tokens, pos);
-			tokens[*pos].assert_ty(TokenSemi, pos);
+			tokenset.pos += 1;
+			let lhs = expr(tokenset);
+			tokenset.assert_ty(TokenSemi);
 			return Node::new_ret(lhs);
 		},
 		TokenIf => {
-			*pos += 1;
-			tokens[*pos].assert_ty(TokenRightBrac, pos);
-			let cond = expr(tokens, pos);
-			tokens[*pos].assert_ty(TokenLeftBrac, pos);
-			let then = stmt(tokens, pos);
-			if tokens[*pos].consume_ty(TokenElse, pos) {
-				let elthen = stmt(tokens, pos);
+			tokenset.pos += 1;
+			tokenset.assert_ty(TokenRightBrac);
+			let cond = expr(tokenset);
+			tokenset.assert_ty(TokenLeftBrac);
+			let then = stmt(tokenset);
+			if tokenset.consume_ty(TokenElse) {
+				let elthen = stmt(tokenset);
 				return Node::new_if(cond, then, Some(elthen));
 			} else {
 				return Node::new_if(cond, then, None);
 			}
 		}
 		TokenFor => {
-			*pos += 1;
-			tokens[*pos].assert_ty(TokenRightBrac, pos);
+			tokenset.pos += 1;
+			tokenset.assert_ty(TokenRightBrac);
 			let init;
-			if tokens[*pos].is_typename(pos) {
-				*pos -= 1;
-				init = declaration(tokens, pos);
-			} else if tokens[*pos].consume_ty(TokenSemi, pos) {
+			if tokenset.is_typename() {
+				tokenset.pos -= 1;
+				init = declaration(tokenset);
+			} else if tokenset.consume_ty(TokenSemi) {
 				init = Node::new_null();
 			} else {
-				init = expr_stmt(tokens, pos);
+				init = expr_stmt(tokenset);
 			}
 			let mut cond = Node::new_null();
-			if !tokens[*pos].consume_ty(TokenSemi, pos) {
-				cond = expr(tokens, pos);
-				tokens[*pos].assert_ty(TokenSemi, pos);
+			if !tokenset.consume_ty(TokenSemi) {
+				cond = expr(tokenset);
+				tokenset.assert_ty(TokenSemi);
 			}
 			let mut inc = Node::new_null();
-			if !tokens[*pos].consume_ty(TokenLeftBrac, pos) {
-				inc = stmt(tokens, pos);
-				tokens[*pos].assert_ty(TokenLeftBrac, pos);
+			if !tokenset.consume_ty(TokenLeftBrac) {
+				inc = stmt(tokenset);
+				tokenset.assert_ty(TokenLeftBrac);
 			} 
-			let body = stmt(tokens, pos);
+			let body = stmt(tokenset);
 			return Node::new_for(init, cond, inc, body);
 		}
 		TokenWhile => {
-			*pos += 1;
+			tokenset.pos += 1;
 			let init = Node::new_null();
 			let inc = Node::new_null();
-			tokens[*pos].assert_ty(TokenRightBrac, pos);
-			let cond = expr(tokens, pos);
-			tokens[*pos].assert_ty(TokenLeftBrac, pos);
-			let body = stmt(tokens, pos);
+			tokenset.assert_ty(TokenRightBrac);
+			let cond = expr(tokenset);
+			tokenset.assert_ty(TokenLeftBrac);
+			let body = stmt(tokenset);
 			return Node::new_for(init, cond, inc, body);
 		}
 		TokenDo => {
-			*pos += 1;
-			let body = stmt(tokens, pos);
-			tokens[*pos].assert_ty(TokenWhile, pos);
-			tokens[*pos].assert_ty(TokenRightBrac, pos);
-			let cond = expr(tokens, pos);
-			tokens[*pos].assert_ty(TokenLeftBrac, pos);
-			tokens[*pos].assert_ty(TokenSemi, pos);
+			tokenset.pos += 1;
+			let body = stmt(tokenset);
+			tokenset.assert_ty(TokenWhile);
+			tokenset.assert_ty(TokenRightBrac);
+			let cond = expr(tokenset);
+			tokenset.assert_ty(TokenLeftBrac);
+			tokenset.assert_ty(TokenSemi);
 			return Node::new_dowhile(body, cond);
 		}
 		TokenRightCurlyBrace => {
-			*pos += 1;
+			tokenset.pos += 1;
 			let mut compstmts = vec![];
-			while !tokens[*pos].consume_ty(TokenLeftCurlyBrace, pos) {
-				compstmts.push(stmt(tokens, pos));
+			while !tokenset.consume_ty(TokenLeftCurlyBrace) {
+				compstmts.push(stmt(tokenset));
 			}
 			return Node::new_stmt(compstmts);
 		}
 		TokenInt | TokenChar | TokenStruct => {
-			return declaration(tokens, pos);
+			return declaration(tokenset);
 		}
 		TokenSemi => {
-			*pos += 1;
+			tokenset.pos += 1;
 			return Node::new_null();
 		}
 		TokenTypedef => {
-			*pos += 1;
-			let lhs = declaration(tokens, pos);
+			tokenset.pos += 1;
+			let lhs = declaration(tokenset);
 			if let NodeType::VarDef(ctype, _, name, _, None) = lhs.op {
 				ENV.lock().unwrap().typedefs.insert(name, ctype);
 				return Node::new_null();
@@ -1053,33 +1058,33 @@ pub fn stmt(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 			panic!("typedef error.");
 		}
 		TokenBreak => {
-			*pos += 1;
+			tokenset.pos += 1;
 			return Node::new_break();
 		}
 		_ => {
-			if tokens[*pos].consume_ty(TokenIdent, pos) {
-				if tokens[*pos].consume_ty(TokenIdent, pos) {
-					*pos -= 2;
-					return declaration(tokens, pos);
+			if tokenset.consume_ty(TokenIdent) {
+				if tokenset.consume_ty(TokenIdent) {
+					tokenset.pos -= 2;
+					return declaration(tokenset);
 				}
-				*pos -= 1;
+				tokenset.pos -= 1;
 			}
-			return expr_stmt(tokens, pos);
+			return expr_stmt(tokenset);
 		}
 	}
 }
 
-pub fn compound_stmt(tokens: &Vec<Token>, pos: &mut usize) -> Node {
+pub fn compound_stmt(tokenset: &mut Tokens) -> Node {
 	
 	let mut compstmts = vec![];
-	tokens[*pos].assert_ty(TokenRightCurlyBrace, pos);
+	tokenset.assert_ty(TokenRightCurlyBrace);
 	let env = (*ENV.lock().unwrap()).clone();
 	*ENV.lock().unwrap() = Env::new_env(Some(env));
 	loop {
-		match tokens[*pos].consume_ty(TokenLeftCurlyBrace, pos) {
+		match tokenset.consume_ty(TokenLeftCurlyBrace) {
 			true => { break; },
 			false => { 
-				let stmt = stmt(tokens, pos);
+				let stmt = stmt(tokenset);
 				compstmts.push(stmt);
 			}
 		}
@@ -1089,11 +1094,11 @@ pub fn compound_stmt(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 	return Node::new_stmt(compstmts);
 }
 
-pub fn param_declaration(tokens: &Vec<Token>, pos: &mut usize) -> Node {
+pub fn param_declaration(tokenset: &mut Tokens) -> Node {
 	
 	// type
-	let ty = decl_specifiers(tokens, pos);
-	let mut node = declarator(tokens, pos, ty);
+	let ty = decl_specifiers(tokenset);
+	let mut node = declarator(tokenset, ty);
 	let ctype = node.nodesctype(None);
 	if let Ty::ARY = &ctype.ty {
 		let new_ty = ctype.ary_to.unwrap().clone().ptr_to();
@@ -1103,52 +1108,52 @@ pub fn param_declaration(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 	return node;
 }
 
-pub fn toplevel(tokens: &Vec<Token>, pos: &mut usize) -> Node {
+pub fn toplevel(tokenset: &mut Tokens) -> Node {
 	
 	let mut args = vec![];
 
-	let is_extern = tokens[*pos].consume_ty(TokenExtern, pos);
+	let is_extern = tokenset.consume_ty(TokenExtern);
 	// if is_extern {
 	// 	panic!("rerererererer {}", *pos);
 	// }
-	let is_typedef = tokens[*pos].consume_ty(TokenTypedef, pos);
+	let is_typedef = tokenset.consume_ty(TokenTypedef);
 
 	// Ctype
-	let mut ctype = decl_specifiers(tokens, pos);
+	let mut ctype = decl_specifiers(tokenset);
 	
-	while tokens[*pos].consume_ty(TokenStar, pos) {
+	while tokenset.consume_ty(TokenStar) {
 		ctype = ctype.ptr_to();
 	}
 	
 	// identifier
-	let ident = ident(tokens, pos);
+	let ident = ident(tokenset);
 	
 	// function
-	if tokens[*pos].consume_ty(TokenRightBrac, pos){
+	if tokenset.consume_ty(TokenRightBrac){
 		if is_typedef {
 			// error(&format!("typedef {} has function definition.", name));
 			// for debug.
 			panic!("typedef {} has function definition.", ident);
 		}
 		// argument
-		if !tokens[*pos].consume_ty(TokenLeftBrac, pos) {
+		if !tokenset.consume_ty(TokenLeftBrac) {
 			loop {
-				args.push(param_declaration(tokens, pos));
-				if tokens[*pos].consume_ty(TokenLeftBrac, pos){ break; }
-				tokens[*pos].assert_ty(TokenComma, pos);
+				args.push(param_declaration(tokenset));
+				if tokenset.consume_ty(TokenLeftBrac){ break; }
+				tokenset.assert_ty(TokenComma);
 			}
 		}
 		// function decl
-		if tokens[*pos].consume_ty(TokenSemi, pos) {
+		if tokenset.consume_ty(TokenSemi) {
 			return Node::new_decl(ctype, ident, args, is_extern);
 		}
 		// body
-		let body = compound_stmt(tokens, pos);
+		let body = compound_stmt(tokenset);
 		return Node::new_func(ctype, ident, is_extern, args, body, 0);
 	}
 
-	ctype = read_array(tokens, pos, ctype);
-	tokens[*pos].assert_ty(TokenSemi, pos);
+	ctype = read_array(tokenset, ctype);
+	tokenset.assert_ty(TokenSemi);
 	// typedef
 	if is_typedef {
 		ENV.lock().unwrap().typedefs.insert(ident, ctype);
@@ -1159,15 +1164,15 @@ pub fn toplevel(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 
 }
 
-pub fn parse(tokens: &Vec<Token>, program: &mut Program, pos: &mut usize) {
+pub fn parse(tokenset: &mut Tokens, program: &mut Program) {
 	
 	let env = (*ENV.lock().unwrap()).clone();
 	*ENV.lock().unwrap() = Env::new_env(Some(env));
 
 	loop {
-		match tokens[*pos].consume_ty(TokenEof, pos) {
+		match tokenset.consume_ty(TokenEof) {
 			true => { break; }
-			false => { program.nodes.push(toplevel(tokens, pos)); }
+			false => { program.nodes.push(toplevel(tokenset)); }
 		}
 	}
 }
