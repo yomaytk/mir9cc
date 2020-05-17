@@ -70,7 +70,7 @@ lazy_static! {
 		len: 0,
 	};
 	pub static ref STRUCT_TY: Type = Type {
-		ty: Ty::STRUCT(Vec::new()),
+		ty: Ty::STRUCT(String::new(), Vec::new()),
 		ptr_to: None,
 		ary_to: None,
 		size: 0,
@@ -136,9 +136,30 @@ pub enum Ty {
 	PTR,
 	ARY,
 	CHAR,
-	STRUCT(Vec<Node>),
+	STRUCT(String, Vec<Node>),
 	VOID,
 	NULL,
+}
+
+impl PartialEq for Ty {
+	fn eq(&self, other: &Self) -> bool {
+		match (self, other) {
+			(Ty::INT, Ty::INT) | (Ty::PTR, Ty::PTR) | (Ty::ARY, Ty::ARY)
+			| (Ty::CHAR, Ty::CHAR) | (Ty::VOID, Ty::VOID) | (Ty::NULL, Ty::NULL) => {
+				return true;
+			}
+			(Ty::STRUCT(tag1, _), Ty::STRUCT(tag2, _)) => {
+				if tag1 == tag2 {
+					return true;
+				} else {
+					return false;
+				}
+			}
+			_ => {
+				return false;
+			}
+		}
+	}
 }
 
 #[allow(dead_code)]
@@ -485,7 +506,7 @@ pub fn decl_specifiers(tokens: &Vec<Token>,  pos: &mut usize) -> Type {
 				env_find!(tag.clone(), tags, STRUCT_TY.clone());
 			}
 			(false, c) => {
-				let struct_type = new_struct(members);
+				let struct_type = new_struct(tag.clone(), members);
 				if !c {
 					ENV.lock().unwrap().tags.insert(tag, struct_type.clone());
 				}
@@ -499,7 +520,7 @@ pub fn decl_specifiers(tokens: &Vec<Token>,  pos: &mut usize) -> Type {
 	return NULL_TY.clone();
 }
 
-pub fn new_struct(mut members: Vec<Node>) -> Type {
+pub fn new_struct(tag: String, mut members: Vec<Node>) -> Type {
 	let mut ty_align = 0;
 
 	let mut off = 0;
@@ -513,7 +534,7 @@ pub fn new_struct(mut members: Vec<Node>) -> Type {
 	}
 	let ty_size = roundup(off, ty_align);
 
-	return Type::new(Ty::STRUCT(members), None, None, ty_size ,ty_align , 0, 0);
+	return Type::new(Ty::STRUCT(tag, members), None, None, ty_size ,ty_align , 0, 0);
 }
 
 fn assignment_op(tokens: &Vec<Token>, pos: &mut usize) -> Option<TokenType> {

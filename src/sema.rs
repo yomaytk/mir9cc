@@ -154,6 +154,23 @@ fn bin_ptr_swap(ctype: &mut Type, mut lhs: Node, mut rhs: Node) -> (Node, Node) 
 	return (lhs, rhs);
 }
 
+fn same_type(ty1: Type, ty2: Type) -> bool {
+	if ty1.ty != ty2.ty {
+		return false;
+	}
+	match ty1.ty {
+		Ty::PTR => {
+			return same_type(*ty1.ptr_to.unwrap(), *ty2.ptr_to.unwrap());
+		}
+		Ty::ARY => {
+			return ty1.size == ty2.size && same_type(*ty1.ary_to.unwrap(), *ty2.ary_to.unwrap());
+		}
+		_ => {
+			return true;
+		}
+	}
+}
+
 pub fn do_walk(node: &Node, env: &mut Env, decay: bool) -> Node {
 	match &node.op {
 		Num(val) => { return Node::new_num(*val); }
@@ -172,6 +189,9 @@ pub fn do_walk(node: &Node, env: &mut Env, decay: bool) -> Node {
 			} else if let TokenSub = op {
 				match (lhs2.nodesctype(None).ty, rhs2.nodesctype(None).ty) {
 					(Ty::PTR, Ty::PTR) => {
+						if !same_type(lhs2.nodesctype(None).clone(), rhs2.nodesctype(None).clone()) {
+							panic!("both type of operand of ptr - ptr should be same")
+						}
 						let node = Node::new_bit(ctype.clone(), TokenSub, lhs2, rhs2);
 						let scale_ptr = ctype.ptr_to.as_ref().unwrap().size as i32;
 						return Node::new_bit(ctype, TokenDiv, node, Node::new_num(scale_ptr));
@@ -336,7 +356,7 @@ pub fn do_walk(node: &Node, env: &mut Env, decay: bool) -> Node {
 		Dot(_, expr, name, _) => {
 			let expr2 = walk(expr, env);
 			match expr2.nodesctype(None).ty {
-				Ty::STRUCT(members) => {
+				Ty::STRUCT(_, members) => {
 					if members.is_empty() {
 						// error("incomplete type.");
 						// for debug.
