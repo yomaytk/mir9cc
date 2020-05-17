@@ -52,7 +52,7 @@ fn main() {
 
 	// lexical analysis
 	let tokens = tokenize(0, true);
-	let mut tokens = Tokens::new(tokens);
+	let mut tokens = TokenSet::new(tokens);
 	// let mut i = 0;
 	// for token in &tokens {
 	// 	println!("{:?}", token);

@@ -470,7 +470,7 @@ pub fn roundup(x: usize, align: usize) -> usize {
 	return (x + align - 1) & !(align - 1);
 }
 
-pub fn decl_specifiers(tokenset: &mut Tokens) -> Type {
+pub fn decl_specifiers(tokenset: &mut TokenSet) -> Type {
 	if tokenset.consume_ty(TokenIdent) {
 		tokenset.pos -= 1;
 		let name = ident(tokenset);
@@ -539,7 +539,7 @@ pub fn new_struct(tag: String, mut members: Vec<Node>) -> Type {
 	return Type::new(Ty::STRUCT(tag, members), None, None, ty_size ,ty_align , 0, 0);
 }
 
-fn assignment_op(tokenset: &mut Tokens) -> Option<TokenType> {
+fn assignment_op(tokenset: &mut TokenSet) -> Option<TokenType> {
 	if tokenset.consume_ty(TokenAddEq) { return Some(TokenAdd); }
 	else if tokenset.consume_ty(TokenSubEq) { return Some(TokenSub); }
 	else if tokenset.consume_ty(TokenMulEq) { return Some(TokenStar); }
@@ -554,7 +554,7 @@ fn assignment_op(tokenset: &mut Tokens) -> Option<TokenType> {
 	else { return None; }
 }
 
-fn primary(tokenset: &mut Tokens) -> Node {
+fn primary(tokenset: &mut TokenSet) -> Node {
 	
 	if tokenset.consume_ty(TokenRightBrac) {
 		if tokenset.consume_ty(TokenRightCurlyBrace) {
@@ -607,7 +607,7 @@ fn primary(tokenset: &mut Tokens) -> Node {
 	panic!("parse.rs: primary parse fail. and got rerere{:?}rererer {}", token, &PROGRAMS.lock().unwrap()[token.program_id][token.pos..]);
 }
 
-fn postfix(tokenset: &mut Tokens) -> Node {
+fn postfix(tokenset: &mut TokenSet) -> Node {
 	
 	let mut lhs = primary(tokenset);
 
@@ -639,7 +639,7 @@ fn postfix(tokenset: &mut Tokens) -> Node {
 	}
 }
 
-fn unary(tokenset: &mut Tokens) -> Node {
+fn unary(tokenset: &mut TokenSet) -> Node {
 	
 	if tokenset.consume_ty(TokenInc) {
 		let lhs = unary(tokenset);
@@ -675,7 +675,7 @@ fn unary(tokenset: &mut Tokens) -> Node {
 	return postfix(tokenset);
 }
 
-fn mul(tokenset: &mut Tokens) -> Node {
+fn mul(tokenset: &mut TokenSet) -> Node {
 	let mut lhs = unary(tokenset);
 	
 	loop {
@@ -692,7 +692,7 @@ fn mul(tokenset: &mut Tokens) -> Node {
 
 }
 
-fn add(tokenset: &mut Tokens) -> Node {
+fn add(tokenset: &mut TokenSet) -> Node {
 	let mut lhs = mul(tokenset);
 	
 	loop {
@@ -706,7 +706,7 @@ fn add(tokenset: &mut Tokens) -> Node {
 	
 }
 
-fn shift(tokenset: &mut Tokens) -> Node {
+fn shift(tokenset: &mut TokenSet) -> Node {
 	let mut lhs = add(tokenset);
 
 	loop {
@@ -721,7 +721,7 @@ fn shift(tokenset: &mut Tokens) -> Node {
 
 }
 
-fn relational(tokenset: &mut Tokens) -> Node {
+fn relational(tokenset: &mut TokenSet) -> Node {
 	let mut lhs = shift(tokenset);
 	
 	loop {
@@ -739,7 +739,7 @@ fn relational(tokenset: &mut Tokens) -> Node {
 	}
 }
 
-fn equarity(tokenset: &mut Tokens) -> Node {
+fn equarity(tokenset: &mut TokenSet) -> Node {
 	let mut lhs = relational(tokenset);
 	
 	loop {
@@ -753,7 +753,7 @@ fn equarity(tokenset: &mut Tokens) -> Node {
 	}
 }
 
-fn bitand(tokenset: &mut Tokens) -> Node {
+fn bitand(tokenset: &mut TokenSet) -> Node {
 	let mut lhs = equarity(tokenset);
 
 	while tokenset.consume_ty(TokenAmpersand) {
@@ -762,7 +762,7 @@ fn bitand(tokenset: &mut Tokens) -> Node {
 	return lhs;
 }
 
-fn bitxor(tokenset: &mut Tokens) -> Node {
+fn bitxor(tokenset: &mut TokenSet) -> Node {
 	let mut lhs = bitand(tokenset);
 
 	while tokenset.consume_ty(TokenXor) {
@@ -771,7 +771,7 @@ fn bitxor(tokenset: &mut Tokens) -> Node {
 	return lhs;
 }
 
-fn bitor(tokenset: &mut Tokens) -> Node {
+fn bitor(tokenset: &mut TokenSet) -> Node {
 	let mut lhs = bitxor(tokenset);
 
 	while tokenset.consume_ty(TokenOr) {
@@ -780,7 +780,7 @@ fn bitor(tokenset: &mut Tokens) -> Node {
 	return lhs;
 }
 
-fn logand(tokenset: &mut Tokens) -> Node {
+fn logand(tokenset: &mut TokenSet) -> Node {
 	let mut lhs = bitor(tokenset);
 
 	while tokenset.consume_ty(TokenLogAnd) {
@@ -789,7 +789,7 @@ fn logand(tokenset: &mut Tokens) -> Node {
 	return lhs;
 }
 
-fn logor(tokenset: &mut Tokens) -> Node {
+fn logor(tokenset: &mut TokenSet) -> Node {
 	let mut lhs = logand(tokenset);
 
 	while tokenset.consume_ty(TokenLogOr) {
@@ -798,7 +798,7 @@ fn logor(tokenset: &mut Tokens) -> Node {
 	return lhs;
 }
 
-fn conditional(tokenset: &mut Tokens) -> Node {
+fn conditional(tokenset: &mut TokenSet) -> Node {
 	let cond = logor(tokenset);
 	if tokenset.consume_ty(TokenQuestion) {
 		let then = expr(tokenset);
@@ -809,7 +809,7 @@ fn conditional(tokenset: &mut Tokens) -> Node {
 	return cond;
 }
 
-fn assign(tokenset: &mut Tokens) -> Node {
+fn assign(tokenset: &mut TokenSet) -> Node {
 	let mut lhs = conditional(tokenset);
 
 	if let Some(op) = assignment_op(tokenset) {
@@ -827,7 +827,7 @@ fn assign(tokenset: &mut Tokens) -> Node {
 	return lhs;
 }
 
-fn expr(tokenset: &mut Tokens) -> Node {
+fn expr(tokenset: &mut TokenSet) -> Node {
 	let lhs = assign(tokenset);
 	if tokenset.consume_ty(TokenComma) {
 		return Node::new_tuple(NULL_TY.clone(), lhs, expr(tokenset));
@@ -835,7 +835,7 @@ fn expr(tokenset: &mut Tokens) -> Node {
 	return lhs;
 }
 
-fn declarator(tokenset: &mut Tokens, mut ty: Type) -> Node {
+fn declarator(tokenset: &mut TokenSet, mut ty: Type) -> Node {
 	
 	while tokenset.consume_ty(TokenStar) {
 		ty = ty.ptr_to();
@@ -845,7 +845,7 @@ fn declarator(tokenset: &mut Tokens, mut ty: Type) -> Node {
 
 }
 
-fn read_array(tokenset: &mut Tokens, ty: Type) -> Type {
+fn read_array(tokenset: &mut TokenSet, ty: Type) -> Type {
 	let mut ary_size = vec![];
 	let mut ty = ty.clone();
 
@@ -875,7 +875,7 @@ fn read_array(tokenset: &mut Tokens, ty: Type) -> Type {
 	return ty;
 }
 
-fn ident(tokenset: &mut Tokens) -> String {
+fn ident(tokenset: &mut TokenSet) -> String {
 	// panic!("{}, {}, {}", tokenset[*pos].program_id, tokenset[*pos].pos, tokenset[*pos].val);
 	let token = tokenset.tokens[tokenset.pos].clone();
 	let name = String::from(&PROGRAMS.lock().unwrap()[token.program_id][token.pos..token.end]);
@@ -887,7 +887,7 @@ fn ident(tokenset: &mut Tokens) -> String {
 	return name;
 }
 
-fn decl_init(tokenset: &mut Tokens, node: &mut Node) {
+fn decl_init(tokenset: &mut TokenSet, node: &mut Node) {
 	if let NodeType::VarDef(_, _, _, _, ref mut init) = node.op {
 		if tokenset.consume_ty(TokenEq) {
 			let rhs = assign(tokenset);
@@ -916,7 +916,7 @@ fn new_ptr_to_replace_type(ctype: &Type, true_ty: Type) -> Type {
 	}
 }
 
-fn direct_decl(tokenset: &mut Tokens, mut ty: Type) -> Node {
+fn direct_decl(tokenset: &mut TokenSet, mut ty: Type) -> Node {
 
 	let mut ident_node;
 	
@@ -949,7 +949,7 @@ fn direct_decl(tokenset: &mut Tokens, mut ty: Type) -> Node {
 	return ident_node;
 }
 
-fn declaration(tokenset: &mut Tokens) -> Node {
+fn declaration(tokenset: &mut TokenSet) -> Node {
 
 	// declaration type
 	let ty = decl_specifiers(tokenset);
@@ -960,13 +960,13 @@ fn declaration(tokenset: &mut Tokens) -> Node {
 	return ident_node;
 }
 
-fn expr_stmt(tokenset: &mut Tokens) -> Node {
+fn expr_stmt(tokenset: &mut TokenSet) -> Node {
 	let lhs = expr(tokenset);
 	tokenset.consume_ty(TokenSemi);
 	return Node::new_expr(lhs);
 }
 
-pub fn stmt(tokenset: &mut Tokens) -> Node {
+pub fn stmt(tokenset: &mut TokenSet) -> Node {
 	
 	match tokenset.tokens[tokenset.pos].ty {
 		TokenRet => {
@@ -1074,7 +1074,7 @@ pub fn stmt(tokenset: &mut Tokens) -> Node {
 	}
 }
 
-pub fn compound_stmt(tokenset: &mut Tokens) -> Node {
+pub fn compound_stmt(tokenset: &mut TokenSet) -> Node {
 	
 	let mut compstmts = vec![];
 	tokenset.assert_ty(TokenRightCurlyBrace);
@@ -1094,7 +1094,7 @@ pub fn compound_stmt(tokenset: &mut Tokens) -> Node {
 	return Node::new_stmt(compstmts);
 }
 
-pub fn param_declaration(tokenset: &mut Tokens) -> Node {
+pub fn param_declaration(tokenset: &mut TokenSet) -> Node {
 	
 	// type
 	let ty = decl_specifiers(tokenset);
@@ -1108,7 +1108,7 @@ pub fn param_declaration(tokenset: &mut Tokens) -> Node {
 	return node;
 }
 
-pub fn toplevel(tokenset: &mut Tokens) -> Node {
+pub fn toplevel(tokenset: &mut TokenSet) -> Node {
 	
 	let mut args = vec![];
 
@@ -1164,7 +1164,7 @@ pub fn toplevel(tokenset: &mut Tokens) -> Node {
 
 }
 
-pub fn parse(tokenset: &mut Tokens, program: &mut Program) {
+pub fn parse(tokenset: &mut TokenSet, program: &mut Program) {
 	
 	let env = (*ENV.lock().unwrap()).clone();
 	*ENV.lock().unwrap() = Env::new_env(Some(env));
