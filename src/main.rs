@@ -9,6 +9,7 @@ pub mod sema;
 pub mod ir_dump;
 pub mod lib;
 pub mod preprocess;
+pub mod mir;
 
 use token::*;
 use parse::*;
@@ -18,6 +19,7 @@ use gen_x86::*;
 use sema::*;
 use ir_dump::*;
 use preprocess::*;
+use mir::*;
 
 #[macro_use]
 extern crate lazy_static;
@@ -47,11 +49,7 @@ fn main() {
 	}
 
 	add_program(args.pop().unwrap());
-	// let t = Token::new(TokenType::TokenString(String::from("")), 0, 0, 0, 0);
-	// let mut p = 1;
-	// if t.consume_ty(TokenType::TokenString(String::new()), &mut p) {
-	// 	panic!("rererewrwerwerwerwerwerwer {}", p);
-	// }
+
 	// lexical analysis
 	let tokens = tokenize(0, true);
 	// let mut i = 0;
@@ -62,33 +60,33 @@ fn main() {
 	// 		break;
 	// 	}
 	// }
-
+	let mut program = Program::new();
 	// parsing analysis
-	let nodes = parse(&tokens, &mut 0);
-	// println!("{:#?}", &nodes);
-	let (nodes, globals) = sema(&nodes);
-	// println!("{:#?}", &nodes);
+	parse(&tokens, &mut program, &mut 0);
+	// println!("{:#?}", &program.nodes);
+	sema(&mut program);
+	// println!("{:#?}", &program.nodes);
 
 	// alloc index for register
-	let mut funcs = gen_ir(&nodes);
+	gen_ir(&mut program);
 	if dump_ir1 {
-		IrInfo::dump_ir(&funcs, "-dump-ir1");
+		IrInfo::dump_ir(&program.funs, "-dump-ir1");
 	}
-	// for func in &funcs {
+	// for func in &program.funs {
 	// 	for ir in &func.irs{
 	// 		println!("{:?}", ir);
 	// 	}
 	// }
-	alloc_regs(&mut funcs);
+	alloc_regs(&mut program);
 	if dump_ir2 {
-		IrInfo::dump_ir(&funcs, "-dump-ir2");
+		IrInfo::dump_ir(&program.funs, "-dump-ir2");
 	}
-	// for func in &funcs {
+	// for func in &program.funs {
 	// 	for ir in &func.irs{
 	// 		println!("{:?}", ir);
 	// 	}
 	// }
 	
 	// code generator
-	gen_x86(globals, funcs);
+	gen_x86(&program);
 }

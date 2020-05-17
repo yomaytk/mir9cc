@@ -1,6 +1,8 @@
 use super::token::*;
 use super::token::TokenType::*;
 // use super::lib::*;
+use super::mir::*;
+
 use std::collections::HashMap;
 use std::sync::Mutex;
 
@@ -1157,18 +1159,15 @@ pub fn toplevel(tokens: &Vec<Token>, pos: &mut usize) -> Node {
 
 }
 
-pub fn parse(tokens: &Vec<Token>, pos: &mut usize) -> Vec<Node> {
+pub fn parse(tokens: &Vec<Token>, program: &mut Program, pos: &mut usize) {
 	
-	let mut program = vec![];
 	let env = (*ENV.lock().unwrap()).clone();
 	*ENV.lock().unwrap() = Env::new_env(Some(env));
 
 	loop {
 		match tokens[*pos].consume_ty(TokenEof, pos) {
 			true => { break; }
-			false => { program.push(toplevel(tokens, pos)); }
+			false => { program.nodes.push(toplevel(tokens, pos)); }
 		}
 	}
-
-	return program;
 }

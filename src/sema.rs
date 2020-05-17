@@ -1,6 +1,8 @@
 use super::parse::{*, NodeType::*, INT_TY};
 use super::token::TokenType::*;
 // use super::lib::*;
+use super::mir::*;
+
 use std::collections::HashMap;
 use std::sync::Mutex;
 
@@ -412,12 +414,12 @@ pub fn do_walk(node: &Node, env: &mut Env, decay: bool) -> Node {
 	}
 }
 
-pub fn sema(nodes: &Vec<Node>) -> (Vec<Node>, Vec<Var>) {
+pub fn sema(program: &mut Program) {
 	
-	let mut funcv = vec![];
 	let mut topenv = Env::new(None);
+	let mut nodes = vec![];
 	
-	for topnode in nodes {
+	for topnode in &mut program.nodes {
 
 		if let VarDef(ctype, is_extern, ident, ..) = &topnode.op {
 			let var = new_global(&ctype, ident.clone(), None, *is_extern);
@@ -441,7 +443,7 @@ pub fn sema(nodes: &Vec<Node>) -> (Vec<Node>, Vec<Var>) {
 				let var = Var::new(ctype.clone(), 0, false, ident.clone(), String::new(), *is_extern);
 				topenv.vars.insert(ident.clone(), var);
 				
-				funcv.push(node);
+				nodes.push(node);
 			}
 			Decl(ctype, ident, _, is_extern) => {
 				// add to global
@@ -453,5 +455,6 @@ pub fn sema(nodes: &Vec<Node>) -> (Vec<Node>, Vec<Var>) {
 		}
 	}
 
-	return (funcv, GVARS.lock().unwrap().clone());
+	program.gvars = std::mem::replace(&mut GVARS.lock().unwrap(), vec![]);
+	program.nodes = nodes;
 }

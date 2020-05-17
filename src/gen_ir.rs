@@ -4,6 +4,7 @@ use IrType::*;
 use super::parse::*;
 use super::ir_dump::{IrInfo, IRINFO};
 // use super::lib::*;
+use super::mir::*;
 
 use std::sync::Mutex;
 use std::fmt;
@@ -592,11 +593,9 @@ fn gen_stmt(node: &Node, code: &mut Vec<Ir>) {
 }
 
 // generate IR Vector
-pub fn gen_ir(funcs: &Vec<Node>) -> Vec<Function> {
+pub fn gen_ir(program: &mut Program) {
 	
-	let mut v = vec![];
-
-	for funode in funcs {
+	for funode in &mut program.nodes {
 		
 		let mut code = vec![];
 		*REGNO.lock().unwrap() = 1;
@@ -620,11 +619,9 @@ pub fn gen_ir(funcs: &Vec<Node>) -> Vec<Function> {
 				}
 				gen_stmt(body, &mut code);
 				let func = Function::new(name.clone(), code, *stacksize);
-				v.push(func);
+				program.funs.push(func);
 			}
 			_ => { panic!(" should be func node at gen_ir: {:?}", funode); }
 		}
 	}
-
-	return v;
 }

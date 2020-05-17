@@ -1,4 +1,5 @@
 use super::gen_ir::{*, IrOp::*, IrType::*};
+use super::mir::*;
 
 // Register allocator.
 //
@@ -86,9 +87,9 @@ pub fn visit(reg_map: &mut Vec<i32>, used: &mut Vec<bool>, irs: &mut Vec<Ir>) {
 	}
 }
 
-pub fn alloc_regs(funcs: &mut Vec<Function>) {
+pub fn alloc_regs(program: &mut Program) {
 
-	for fun in funcs {
+	for fun in &mut program.funs {
 		let mut reg_map: Vec<i32> = vec![-1; 8192];
 		let mut used: Vec<bool> = vec![false; 8];
 		visit(&mut reg_map, &mut used, &mut fun.irs);

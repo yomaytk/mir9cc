@@ -1,6 +1,7 @@
 use super::gen_ir::{*, IrOp::*};
-use super::sema::Var;
 use super::parse::roundup;
+use super::mir::*;
+
 use std::collections::HashMap;
 use std::sync::Mutex;
 
@@ -247,13 +248,13 @@ pub fn gen(fun: &Function, label: usize) {
 	emit!("ret");
 }
 
-pub fn gen_x86(globals: Vec<Var>, funcs: Vec<Function>) {
+pub fn gen_x86(program: &Program) {
 	
 	println!(".intel_syntax noprefix");
 	
 	// global variable
 	println!(".data");
-	for gvar in &globals {
+	for gvar in &program.gvars {
 		if gvar.is_extern {
 			continue;
 		}
@@ -261,7 +262,7 @@ pub fn gen_x86(globals: Vec<Var>, funcs: Vec<Function>) {
 		emit!(".ascii \"{}\"", escape(gvar.strname.clone(), gvar.ctype.size));
 	}
 
-	for i in 0..funcs.len() {
-		gen(&funcs[i], i);
+	for i in 0..program.funs.len() {
+		gen(&program.funs[i], i);
 	}
 }
