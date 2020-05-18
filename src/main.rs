@@ -52,7 +52,7 @@ fn main() {
 
 	// lexical analysis
 	let tokens = tokenize(0, true);
-	let mut tokens = TokenSet::new(tokens);
+	let mut tokenset = TokenSet::new(tokens);
 	// let mut i = 0;
 	// for token in &tokens {
 	// 	println!("{:?}", token);
@@ -63,7 +63,7 @@ fn main() {
 	// }
 	let mut program = Program::new();
 	// parsing analysis
-	parse(&mut tokens, &mut program);
+	parse(&mut tokenset, &mut program);
 	// println!("{:#?}", &program.nodes);
 	sema(&mut program);
 	// println!("{:#?}", &program.nodes);

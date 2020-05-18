@@ -43,6 +43,7 @@ lazy_static! {
 		align: 4,
 		offset: 0,
 		len: 0,
+		is_extern: false,
 	};
 	pub static ref CHAR_TY: Type = Type {
 		ty: Ty::CHAR,
@@ -52,6 +53,7 @@ lazy_static! {
 		align: 1,
 		offset: 0,
 		len: 0,
+		is_extern: false,
 	};
 	pub static ref VOID_TY: Type = Type {
 		ty: Ty::VOID,
@@ -61,6 +63,7 @@ lazy_static! {
 		align: 0,
 		offset: 0,
 		len: 0,
+		is_extern: false,
 	};
 	pub static ref NULL_TY: Type = Type {
 		ty: Ty::NULL,
@@ -70,6 +73,7 @@ lazy_static! {
 		align: 0,
 		offset: 0,
 		len: 0,
+		is_extern: false,
 	};
 	pub static ref STRUCT_TY: Type = Type {
 		ty: Ty::STRUCT(String::new(), Vec::new()),
@@ -79,6 +83,7 @@ lazy_static! {
 		align: 0,
 		offset: 0,
 		len: 0,
+		is_extern: false,
 	};
 	pub static ref ENV: Mutex<Env> = Mutex::new(Env::new_env(None));
 }
@@ -92,10 +97,11 @@ pub struct Type {
 	pub align: usize,
 	pub offset: usize,
 	pub len: usize,
+	pub is_extern: bool,
 }
 
 impl Type {
-	pub fn new(ty: Ty, ptr_to: Option<Box<Type>>, ary_to: Option<Box<Type>>, size: usize, align: usize, offset: usize, len: usize) -> Self {
+	pub fn new(ty: Ty, ptr_to: Option<Box<Type>>, ary_to: Option<Box<Type>>, size: usize, align: usize, offset: usize, len: usize, is_extern: bool) -> Self {
 		Self {
 			ty,
 			ptr_to,
@@ -104,9 +110,11 @@ impl Type {
 			align,
 			offset,
 			len,
+			is_extern,
 		}
 	}
 	pub fn ptr_to(self) -> Self {
+		let is_extern = self.is_extern;
 		Self {
 			ty: Ty::PTR,
 			ptr_to: Some(Box::new(self)),
@@ -115,19 +123,22 @@ impl Type {
 			align: 8,
 			offset: 0,
 			len: 0,
+			is_extern,
 		}
 	}
 	pub fn ary_of(self, len: usize) -> Self {
 		let size = self.size;
 		let align = self.align;
+		let is_extern = self.is_extern;
 		Self {
 			ty: Ty::ARY,
 			ptr_to: None,
 			ary_to: Some(Box::new(self)),
 			size: size * len,
-			align: align,
+			align,
 			offset: 0,
 			len,
+			is_extern,
 		}
 	}
 }
@@ -177,11 +188,11 @@ pub enum NodeType {
 	EqTree(Type, Box<Node>, Box<Node>),											// EqTree(ctype, lhs, rhs)
 	IfThen(Box<Node>, Box<Node>, Option<Box<Node>>),							// IfThen(cond, then, elthen)
 	Call(Type, String, Vec<Node>),												// Call(ctype, ident, args)
-	Func(Type, String, bool, Vec<Node>, Box<Node>, usize),						// Func(ctype, ident, is_extern, args, body, stacksize)
+	Func(Type, String, Vec<Node>, Box<Node>, usize),							// Func(ctype, ident, is_extern, args, body, stacksize)
 	LogAnd(Box<Node>, Box<Node>),												// LogAnd(lhs, rhs)
 	LogOr(Box<Node>, Box<Node>),												// LogOr(lhs, rhs)
 	For(Box<Node>, Box<Node>, Box<Node>, Box<Node>),							// For(init, cond, inc, body)
-	VarDef(Type, bool, String, usize, Option<Box<Node>>),						// VarDef(ty, is_extern, name, off, rhs)
+	VarDef(Type, String, usize, Option<Box<Node>>),								// VarDef(ty, is_extern, name, off, rhs)
 	Lvar(Type, usize),															// Lvar(ty, stacksize)
 	Deref(Type, Box<Node>),														// Deref(ctype, lhs)
 	Addr(Type, Box<Node>),														// Addr(ctype, lhs)
@@ -198,7 +209,7 @@ pub enum NodeType {
 	TupleExpr(Type, Box<Node>, Box<Node>),										// TupleExpr(ctype, lhs, rhs)
 	Neg(Box<Node>),																// Neg(expr)
 	IncDec(Type, i32, Box<Node>),												// IncDec(ctype, selector, expr)
-	Decl(Type, String, Vec<Node>, bool),										// Decl(ctype, ident)
+	Decl(Type, String, Vec<Node>),												// Decl(ctype, ident, args)
 	Break,																		// Break
 	NULL,																		// NULL
 }
@@ -308,9 +319,9 @@ impl Node {
 			op: NodeType::Call(ctype, ident, args)
 		}
 	}
-	pub fn new_func(ctype: Type, ident: String, is_extern: bool, args: Vec<Node>, body: Node, stacksize: usize) -> Self {
+	pub fn new_func(ctype: Type, ident: String, args: Vec<Node>, body: Node, stacksize: usize) -> Self {
 		Self {
-			op: NodeType::Func(ctype, ident, is_extern, args, Box::new(body), stacksize)
+			op: NodeType::Func(ctype, ident, args, Box::new(body), stacksize)
 		}
 	}
 	pub fn new_and(lhs: Node, rhs: Node) -> Self {
@@ -328,11 +339,11 @@ impl Node {
 			op: NodeType::For(Box::new(init), Box::new(cond), Box::new(inc), Box::new(body))
 		}
 	}
-	pub fn new_vardef(ty: Type, is_extern: bool, name: String, off: usize, rhs: Option<Node>) -> Self {
+	pub fn new_vardef(ty: Type, name: String, off: usize, rhs: Option<Node>) -> Self {
 		Self {
 			op: match rhs {
-				Some(node) => { NodeType::VarDef(ty, is_extern, name, off, Some(Box::new(node))) }
-				_ => { NodeType::VarDef(ty, is_extern, name, off, None)}
+				Some(node) => { NodeType::VarDef(ty, name, off, Some(Box::new(node))) }
+				_ => { NodeType::VarDef(ty, name, off, None)}
 			}
 		}
 	}
@@ -421,9 +432,9 @@ impl Node {
 			op: NodeType::IncDec(ctype, selector, Box::new(expr))
 		}
 	}
-	pub fn new_decl(ctype: Type, ident: String, args: Vec<Node>, is_extern: bool) -> Self {
+	pub fn new_decl(ctype: Type, ident: String, args: Vec<Node>) -> Self {
 		Self {
-			op: NodeType::Decl(ctype, ident, args, is_extern)
+			op: NodeType::Decl(ctype, ident, args)
 		}
 	}
 	pub fn new_break() -> Self {
@@ -536,7 +547,7 @@ pub fn new_struct(tag: String, mut members: Vec<Node>) -> Type {
 	}
 	let ty_size = roundup(off, ty_align);
 
-	return Type::new(Ty::STRUCT(tag, members), None, None, ty_size ,ty_align , 0, 0);
+	return Type::new(Ty::STRUCT(tag, members), None, None, ty_size ,ty_align , 0, 0, false);
 }
 
 fn assignment_op(tokenset: &mut TokenSet) -> Option<TokenType> {
@@ -888,7 +899,7 @@ fn ident(tokenset: &mut TokenSet) -> String {
 }
 
 fn decl_init(tokenset: &mut TokenSet, node: &mut Node) {
-	if let NodeType::VarDef(_, _, _, _, ref mut init) = node.op {
+	if let NodeType::VarDef(.., ref mut init) = node.op {
 		if tokenset.consume_ty(TokenEq) {
 			let rhs = assign(tokenset);
 			std::mem::replace(init, Some(Box::new(rhs)));
@@ -910,7 +921,8 @@ fn new_ptr_to_replace_type(ctype: &Type, true_ty: Type) -> Type {
 				ctype.size,
 				ctype.align,
 				ctype.offset,
-				ctype.len
+				ctype.len,
+				ctype.is_extern,
 			)
 		}
 	}
@@ -924,7 +936,7 @@ fn direct_decl(tokenset: &mut TokenSet, mut ty: Type) -> Node {
 		tokenset.pos -= 1;
 		let name = ident(tokenset);
 		ty = read_array(tokenset, ty);
-		ident_node = Node::new_vardef(ty, false, name, 0, None);
+		ident_node = Node::new_vardef(ty, name, 0, None);
 	} else if tokenset.consume_ty(TokenRightBrac) {
 		ident_node = declarator(tokenset, NULL_TY.clone());
 		tokenset.assert_ty(TokenLeftBrac);
@@ -932,8 +944,8 @@ fn direct_decl(tokenset: &mut TokenSet, mut ty: Type) -> Node {
 		let true_ty = read_array(tokenset, ty);
 		let ident_node_true_ty = new_ptr_to_replace_type(&ident_node.nodesctype(None), true_ty);
 
-		if let NodeType::VarDef(_, false, name, offset, init) = ident_node.op {
-			let op = NodeType::VarDef(ident_node_true_ty, false, name, offset, init);
+		if let NodeType::VarDef(_, name, offset, init) = ident_node.op {
+			let op = NodeType::VarDef(ident_node_true_ty, name, offset, init);
 			return Node { op };
 		} else {
 			panic!("direct_decl fun error.");
@@ -1051,7 +1063,7 @@ pub fn stmt(tokenset: &mut TokenSet) -> Node {
 		TokenTypedef => {
 			tokenset.pos += 1;
 			let lhs = declaration(tokenset);
-			if let NodeType::VarDef(ctype, _, name, _, None) = lhs.op {
+			if let NodeType::VarDef(ctype, name, _, None) = lhs.op {
 				ENV.lock().unwrap().typedefs.insert(name, ctype);
 				return Node::new_null();
 			}
@@ -1113,13 +1125,11 @@ pub fn toplevel(tokenset: &mut TokenSet) -> Node {
 	let mut args = vec![];
 
 	let is_extern = tokenset.consume_ty(TokenExtern);
-	// if is_extern {
-	// 	panic!("rerererererer {}", *pos);
-	// }
 	let is_typedef = tokenset.consume_ty(TokenTypedef);
 
 	// Ctype
 	let mut ctype = decl_specifiers(tokenset);
+	ctype.is_extern = is_extern;
 	
 	while tokenset.consume_ty(TokenStar) {
 		ctype = ctype.ptr_to();
@@ -1145,11 +1155,11 @@ pub fn toplevel(tokenset: &mut TokenSet) -> Node {
 		}
 		// function decl
 		if tokenset.consume_ty(TokenSemi) {
-			return Node::new_decl(ctype, ident, args, is_extern);
+			return Node::new_decl(ctype, ident, args);
 		}
 		// body
 		let body = compound_stmt(tokenset);
-		return Node::new_func(ctype, ident, is_extern, args, body, 0);
+		return Node::new_func(ctype, ident, args, body, 0);
 	}
 
 	ctype = read_array(tokenset, ctype);
@@ -1160,7 +1170,7 @@ pub fn toplevel(tokenset: &mut TokenSet) -> Node {
 		return Node::new_null();
 	}
 	// global variable
-	return Node::new_vardef(ctype, is_extern, ident, 0, None);
+	return Node::new_vardef(ctype, ident, 0, None);
 
 }
 

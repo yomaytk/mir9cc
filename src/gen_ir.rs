@@ -601,8 +601,8 @@ pub fn gen_ir(program: &mut Program) {
 		*REGNO.lock().unwrap() = 1;
 		
 		match &funode.op {
-			NodeType::Func(_, name, is_extern, args, body, stacksize) => {
-				if *is_extern {
+			NodeType::Func(ctype, name, args, body, stacksize) => {
+				if ctype.is_extern {
 					continue;
 				}
 				for i in 0..args.len() {

@@ -40,7 +40,8 @@ pub struct Var {
 }
 
 impl Var {
-	pub fn new(ctype: Type, offset: usize, is_local: bool, ident: String, strname: String, is_extern: bool) -> Self {
+	pub fn new(ctype: Type, offset: usize, is_local: bool, ident: String, strname: String) -> Self {
+		let is_extern = ctype.is_extern;
 		Self {
 			ctype,
 			offset,
@@ -106,7 +107,7 @@ pub fn maybe_decay(node: Node, decay: bool) -> Node {
 	}
 }
 
-pub fn new_global(ctype: &Type, ident: String, strname: Option<String>, is_extern: bool) -> Var {
+pub fn new_global(ctype: &Type, ident: String, strname: Option<String>) -> Var {
 	let mut strdata = String::new();
 	if let Some(data) = strname {
 		strdata = data.clone()
@@ -117,7 +118,6 @@ pub fn new_global(ctype: &Type, ident: String, strname: Option<String>, is_exter
 		false, 
 		ident,
 		strdata,
-		is_extern,
 	);
 	return var;
 }
@@ -271,7 +271,7 @@ pub fn do_walk(node: &Node, env: &mut Env, decay: bool) -> Node {
 			let mut newenv = Env::new(Some(env.clone()));
 			return Node::new_for(walk(init, &mut newenv), walk(cond, &mut newenv), walk(inc, &mut newenv), walk(body, &mut newenv));
 		}
-		VarDef(ctype, is_extern, ident, _, init) => {
+		VarDef(ctype, ident, _, init) => {
 			let mut rexpr = None;
 			if let Some(rhs) = init {
 				rexpr = Some(walk(rhs, env));
@@ -288,10 +288,9 @@ pub fn do_walk(node: &Node, env: &mut Env, decay: bool) -> Node {
 					true, 
 					ident.clone(),
 					String::from("dummy"),
-					*is_extern,
 				),
 			);
-			return Node::new_vardef(ctype.clone(), *is_extern, ident.clone(), offset, rexpr)
+			return Node::new_vardef(ctype.clone(), ident.clone(), offset, rexpr)
 		}
 		Deref(_, lhs) => {
 			let lhs2 = walk(lhs, env);
@@ -334,7 +333,7 @@ pub fn do_walk(node: &Node, env: &mut Env, decay: bool) -> Node {
 		// global variable of type char array.
 			*STRLABEL.lock().unwrap() += 1;
 			let labelname = format!(".L.str{}", *STRLABEL.lock().unwrap());
-			GVARS.lock().unwrap().push(new_global(&ctype, labelname.clone(), Some(strname.clone()), false));
+			GVARS.lock().unwrap().push(new_global(&ctype, labelname.clone(), Some(strname.clone())));
 			let lhs = Node::new_gvar(ctype.clone(), labelname);
 			return maybe_decay(lhs, decay);
 		}
@@ -365,7 +364,7 @@ pub fn do_walk(node: &Node, env: &mut Env, decay: bool) -> Node {
 						panic!("incomplete type.")
 					}
 					for membernode in members {
-						if let NodeType::VarDef(ctype, _, name2, ..) = membernode.op {
+						if let NodeType::VarDef(ctype, name2, ..) = membernode.op {
 							if &name[..] != &name2[..] {
 								continue;
 							}
@@ -421,15 +420,15 @@ pub fn sema(program: &mut Program) {
 	
 	for topnode in &mut program.nodes {
 
-		if let VarDef(ctype, is_extern, ident, ..) = &topnode.op {
-			let var = new_global(&ctype, ident.clone(), None, *is_extern);
+		if let VarDef(ctype, ident, ..) = &topnode.op {
+			let var = new_global(&ctype, ident.clone(), None);
 			GVARS.lock().unwrap().push(var.clone());
 			topenv.vars.insert(ident.clone(), var);
 			continue;
 		}
 
 		match &topnode.op {
-			Func(ctype, ident, is_extern, args, body, _) => {
+			Func(ctype, ident, args, body, _) => {
 				*STACKSIZE.lock().unwrap() = 0;
 				// eval args
 				let mut argv = vec![];
@@ -438,16 +437,16 @@ pub fn sema(program: &mut Program) {
 				}
 				// eval body
 				let body = walk(body, &mut topenv);
-				let node = Node::new_func(ctype.clone(), ident.clone(), *is_extern, argv, body, *STACKSIZE.lock().unwrap());
+				let node = Node::new_func(ctype.clone(), ident.clone(), argv, body, *STACKSIZE.lock().unwrap());
 				// add to var env
-				let var = Var::new(ctype.clone(), 0, false, ident.clone(), String::new(), *is_extern);
+				let var = Var::new(ctype.clone(), 0, false, ident.clone(), String::new());
 				topenv.vars.insert(ident.clone(), var);
 				
 				nodes.push(node);
 			}
-			Decl(ctype, ident, _, is_extern) => {
+			Decl(ctype, ident, _) => {
 				// add to global
-				let var = Var::new(ctype.clone(), 0, false, ident.clone(), String::new(), *is_extern);
+				let var = Var::new(ctype.clone(), 0, false, ident.clone(), String::new());
 				topenv.vars.insert(ident.clone(), var);
 			}
 			NULL => { continue; }
