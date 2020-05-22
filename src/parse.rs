@@ -599,6 +599,53 @@ fn assignment_op(tokenset: &mut TokenSet) -> Option<TokenType> {
 	else { return None; }
 }
 
+fn string_literal(tokenset: &mut TokenSet) -> Node {
+	// A string literal is converted to a reference to an anonymous
+	// global variable of type char array.
+	let strname = tokenset.getstring();
+	let ctype = CHAR_TY.clone().ary_of(strname.len() + 1);
+	tokenset.pos += 1;
+	*STRLABEL.lock().unwrap() += 1;
+	let labelname = format!(".L.str{}", *STRLABEL.lock().unwrap());
+	let var = Var::new(ctype, 0, false, Some(labelname), Some(strname));
+	GVARS.lock().unwrap().push(var.clone());
+	return Node::new_var(var);
+}
+
+fn local_variable(tokenset: &mut TokenSet) -> Node {
+	let token = &tokenset.tokens[tokenset.pos-1];
+	let name = String::from(&PROGRAMS.lock().unwrap()[token.program_id][token.pos..token.end]);
+	let var = env_find!(name.clone(), vars, NULL_VAR.clone());
+	if let Ty::NULL = var.ctype.ty {
+		panic!("{} is not defined.", name);
+	}
+	return Node::new_var(var);
+}
+
+fn function_call(tokenset: &mut TokenSet) -> Node {
+	let token = &tokenset.tokens[tokenset.pos-2];
+	let name = String::from(&PROGRAMS.lock().unwrap()[token.program_id][token.pos..token.end]);
+	let var = env_find!(name.clone(), vars, NULL_VAR.clone());
+	if let Ty::NULL = var.ctype.ty {
+		eprintln!("Warning: \"{}\" function is not defined.", name);
+	}
+	// function call
+	let mut args = vec![];
+	//// arity = 0;
+	if tokenset.consume_ty(TokenLeftBrac){
+		return Node::new_call(NULL_TY.clone(), name, args);
+	}
+	//// arity > 0;
+	let arg1 = assign(tokenset);
+	args.push(arg1);
+	while tokenset.consume_ty(TokenComma) {
+		let argv = assign(tokenset);
+		args.push(argv);
+	}
+	tokenset.assert_ty(TokenLeftBrac);
+	return Node::new_call(var.ctype, name, args);
+}
+
 fn primary(tokenset: &mut TokenSet) -> Node {
 	
 	if tokenset.consume_ty(TokenRightBrac) {
@@ -616,44 +663,14 @@ fn primary(tokenset: &mut TokenSet) -> Node {
 		return Node::new_num(tokenset.tokens[tokenset.pos-1].val);
 	}
 	if tokenset.consume_ty(TokenIdent) {
-
-		let token = &tokenset.tokens[tokenset.pos-1];
-		let name = String::from(&PROGRAMS.lock().unwrap()[token.program_id][token.pos..token.end]);
-		let var = env_find!(name.clone(), vars, NULL_VAR.clone());
-		if let Ty::NULL = var.ctype.ty {
-			panic!("{} is not defined.", name);
-		}
 		// variable
 		if !tokenset.consume_ty(TokenRightBrac){
-			return Node::new_var(var);
+			return local_variable(tokenset);
 		}
-		// function call
-		let mut args = vec![];
-		//// arity = 0;
-		if tokenset.consume_ty(TokenLeftBrac){
-			return Node::new_call(NULL_TY.clone(), name, args);
-		}
-		//// arity > 0;
-		let arg1 = assign(tokenset);
-		args.push(arg1);
-		while tokenset.consume_ty(TokenComma) {
-			let argv = assign(tokenset);
-			args.push(argv);
-		}
-		tokenset.assert_ty(TokenLeftBrac);
-		return Node::new_call(var.ctype, name, args);
+		return function_call(tokenset);
 	}
 	if tokenset.consume_ty(TokenString(String::new())) {
-		// A string literal is converted to a reference to an anonymous
-		// global variable of type char array.
-		let strname = tokenset.getstring();
-		let ctype = CHAR_TY.clone().ary_of(strname.len() + 1);
-		tokenset.pos += 1;
-		*STRLABEL.lock().unwrap() += 1;
-		let labelname = format!(".L.str{}", *STRLABEL.lock().unwrap());
-		let var = Var::new(ctype, 0, false, Some(labelname), Some(strname));
-		GVARS.lock().unwrap().push(var.clone());
-		return Node::new_var(var);
+		return string_literal(tokenset);
 	}
 	// error(&format!("parse.rs: primary parse fail. and got {}", tokenset[*pos].input));
 	// for debug.
@@ -971,16 +988,15 @@ fn new_ptr_to_replace_type(ctype: &Type, true_ty: Type) -> Type {
 	}
 }
 
-fn direct_decl(tokenset: &mut TokenSet, mut ty: Type) -> Node {
+fn direct_decl(tokenset: &mut TokenSet, ty: Type) -> Node {
 
 	let mut ident_node;
 	
 	if tokenset.consume_ty(TokenIdent) {
 		tokenset.pos -= 1;
 		let name = ident(tokenset);
-		ty = read_array(tokenset, ty);
 		let mut var = NULL_VAR.clone();
-		var.ctype = ty;
+		var.ctype = read_array(tokenset, ty);
 		ident_node = Node::new_vardef(name, var, None);
 	} else if tokenset.consume_ty(TokenRightBrac) {
 		ident_node = declarator(tokenset, NULL_TY.clone());
@@ -989,11 +1005,10 @@ fn direct_decl(tokenset: &mut TokenSet, mut ty: Type) -> Node {
 		let true_ty = read_array(tokenset, ty);
 		let ident_node_true_ty = new_ptr_to_replace_type(&ident_node.nodesctype(None), true_ty);
 
-		if let NodeType::VarDef(name, var, init) = ident_node.op {
-			let mut _var = var;
-			_var.ctype = ident_node_true_ty;
+		if let NodeType::VarDef(name, mut var, init) = ident_node.op {
+			var.ctype = ident_node_true_ty;
 			ident_node = Node {
-				op: NodeType::VarDef(name, _var, init)
+				op: NodeType::VarDef(name, var, init)
 			};
 		} else {
 			panic!("direct_decl fun error.");
