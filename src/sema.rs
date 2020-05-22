@@ -3,9 +3,6 @@ use super::token::TokenType::*;
 // use super::lib::*;
 use super::mir::*;
 
-use std::collections::HashMap;
-use std::sync::Mutex;
-
 // Semantics analyzer. This pass plays a few important roles as shown
 // below:
 //
@@ -23,79 +20,9 @@ use std::sync::Mutex;
 //
 // - Reject bad assignments, such as `1=2+3`.
 
-lazy_static! {
-	pub static ref STACKSIZE: Mutex<usize> = Mutex::new(0);
-	pub static ref GVARS: Mutex<Vec<Var>> = Mutex::new(vec![]);
-	pub static ref STRLABEL: Mutex<usize> = Mutex::new(0);
-}
-
-#[derive(Debug, Clone)]
-pub struct Var {
-	pub ctype: Type,
-	pub offset: usize,
-	pub is_local: bool,
-	pub ident: String,
-	pub strname: String,
-	pub is_extern: bool,
-}
-
-impl Var {
-	pub fn new(ctype: Type, offset: usize, is_local: bool, ident: String, strname: String, is_extern: bool) -> Self {
-		Self {
-			ctype,
-			offset,
-			is_local,
-			ident,
-			strname,
-			is_extern,
-		}
-	}
-}
-
-#[derive(Debug, Clone)]
-pub struct Env {
-	pub vars: HashMap<String, Var>,
-	pub next: Option<Box<Env>>,
-}
-
-impl Env {
-	pub fn new(next: Option<Env>) -> Self {
-		match next {
-			Some(nextenv) => {
-				Self {
-					vars: HashMap::new(),
-					next: Some(Box::new(nextenv)),
-				}
-			}
-			_ => {
-				Self {
-					vars: HashMap::new(),
-					next: None,
-				}
-			}
-		}
-	}
-	pub fn find(&self, name: String) -> Option<&Var> {
-
-		if let Some(var) = self.vars.get(&name) {
-			return Some(var);
-		}
-
-		let mut env = &self.next;
-
-		while let Some(e) = env {
-			if let Some(var) = e.vars.get(&name) {
-				return Some(var);
-			}
-			env = &e.next;
-		}
-		return None;
-	}
-}
-
 pub fn maybe_decay(node: Node, decay: bool) -> Node {
 	let ctype = node.nodesctype(None);
-	match node.nodesctype(None).ty {
+	match ctype.ty {
 		Ty::ARY if decay => {
 			return Node::new_addr(ctype.ary_to.as_ref().unwrap().as_ref().clone().ptr_to(), node);
 		}
@@ -106,25 +33,9 @@ pub fn maybe_decay(node: Node, decay: bool) -> Node {
 	}
 }
 
-pub fn new_global(ctype: &Type, ident: String, strname: Option<String>, is_extern: bool) -> Var {
-	let mut strdata = String::new();
-	if let Some(data) = strname {
-		strdata = data.clone()
-	}
-	let var = Var::new(
-		ctype.clone(), 
-		0, 
-		false, 
-		ident,
-		strdata,
-		is_extern,
-	);
-	return var;
-}
-
-pub fn binwalk(f: fn(Type, lhs: Node, rhs: Node) -> Node, lhs: &Node, rhs: &Node, env: &mut Env, lhs_or_rhs: i32) -> Node {
-	let lhs2 = walk(lhs, env);
-	let rhs2 = walk(rhs, env);
+pub fn binwalk(f: fn(Type, lhs: Node, rhs: Node) -> Node, lhs: &Node, rhs: &Node, lhs_or_rhs: i32) -> Node {
+	let lhs2 = walk(lhs);
+	let rhs2 = walk(rhs);
 	if lhs_or_rhs == -1 {
 		return f(lhs2.nodesctype(Some(INT_TY.clone())), lhs2, rhs2);
 	} else {
@@ -132,12 +43,12 @@ pub fn binwalk(f: fn(Type, lhs: Node, rhs: Node) -> Node, lhs: &Node, rhs: &Node
 	}
 }
 
-pub fn walk(node: &Node, env: &mut Env) -> Node {
-	return do_walk(node, env, true)
+pub fn walk(node: &Node) -> Node {
+	return do_walk(node, true)
 }
 
-pub fn walk_noconv(node: &Node, env: &mut Env) -> Node {
-	return do_walk(node, env, false)
+pub fn walk_noconv(node: &Node) -> Node {
+	return do_walk(node, false)
 }
 
 fn bin_ptr_swap(ctype: &mut Type, mut lhs: Node, mut rhs: Node) -> (Node, Node) {
@@ -173,12 +84,12 @@ fn same_type(ty1: Type, ty2: Type) -> bool {
 	}
 }
 
-pub fn do_walk(node: &Node, env: &mut Env, decay: bool) -> Node {
+pub fn do_walk(node: &Node, decay: bool) -> Node {
 	match &node.op {
 		Num(val) => { return Node::new_num(*val); }
 		BinaryTree(_, op, lhs, rhs)  => {
-			let mut lhs2 = walk(lhs, env);
-			let mut rhs2 = walk(rhs, env);
+			let mut lhs2 = walk(lhs);
+			let mut rhs2 = walk(rhs);
 			let mut ctype = INT_TY.clone();
 			ctype = lhs2.nodesctype(Some(ctype));
 			if let TokenAdd = op {
@@ -207,94 +118,56 @@ pub fn do_walk(node: &Node, env: &mut Env, decay: bool) -> Node {
 			}
 			return Node::new_bit(ctype, op.clone(), lhs2, rhs2);
 		}
-		Ret(lhs) => { return Node::new_ret(walk(lhs, env)); }
-		Expr(lhs) => { return Node::new_expr(walk(lhs, env)); }
+		Ret(lhs) => { return Node::new_ret(walk(lhs)); }
+		Expr(lhs) => { return Node::new_expr(walk(lhs)); }
 		CompStmt(lhsv) => {
 			let mut v = vec![];
-			let mut newenv = Env::new(Some(env.clone()));
 			for lhs in lhsv {
-				v.push(walk(lhs, &mut newenv));
+				v.push(walk(lhs));
 			}
 			return Node::new_stmt(v);
 		}
 		StmtExpr(ctype, body) => {
-			return Node::new_stmtexpr(ctype.clone(), walk(body, env));
+			return Node::new_stmtexpr(ctype.clone(), walk(body));
 		}
-		Ident(name) => {
-			if let Some(var) = env.find(name.clone()) {
-				if let Ty::NULL = var.ctype.ty {
-					panic!("type of {} is invalid.", var.ident);
-				}
-				if var.is_local {
-					let lvar = Node::new_lvar(var.ctype.clone(), var.offset);
-					return maybe_decay(lvar, decay);
-				} else {
-					let gvar = Node::new_gvar(var.ctype.clone(), var.ident.clone());
-					return maybe_decay(gvar, decay);
-				}
-			}
-			// error(&format!("\"{}\" is not defined.", name));
-			// for debug.
-			panic!("\"{}\" is not defined.", name);
+		Var(_) => {
+			return maybe_decay(node.clone(), decay);
 		}
 		EqTree(_, lhs, rhs) => {
-			let lhs2 = walk_noconv(lhs, env);
+			let lhs2 = walk_noconv(lhs);
 			lhs2.checklval();
-			let rhs2 = walk(rhs, env);
+			let rhs2 = walk(rhs);
 			return Node::new_eq(lhs2.nodesctype(None).clone(), lhs2, rhs2);
 		}
 		IfThen(cond, then, elthen) => {
 			match elthen {
 				Some(elth) => { 
-					return Node::new_if(walk(cond, env), walk(then, env), Some(walk(elth, env)));
+					return Node::new_if(walk(cond), walk(then), Some(walk(elth)));
 				}
-				_ => { return Node::new_if(walk(cond, env), walk(then, env), None); }
+				_ => { return Node::new_if(walk(cond), walk(then), None); }
 			}
 		}
-		Call(_, name, args) => {
-			let ctype;
-			if let Some(var) = env.find(name.clone()) {
-				ctype = var.ctype.clone();
-			} else {
-				eprintln!("bad function: {}", name.clone());
-				ctype = INT_TY.clone();
-			}
+		Call(ctype, name, args) => {
 			let mut v = vec![];
 			for arg in args {
-				v.push(walk(arg, env));
+				v.push(walk(arg));
 			}
-			return Node::new_call(ctype, name.clone(), v);
+			return Node::new_call(ctype.clone(), name.clone(), v);
 		}
-		LogAnd(lhs, rhs) => { return Node::new_and(walk(lhs, env), walk(rhs, env)); }
-		LogOr(lhs, rhs) => { return Node::new_or(walk(lhs, env), walk(rhs, env)); }
+		LogAnd(lhs, rhs) => { return Node::new_and(walk(lhs), walk(rhs)); }
+		LogOr(lhs, rhs) => { return Node::new_or(walk(lhs), walk(rhs)); }
 		For(init, cond, inc, body) => {
-			let mut newenv = Env::new(Some(env.clone()));
-			return Node::new_for(walk(init, &mut newenv), walk(cond, &mut newenv), walk(inc, &mut newenv), walk(body, &mut newenv));
+			return Node::new_for(walk(init), walk(cond), walk(inc), walk(body));
 		}
-		VarDef(ctype, is_extern, ident, _, init) => {
+		VarDef(name, var, init) => {
 			let mut rexpr = None;
 			if let Some(rhs) = init {
-				rexpr = Some(walk(rhs, env));
+				rexpr = Some(walk(rhs));
 			}
-			let stacksize = *STACKSIZE.lock().unwrap();
-			*STACKSIZE.lock().unwrap() = roundup(stacksize, ctype.align);
-			*STACKSIZE.lock().unwrap() += ctype.size;
-			let offset = *STACKSIZE.lock().unwrap();
-			env.vars.insert(
-				ident.clone(),
-				Var::new(
-					ctype.clone(), 
-					offset, 
-					true, 
-					ident.clone(),
-					String::from("dummy"),
-					*is_extern,
-				),
-			);
-			return Node::new_vardef(ctype.clone(), *is_extern, ident.clone(), offset, rexpr)
+			return Node::new_vardef(name.clone(), var.clone(), rexpr)
 		}
 		Deref(_, lhs) => {
-			let lhs2 = walk(lhs, env);
+			let lhs2 = walk(lhs);
 			let ctype = lhs2.nodesctype(None);
 			match ctype.ty {
 				Ty::PTR => { 
@@ -313,12 +186,12 @@ pub fn do_walk(node: &Node, env: &mut Env, decay: bool) -> Node {
 			}
 		}
 		Addr(_, lhs) => {
-			let lhs2 = walk(lhs, env);
+			let lhs2 = walk(lhs);
 			lhs2.checklval();
 			return Node::new_addr(lhs2.nodesctype(None).ptr_to(), lhs2);
 		}
 		Sizeof(.., lhs) => {
-			let lhs2 = walk_noconv(lhs, env);
+			let lhs2 = walk_noconv(lhs);
 			let ctype = lhs2.nodesctype(None);
 			match ctype.ty {
 				Ty::NULL => { panic!("The size of an untyped value cannot be calculated."); }
@@ -327,28 +200,18 @@ pub fn do_walk(node: &Node, env: &mut Env, decay: bool) -> Node {
 					return Node::new_num(val as i32);
 				}
 			}
-			
-		}
-		Str(ctype, strname, _) => {
-		// A string literal is converted to a reference to an anonymous
-		// global variable of type char array.
-			*STRLABEL.lock().unwrap() += 1;
-			let labelname = format!(".L.str{}", *STRLABEL.lock().unwrap());
-			GVARS.lock().unwrap().push(new_global(&ctype, labelname.clone(), Some(strname.clone()), false));
-			let lhs = Node::new_gvar(ctype.clone(), labelname);
-			return maybe_decay(lhs, decay);
 		}
 		EqEq(lhs, rhs) => {
-			return Node::new_eqeq(walk(lhs, env), walk(rhs, env));
+			return Node::new_eqeq(walk(lhs), walk(rhs));
 		}
 		Ne(lhs, rhs) => {
-			return Node::new_neq(walk(lhs, env), walk(rhs, env));
+			return Node::new_neq(walk(lhs), walk(rhs));
 		}
 		DoWhile(body, cond) => {
-			return Node::new_dowhile(walk(body, env), walk(cond, env));
+			return Node::new_dowhile(walk(body), walk(cond));
 		}
 		Alignof(expr) => {
-			let expr2 = walk_noconv(expr, env);
+			let expr2 = walk_noconv(expr);
 			let ctype = expr2.nodesctype(None);
 			match ctype.ty {
 				Ty::NULL => { panic!("_Alignof should be used for Node has Ctype."); }
@@ -356,7 +219,7 @@ pub fn do_walk(node: &Node, env: &mut Env, decay: bool) -> Node {
 			}
 		}
 		Dot(_, expr, name) => {
-			let expr2 = walk(expr, env);
+			let expr2 = walk(expr);
 			match expr2.nodesctype(None).ty {
 				Ty::STRUCT(_, members) => {
 					if members.is_empty() {
@@ -365,11 +228,11 @@ pub fn do_walk(node: &Node, env: &mut Env, decay: bool) -> Node {
 						panic!("incomplete type.")
 					}
 					for membernode in members {
-						if let NodeType::VarDef(ctype, _, name2, ..) = membernode.op {
-							if &name[..] != &name2[..] {
+						if let NodeType::VarDef(name_, var, ..) = membernode.op {
+							if &name[..] != &name_[..] {
 								continue;
 							}
-							let lhs = Node::new_dot(ctype.clone(), expr2, name2);
+							let lhs = Node::new_dot(var.ctype.clone(), expr2, name_);
 							return maybe_decay(lhs, decay);
 						}
 					}
@@ -380,27 +243,28 @@ pub fn do_walk(node: &Node, env: &mut Env, decay: bool) -> Node {
 				_ => {
 					// error(&format!("struct expected before ."));
 					// for debug.
-					panic!("struct expected before ."); }
+					panic!("struct expected before . {:?}", expr2.clone()); 
+				}
 			}
 		}
 		Not(expr) => {
-			let expr2 = walk(expr, env);
+			let expr2 = walk(expr);
 			return Node::new_not(expr2);
 		}
 		Ternary(_, cond, then, els) => {
-			let cond2 = walk(cond, env);
-			let then2 = walk(then, env);
-			let els2 = walk(els, env);
+			let cond2 = walk(cond);
+			let then2 = walk(then);
+			let els2 = walk(els);
 			return Node::new_ternary(then2.nodesctype(Some(INT_TY.clone())), cond2, then2, els2);
 		}
 		TupleExpr(_, lhs, rhs) => {
-			return binwalk(Node::new_tuple, lhs, rhs, env, 1);
+			return binwalk(Node::new_tuple, lhs, rhs, 1);
 		}
 		Neg(expr) => {
-			return Node::new_neg(walk(expr, env));
+			return Node::new_neg(walk(expr));
 		}
 		IncDec(_, selector, expr) => {
-			let lhs = walk(expr, env);
+			let lhs = walk(expr);
 			lhs.checklval();
 			return Node::new_incdec(lhs.nodesctype(None), *selector, lhs);
 		}
@@ -416,45 +280,25 @@ pub fn do_walk(node: &Node, env: &mut Env, decay: bool) -> Node {
 
 pub fn sema(program: &mut Program) {
 	
-	let mut topenv = Env::new(None);
 	let mut nodes = vec![];
 	
 	for topnode in &mut program.nodes {
 
-		if let VarDef(ctype, is_extern, ident, ..) = &topnode.op {
-			let var = new_global(&ctype, ident.clone(), None, *is_extern);
-			GVARS.lock().unwrap().push(var.clone());
-			topenv.vars.insert(ident.clone(), var);
-			continue;
-		}
-
 		match &topnode.op {
-			Func(ctype, ident, is_extern, args, body, _) => {
-				*STACKSIZE.lock().unwrap() = 0;
+			Func(ctype, ident, args, body, stacksize) => {
 				// eval args
 				let mut argv = vec![];
 				for arg in args {
-					argv.push(walk(arg, &mut topenv));
+					argv.push(walk(arg));
 				}
 				// eval body
-				let body = walk(body, &mut topenv);
-				let node = Node::new_func(ctype.clone(), ident.clone(), *is_extern, argv, body, *STACKSIZE.lock().unwrap());
-				// add to var env
-				let var = Var::new(ctype.clone(), 0, false, ident.clone(), String::new(), *is_extern);
-				topenv.vars.insert(ident.clone(), var);
-				
+				let body = walk(body);
+				let node = Node::new_func(ctype.clone(), ident.clone(), argv, body, *stacksize);
 				nodes.push(node);
 			}
-			Decl(ctype, ident, _, is_extern) => {
-				// add to global
-				let var = Var::new(ctype.clone(), 0, false, ident.clone(), String::new(), *is_extern);
-				topenv.vars.insert(ident.clone(), var);
-			}
 			NULL => { continue; }
-			_ => { panic!("funode should be NodeType::Func. "); }
+			_ => { panic!("funode should be NodeType::Func or NULL but got {:?}", topnode.op); }
 		}
 	}
-
-	program.gvars = std::mem::replace(&mut GVARS.lock().unwrap(), vec![]);
 	program.nodes = nodes;
 }

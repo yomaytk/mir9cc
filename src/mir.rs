@@ -1,5 +1,4 @@
 use super::parse::*;
-use super::sema::*;
 use super::gen_ir::*;
 
 pub struct Program {

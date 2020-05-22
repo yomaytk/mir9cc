@@ -258,8 +258,8 @@ pub fn gen_x86(program: &Program) {
 		if gvar.is_extern {
 			continue;
 		}
-		println!("{}:", gvar.ident.clone());
-		emit!(".ascii \"{}\"", escape(gvar.strname.clone(), gvar.ctype.size));
+		println!("{}:", gvar.labelname.clone().unwrap());
+		emit!(".ascii \"{}\"", escape(gvar.strname.clone().unwrap(), gvar.ctype.size));
 	}
 
 	for i in 0..program.funs.len() {

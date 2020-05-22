@@ -319,14 +319,13 @@ fn gen_lval(node: &Node, code: &mut Vec<Ir>) -> usize {
 		NodeType::Deref(_, expr) => {
 			return gen_expr(expr, code);
 		}
-		NodeType::Lvar(_, off) => {
-			let r1 = new_regno();
-			code.push(Ir::new(IrBpRel, r1, *off));
-			return r1;
-		}
-		NodeType::Gvar(_, label) => {
+		NodeType::Var(var) => {
 			let r = new_regno();
-			code.push(Ir::new(IrLabelAddr(label.clone()), r, 0));
+			if var.is_local {
+				code.push(Ir::new(IrBpRel, r, var.offset));
+			} else {
+				code.push(Ir::new(IrLabelAddr(var.labelname.clone().unwrap()), r, 0));
+			}
 			return r;
 		}
 		NodeType::Dot(ctype, expr, _) => {
@@ -388,7 +387,12 @@ fn gen_expr(node: &Node, code: &mut Vec<Ir>) -> usize {
 			kill(rhi, code);
 			return lhi;
 		},
-		NodeType::Lvar(ctype, _) | NodeType::Gvar(ctype, _) | NodeType::Dot(ctype, ..) => {
+		NodeType::Var(var) => {
+			let lhi = gen_lval(node, code);
+			load(&var.ctype, lhi, lhi, code);
+			return lhi;
+		}
+		NodeType::Dot(ctype, ..) => {
 			let lhi = gen_lval(node, code);
 			load(ctype, lhi, lhi, code);
 			return lhi;
@@ -570,12 +574,12 @@ fn gen_stmt(node: &Node, code: &mut Vec<Ir>) {
 			label(*BREAK_LABEL.lock().unwrap(), code);
 			*BREAK_LABEL.lock().unwrap() = orig;
 		}
-		NodeType::VarDef(ctype, .., off, init) => {
+		NodeType::VarDef(_, var, init) => {
 			if let Some(rhs) = init {
 				let r2 = gen_expr(rhs, code);
 				let r1 = new_regno();
-				code.push(Ir::new(IrBpRel, r1, *off));
-				store(ctype, r1, r2, code);
+				code.push(Ir::new(IrBpRel, r1, var.offset));
+				store(&var.ctype, r1, r2, code);
 				kill(r1, code);
 				kill(r2, code);
 			}
@@ -601,14 +605,14 @@ pub fn gen_ir(program: &mut Program) {
 		*REGNO.lock().unwrap() = 1;
 		
 		match &funode.op {
-			NodeType::Func(_, name, is_extern, args, body, stacksize) => {
-				if *is_extern {
+			NodeType::Func(ctype, name, args, body, stacksize) => {
+				if ctype.is_extern {
 					continue;
 				}
 				for i in 0..args.len() {
 					match &args[i].op {
-						NodeType::VarDef(ctype, .., offset, _) => {
-							store_arg(ctype, *offset, i, &mut code);
+						NodeType::VarDef(_, var, _) => {
+							store_arg(&var.ctype, var.offset, i, &mut code);
 						}
 						_ => {
 							// error(&format!("Illegal function parameter."));

@@ -210,12 +210,12 @@ impl Token {
 	}
 }
 
-pub struct Tokens {
+pub struct TokenSet {
 	pub tokens: Vec<Token>,
 	pub pos: usize
 }
 
-impl Tokens {
+impl TokenSet {
 	pub fn new(tokens: Vec<Token>) -> Self {
 		Self {
 			tokens,

@@ -10,13 +10,13 @@ test: mir9cc test/test.c test/token.c
 	@./target/debug/mir9cc test/test.c > compile1.s
 	@gcc -c -o tmp-test2.o test/gcc.c
 	@gcc -static -o compile compile1.s tmp-test2.o
-	@echo -e "\n\e[32m*** test.c TEST start ***\e[m\n"
+	@echo -e "\n\e[33mtest.c TEST start...\e[m\n"
 	@./compile
 	@echo -e "\n\e[32m*** SUCCESS! ***\e[m\n"
 
 	@./target/debug/mir9cc test/token.c > compile2.s
 	@gcc -static -o compile2 compile2.s
-	@echo -e "\n\e[32m*** token.c TEST start ***\e[m\n"
+	@echo -e "\n\e[33mtoken.c TEST start...\e[m\n"
 	@./compile2
 	@echo -e "\n\e[32m*** SUCCESS! ***\e[m\n"
 
