@@ -15,21 +15,23 @@ use std::sync::Mutex;
 // Semantic errors are detected in a later pass.
 
 macro_rules! env_find {
-	($s:expr, $m:ident, $ty:expr) => {
+	($s:expr, $m:ident, $null:expr) => {
 		{
+			let mut target = $null;
 			if let Some(t) = ENV.lock().unwrap().$m.get(&$s) {
-				return t.clone()
+				target = t.clone()
 			}
-			let mut env = &ENV.lock().unwrap().next;
-			let mut ctype = NULL_TY.clone();
-			while let Some(e) = env {
-				if let Some(t) = e.$m.get(&$s) {
-					ctype = t.clone();
-					break;
+			if target == $null {
+				let mut env = &ENV.lock().unwrap().next;
+				while let Some(e) = env {
+					if let Some(t) = e.$m.get(&$s) {
+						target = t.clone();
+						break;
+					}
+					env = &e.next;
 				}
-				env = &e.next;
 			}
-			return ctype
+			target
 		}
 	};
 }
@@ -85,10 +87,21 @@ lazy_static! {
 		len: 0,
 		is_extern: false,
 	};
+	pub static ref NULL_VAR: Var = Var {
+		ctype: NULL_TY.clone(),
+		offset: 0,
+		is_local: true,
+		labelname: None,
+		strname: None,
+		is_extern: false,
+	};
 	pub static ref ENV: Mutex<Env> = Mutex::new(Env::new_env(None));
+	pub static ref STACKSIZE: Mutex<usize> = Mutex::new(0);
+	pub static ref GVARS: Mutex<Vec<Var>> = Mutex::new(vec![]);
+	pub static ref STRLABEL: Mutex<usize> = Mutex::new(0);
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Type {
 	pub ty: Ty,
 	pub ptr_to: Option<Box<Type>>,
@@ -192,13 +205,10 @@ pub enum NodeType {
 	LogAnd(Box<Node>, Box<Node>),												// LogAnd(lhs, rhs)
 	LogOr(Box<Node>, Box<Node>),												// LogOr(lhs, rhs)
 	For(Box<Node>, Box<Node>, Box<Node>, Box<Node>),							// For(init, cond, inc, body)
-	VarDef(Type, String, usize, Option<Box<Node>>),								// VarDef(ty, is_extern, name, off, rhs)
-	Lvar(Type, usize),															// Lvar(ty, stacksize)
+	VarDef(String, Var, Option<Box<Node>>),										// VarDef(name, var, init)
 	Deref(Type, Box<Node>),														// Deref(ctype, lhs)
 	Addr(Type, Box<Node>),														// Addr(ctype, lhs)
 	Sizeof(Type, usize, Box<Node>),												// Sizeof(ctype, val, lhs)
-	Str(Type, String, usize),													// Str(ctype, strname, label)
-	Gvar(Type, String),															// Gvar(ctype, label)
 	EqEq(Box<Node>, Box<Node>),													// EqEq(lhs, rhs)
 	Ne(Box<Node>, Box<Node>),													// Ne(lhs, rhs)
 	DoWhile(Box<Node>, Box<Node>),												// Dowhile(boyd, cond)
@@ -210,6 +220,7 @@ pub enum NodeType {
 	Neg(Box<Node>),																// Neg(expr)
 	IncDec(Type, i32, Box<Node>),												// IncDec(ctype, selector, expr)
 	Decl(Type, String, Vec<Node>),												// Decl(ctype, ident, args)
+	Var(Var),																	// Var(var)
 	Break,																		// Break
 	NULL,																		// NULL
 }
@@ -224,13 +235,15 @@ impl Node {
 	
 	pub fn nodesctype(&self, basetype: Option<Type>) -> Type {
 		match &self.op {
-			NodeType::Lvar(ctype, ..) | NodeType::BinaryTree(ctype, ..) 
+			| NodeType::BinaryTree(ctype, ..) 
 			| NodeType::Deref(ctype,..) | NodeType::Addr(ctype, ..) 
-			| NodeType::Sizeof(ctype, ..) | NodeType::Str(ctype, ..)
-			| NodeType::Gvar(ctype,..) | NodeType::Dot(ctype, ..) 
+			| NodeType::Sizeof(ctype, ..) | NodeType::Dot(ctype, ..) 
 			| NodeType::Ternary(ctype, ..) | NodeType::IncDec(ctype, ..) 
-			| NodeType::EqTree(ctype, ..) | NodeType::VarDef(ctype, ..) => { 
+			| NodeType::EqTree(ctype, ..) => { 
 				return ctype.clone(); 
+			}
+			| NodeType::Var(var) | NodeType::VarDef(_, var, ..) => {
+				return  var.ctype.clone();
 			}
 			_ => { 
 				if let Some(ty) = basetype {
@@ -242,23 +255,9 @@ impl Node {
 		} 
 	}
 
-	fn ctype_replace(&mut self, new_ty: Type) {
-		match &mut self.op {
-			NodeType::Lvar(ref mut ctype, ..) | NodeType::BinaryTree(ref mut ctype, ..) 
-			| NodeType::Deref(ref mut ctype,..) | NodeType::Addr(ref mut ctype, ..) 
-			| NodeType::Sizeof(ref mut ctype, ..) | NodeType::Str(ref mut ctype, ..)
-			| NodeType::Gvar(ref mut ctype,..) | NodeType::Dot(ref mut ctype, ..) 
-			| NodeType::Ternary(ref mut ctype, ..) | NodeType::IncDec(ref mut ctype, ..) 
-			| NodeType::EqTree(ref mut ctype, ..) | NodeType::VarDef(ref mut ctype, ..) => { 
-				std::mem::replace(ctype, new_ty);
-			}
-			_ => {}
-		}
-	}
-
 	pub fn checklval(&self) {
 		match &self.op {
-			NodeType::Lvar(..) | NodeType::Gvar(..) | NodeType::Deref(..) | NodeType::Dot(..) => {}
+			NodeType::Var(..) | NodeType::Deref(..) | NodeType::Dot(..) => {}
 			_ => { 
 				// error("not an lvalue");
 				// for debug.
@@ -339,17 +338,12 @@ impl Node {
 			op: NodeType::For(Box::new(init), Box::new(cond), Box::new(inc), Box::new(body))
 		}
 	}
-	pub fn new_vardef(ty: Type, name: String, off: usize, rhs: Option<Node>) -> Self {
+	pub fn new_vardef(name: String, var: Var, rhs: Option<Node>) -> Self {
 		Self {
 			op: match rhs {
-				Some(node) => { NodeType::VarDef(ty, name, off, Some(Box::new(node))) }
-				_ => { NodeType::VarDef(ty, name, off, None)}
+				Some(node) => { NodeType::VarDef(name, var, Some(Box::new(node))) }
+				_ => { NodeType::VarDef(name, var, None)}
 			}
-		}
-	}
-	pub fn new_lvar(ty: Type, stacksize: usize) -> Self {
-		Self {
-			op: NodeType::Lvar(ty, stacksize)
 		}
 	}
 	pub fn new_deref(ctype: Type, lhs: Node) -> Self {
@@ -365,16 +359,6 @@ impl Node {
 	pub fn new_sizeof(ctype: Type, val: usize, lhs: Node) -> Self {
 		Self {
 			op: NodeType::Sizeof(ctype, val, Box::new(lhs))
-		}
-	}
-	pub fn new_string(ctype: Type, strname: String, label: usize) -> Self {
-		Self {
-			op: NodeType::Str(ctype, strname, label)
-		}
-	}
-	pub fn new_gvar(ctype: Type, label: String) -> Self {
-		Self {
-			op: NodeType::Gvar(ctype, label)
 		}
 	}
 	pub fn new_eqeq(lhs: Node, rhs: Node) -> Self {
@@ -437,6 +421,11 @@ impl Node {
 			op: NodeType::Decl(ctype, ident, args)
 		}
 	}
+	pub fn new_var(var: Var) -> Self {
+		Self {
+			op: NodeType::Var(var)
+		}
+	}
 	pub fn new_break() -> Self {
 		Self {
 			op: NodeType::Break
@@ -449,31 +438,75 @@ impl Node {
 	}
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct Var {
+	pub ctype: Type,
+	pub offset: usize,
+	pub is_local: bool,
+	pub labelname: Option<String>,
+	pub strname: Option<String>,
+	pub is_extern: bool,
+}
+
+impl Var {
+	pub fn new(ctype: Type, offset: usize, is_local: bool, labelname: Option<String>, strname: Option<String>) -> Self {
+		let is_extern = ctype.is_extern;
+		Self {
+			ctype,
+			offset,
+			is_local,
+			labelname,
+			strname,
+			is_extern,
+		}
+	}
+}
+
 #[derive(Debug, Clone)]
 pub struct Env {
 	tags: HashMap<String, Type>,
 	typedefs: HashMap<String, Type>,
+	vars: HashMap<String, Var>,
 	next: Option<Box<Env>>,
 }
 
 impl Env {
-	pub fn new_env(env: Option<Env>) -> Self {
-		match env {
-			Some(_env) => {
-				Self {
-					tags: HashMap::new(),
-					typedefs: HashMap::new(),
-					next: Some(Box::new(_env)),
-				}
-			}
-			None => {
-				Self {
-					tags: HashMap::new(),
-					typedefs: HashMap::new(),
-					next: None,
-				}
-			}
+	fn new_env(env: Option<Env>) -> Self {
+		Self {
+			tags: HashMap::new(),
+			typedefs: HashMap::new(),
+			vars: HashMap::new(),
+			next: match env {
+				Some(_env) => Some(Box::new(_env)),
+				None => None,
+			},
 		}
+	}
+	fn env_inc() {
+		let env = std::mem::replace(&mut *ENV.lock().unwrap(), Env::new_env(None));
+		*ENV.lock().unwrap() = Env::new_env(Some(env));
+	}
+	fn env_dec() {
+		let env = std::mem::replace(&mut *ENV.lock().unwrap(), Env::new_env(None));
+		*ENV.lock().unwrap() = *env.next.unwrap();
+	}
+	fn add_var(ident: String, mut var: Var) -> usize {
+		let mut offset = 1000000;
+		if var.is_local {
+			let stacksize = *STACKSIZE.lock().unwrap();
+			*STACKSIZE.lock().unwrap() = roundup(stacksize, var.ctype.align);
+			*STACKSIZE.lock().unwrap() += var.ctype.size;
+			offset = *STACKSIZE.lock().unwrap();
+			var.offset = offset;
+		}
+		ENV.lock().unwrap().vars.insert(ident, var);
+		return offset;
+	}
+	fn add_typedef(ident: String, ctype: Type) {
+		ENV.lock().unwrap().typedefs.insert(ident, ctype);
+	}
+	fn add_tags(tag: String, ctype: Type) {
+		ENV.lock().unwrap().tags.insert(tag, ctype);
 	}
 }
 
@@ -485,7 +518,7 @@ pub fn decl_specifiers(tokenset: &mut TokenSet) -> Type {
 	if tokenset.consume_ty(TokenIdent) {
 		tokenset.pos -= 1;
 		let name = ident(tokenset);
-		env_find!(name, typedefs, NULL_TY.clone());
+		return env_find!(name, typedefs, NULL_TY.clone());
 	}
 	if tokenset.consume_ty(TokenInt){
 		return INT_TY.clone();
@@ -506,7 +539,7 @@ pub fn decl_specifiers(tokenset: &mut TokenSet) -> Type {
 		// struct member
 		if tokenset.consume_ty(TokenRightCurlyBrace) {
 			while !tokenset.consume_ty(TokenLeftCurlyBrace) {
-				members.push(declaration(tokenset));
+				members.push(declaration(tokenset, false));
 			}
 		}
 		match (members.is_empty(), tag.is_empty()) {
@@ -516,12 +549,12 @@ pub fn decl_specifiers(tokenset: &mut TokenSet) -> Type {
 				panic!("bat struct definition.");
 			}
 			(true, false) => {
-				env_find!(tag.clone(), tags, STRUCT_TY.clone());
+				return env_find!(tag.clone(), tags, NULL_TY.clone());
 			}
 			(false, c) => {
 				let struct_type = new_struct(tag.clone(), members);
 				if !c {
-					ENV.lock().unwrap().tags.insert(tag, struct_type.clone());
+					Env::add_tags(tag, struct_type.clone());
 				}
 				return struct_type;
 			}
@@ -538,7 +571,8 @@ pub fn new_struct(tag: String, mut members: Vec<Node>) -> Type {
 
 	let mut off = 0;
 	for i in 0..members.len() {
-		if let NodeType::VarDef(ctype, ..) = &mut members[i].op {
+		if let NodeType::VarDef(_, var, ..) = &mut members[i].op {
+			let ctype = &mut var.ctype;
 			off = roundup(off, ctype.align);
 			ctype.offset = off;
 			off += ctype.size;
@@ -570,7 +604,7 @@ fn primary(tokenset: &mut TokenSet) -> Node {
 	if tokenset.consume_ty(TokenRightBrac) {
 		if tokenset.consume_ty(TokenRightCurlyBrace) {
 			tokenset.pos -= 1;
-			let body = Node::new_stmtexpr(INT_TY.clone(), compound_stmt(tokenset));
+			let body = Node::new_stmtexpr(NULL_TY.clone(), compound_stmt(tokenset, true));
 			tokenset.assert_ty(TokenLeftBrac);
 			return body;
 		}
@@ -585,11 +619,14 @@ fn primary(tokenset: &mut TokenSet) -> Node {
 
 		let token = &tokenset.tokens[tokenset.pos-1];
 		let name = String::from(&PROGRAMS.lock().unwrap()[token.program_id][token.pos..token.end]);
+		let var = env_find!(name.clone(), vars, NULL_VAR.clone());
+		if let Ty::NULL = var.ctype.ty {
+			panic!("{} is not defined.", name);
+		}
 		// variable
 		if !tokenset.consume_ty(TokenRightBrac){
-			return Node::new_ident(name);
+			return Node::new_var(var);
 		}
-
 		// function call
 		let mut args = vec![];
 		//// arity = 0;
@@ -604,18 +641,24 @@ fn primary(tokenset: &mut TokenSet) -> Node {
 			args.push(argv);
 		}
 		tokenset.assert_ty(TokenLeftBrac);
-		return Node::new_call(NULL_TY.clone(), name, args);
+		return Node::new_call(var.ctype, name, args);
 	}
 	if tokenset.consume_ty(TokenString(String::new())) {
+		// A string literal is converted to a reference to an anonymous
+		// global variable of type char array.
 		let strname = tokenset.getstring();
-		let cty = CHAR_TY.clone().ary_of(strname.len() + 1);
+		let ctype = CHAR_TY.clone().ary_of(strname.len() + 1);
 		tokenset.pos += 1;
-		return Node::new_string(cty, strname, 0);
+		*STRLABEL.lock().unwrap() += 1;
+		let labelname = format!(".L.str{}", *STRLABEL.lock().unwrap());
+		let var = Var::new(ctype, 0, false, Some(labelname), Some(strname));
+		GVARS.lock().unwrap().push(var.clone());
+		return Node::new_var(var);
 	}
 	// error(&format!("parse.rs: primary parse fail. and got {}", tokenset[*pos].input));
 	// for debug.
 	let token = &tokenset.tokens[tokenset.pos];
-	panic!("parse.rs: primary parse fail. and got rerere{:?}rererer {}", token, &PROGRAMS.lock().unwrap()[token.program_id][token.pos..]);
+	panic!("parse.rs: primary parse fail. and got {}", &PROGRAMS.lock().unwrap()[token.program_id][token.pos..]);
 }
 
 fn postfix(tokenset: &mut TokenSet) -> Node {
@@ -936,7 +979,9 @@ fn direct_decl(tokenset: &mut TokenSet, mut ty: Type) -> Node {
 		tokenset.pos -= 1;
 		let name = ident(tokenset);
 		ty = read_array(tokenset, ty);
-		ident_node = Node::new_vardef(ty, name, 0, None);
+		let mut var = NULL_VAR.clone();
+		var.ctype = ty;
+		ident_node = Node::new_vardef(name, var, None);
 	} else if tokenset.consume_ty(TokenRightBrac) {
 		ident_node = declarator(tokenset, NULL_TY.clone());
 		tokenset.assert_ty(TokenLeftBrac);
@@ -944,9 +989,12 @@ fn direct_decl(tokenset: &mut TokenSet, mut ty: Type) -> Node {
 		let true_ty = read_array(tokenset, ty);
 		let ident_node_true_ty = new_ptr_to_replace_type(&ident_node.nodesctype(None), true_ty);
 
-		if let NodeType::VarDef(_, name, offset, init) = ident_node.op {
-			let op = NodeType::VarDef(ident_node_true_ty, name, offset, init);
-			return Node { op };
+		if let NodeType::VarDef(name, var, init) = ident_node.op {
+			let mut _var = var;
+			_var.ctype = ident_node_true_ty;
+			ident_node = Node {
+				op: NodeType::VarDef(name, _var, init)
+			};
 		} else {
 			panic!("direct_decl fun error.");
 		}
@@ -956,12 +1004,11 @@ fn direct_decl(tokenset: &mut TokenSet, mut ty: Type) -> Node {
 		panic!("bad direct declarator at {}", &PROGRAMS.lock().unwrap()[token.program_id][token.pos..]);
 		// error(&format!("bad direct declarator at {}", &tokenset[*pos].input[..]));
 	}
-	
 	decl_init(tokenset, &mut ident_node);
 	return ident_node;
 }
 
-fn declaration(tokenset: &mut TokenSet) -> Node {
+fn declaration(tokenset: &mut TokenSet, newvar: bool) -> Node {
 
 	// declaration type
 	let ty = decl_specifiers(tokenset);
@@ -969,6 +1016,17 @@ fn declaration(tokenset: &mut TokenSet) -> Node {
 	let ident_node = declarator(tokenset, ty);
 	tokenset.assert_ty(TokenSemi);
 	// panic!("{:#?}", ident_node);
+	
+	if newvar {
+		if let NodeType::VarDef(name, mut var, init) = ident_node.op {
+			// add new var to ENV
+			var.offset = Env::add_var(name.clone(), var.clone());
+			return Node {
+				op: NodeType::VarDef(name, var, init)
+			};
+		}
+	}
+
 	return ident_node;
 }
 
@@ -1003,10 +1061,11 @@ pub fn stmt(tokenset: &mut TokenSet) -> Node {
 		TokenFor => {
 			tokenset.pos += 1;
 			tokenset.assert_ty(TokenRightBrac);
+			Env::env_inc();
 			let init;
 			if tokenset.is_typename() {
 				tokenset.pos -= 1;
-				init = declaration(tokenset);
+				init = declaration(tokenset, true);
 			} else if tokenset.consume_ty(TokenSemi) {
 				init = Node::new_null();
 			} else {
@@ -1023,6 +1082,7 @@ pub fn stmt(tokenset: &mut TokenSet) -> Node {
 				tokenset.assert_ty(TokenLeftBrac);
 			} 
 			let body = stmt(tokenset);
+			Env::env_dec();
 			return Node::new_for(init, cond, inc, body);
 		}
 		TokenWhile => {
@@ -1047,14 +1107,16 @@ pub fn stmt(tokenset: &mut TokenSet) -> Node {
 		}
 		TokenRightCurlyBrace => {
 			tokenset.pos += 1;
+			Env::env_inc();
 			let mut compstmts = vec![];
 			while !tokenset.consume_ty(TokenLeftCurlyBrace) {
 				compstmts.push(stmt(tokenset));
 			}
+			Env::env_dec();
 			return Node::new_stmt(compstmts);
 		}
 		TokenInt | TokenChar | TokenStruct => {
-			return declaration(tokenset);
+			return declaration(tokenset, true);
 		}
 		TokenSemi => {
 			tokenset.pos += 1;
@@ -1062,9 +1124,9 @@ pub fn stmt(tokenset: &mut TokenSet) -> Node {
 		}
 		TokenTypedef => {
 			tokenset.pos += 1;
-			let lhs = declaration(tokenset);
-			if let NodeType::VarDef(ctype, name, _, None) = lhs.op {
-				ENV.lock().unwrap().typedefs.insert(name, ctype);
+			let lhs = declaration(tokenset, false);
+			if let NodeType::VarDef(name, var, None) = lhs.op {
+				Env::add_typedef(name, var.ctype);
 				return Node::new_null();
 			}
 			panic!("typedef error.");
@@ -1077,7 +1139,7 @@ pub fn stmt(tokenset: &mut TokenSet) -> Node {
 			if tokenset.consume_ty(TokenIdent) {
 				if tokenset.consume_ty(TokenIdent) {
 					tokenset.pos -= 2;
-					return declaration(tokenset);
+					return declaration(tokenset, true);
 				}
 				tokenset.pos -= 1;
 			}
@@ -1086,12 +1148,13 @@ pub fn stmt(tokenset: &mut TokenSet) -> Node {
 	}
 }
 
-pub fn compound_stmt(tokenset: &mut TokenSet) -> Node {
+pub fn compound_stmt(tokenset: &mut TokenSet, newenv: bool) -> Node {
 	
 	let mut compstmts = vec![];
 	tokenset.assert_ty(TokenRightCurlyBrace);
-	let env = (*ENV.lock().unwrap()).clone();
-	*ENV.lock().unwrap() = Env::new_env(Some(env));
+	if newenv {
+		Env::env_inc();
+	}
 	loop {
 		match tokenset.consume_ty(TokenLeftCurlyBrace) {
 			true => { break; },
@@ -1101,8 +1164,7 @@ pub fn compound_stmt(tokenset: &mut TokenSet) -> Node {
 			}
 		}
 	}
-	let env = (*ENV.lock().unwrap()).clone();
-	*ENV.lock().unwrap() = *env.next.unwrap();
+	Env::env_dec();
 	return Node::new_stmt(compstmts);
 }
 
@@ -1110,14 +1172,19 @@ pub fn param_declaration(tokenset: &mut TokenSet) -> Node {
 	
 	// type
 	let ty = decl_specifiers(tokenset);
-	let mut node = declarator(tokenset, ty);
+	let node = declarator(tokenset, ty);
 	let ctype = node.nodesctype(None);
-	if let Ty::ARY = &ctype.ty {
-		let new_ty = ctype.ary_to.unwrap().clone().ptr_to();
-		node.ctype_replace(new_ty);
+	if let NodeType::VarDef(name, mut var, init) = node.op {
+		if let Ty::ARY = &ctype.ty {
+			var.ctype = ctype.ary_to.unwrap().clone().ptr_to();
+		}
+		var.offset = Env::add_var(name.clone(), var.clone());
+		return Node {
+			op: NodeType::VarDef(name, var, init)
+		};
+	} else {
+		panic!("{:?} should be NodeType::VarDef", node);
 	}
-
-	return node;
 }
 
 pub fn toplevel(tokenset: &mut TokenSet) -> Node {
@@ -1145,6 +1212,12 @@ pub fn toplevel(tokenset: &mut TokenSet) -> Node {
 			// for debug.
 			panic!("typedef {} has function definition.", ident);
 		}
+		*STACKSIZE.lock().unwrap() = 0;
+		// add new function to Env
+		let var = Var::new(ctype.clone(), 0, false, Some(ident.clone()), None);
+		Env::add_var(ident.clone(), var);
+
+		Env::env_inc();
 		// argument
 		if !tokenset.consume_ty(TokenLeftBrac) {
 			loop {
@@ -1155,29 +1228,30 @@ pub fn toplevel(tokenset: &mut TokenSet) -> Node {
 		}
 		// function decl
 		if tokenset.consume_ty(TokenSemi) {
-			return Node::new_decl(ctype, ident, args);
+			return Node::new_null();
 		}
 		// body
-		let body = compound_stmt(tokenset);
-		return Node::new_func(ctype, ident, args, body, 0);
+		let body = compound_stmt(tokenset, false);
+		return Node::new_func(ctype, ident, args, body, *STACKSIZE.lock().unwrap());
 	}
 
 	ctype = read_array(tokenset, ctype);
 	tokenset.assert_ty(TokenSemi);
 	// typedef
 	if is_typedef {
-		ENV.lock().unwrap().typedefs.insert(ident, ctype);
+		Env::add_typedef(ident, ctype);
 		return Node::new_null();
 	}
 	// global variable
-	return Node::new_vardef(ctype, ident, 0, None);
-
+	let var = Var::new(ctype.clone(), 0, false, Some(ident.clone()), Some(String::new()));
+	Env::add_var(ident, var.clone());
+	GVARS.lock().unwrap().push(var);
+	return Node::new_null();
 }
 
 pub fn parse(tokenset: &mut TokenSet, program: &mut Program) {
-	
-	let env = (*ENV.lock().unwrap()).clone();
-	*ENV.lock().unwrap() = Env::new_env(Some(env));
+
+	*ENV.lock().unwrap() = Env::new_env(None);
 
 	loop {
 		match tokenset.consume_ty(TokenEof) {
@@ -1185,4 +1259,5 @@ pub fn parse(tokenset: &mut TokenSet, program: &mut Program) {
 			false => { program.nodes.push(toplevel(tokenset)); }
 		}
 	}
+	program.gvars = std::mem::replace(&mut GVARS.lock().unwrap(), vec![]);
 }

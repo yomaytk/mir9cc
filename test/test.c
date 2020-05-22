@@ -237,7 +237,7 @@ int main() {
 	EXPECT(3, ({ int i = 3; return i--; }));
 	EXPECT(2, ({ int i = 3; return --i; }));
 
-	EXPECT(4, ({ myint foo = 3; return sizeof(foo); }));
+	EXPECT(4, ({ myint fkkoo = 3; return sizeof(fkkoo); }));
 
 	EXPECT(1, ({ typedef struct foo_ foo; return 1; }));
 
