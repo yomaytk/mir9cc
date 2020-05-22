@@ -2,6 +2,7 @@ use super::token::*;
 use super::token::TokenType::*;
 // use super::lib::*;
 use super::mir::*;
+use super::sema::*;
 
 use std::collections::HashMap;
 use std::sync::Mutex;
@@ -559,6 +560,12 @@ pub fn decl_specifiers(tokenset: &mut TokenSet) -> Type {
 				return struct_type;
 			}
 		}
+	}
+	if tokenset.consume_ty(TokenTypeof) {
+		tokenset.assert_ty(TokenRightBrac);
+		let expr = assign(tokenset);
+		tokenset.assert_ty(TokenLeftBrac);
+		return get_type(&expr);
 	}
 	if tokenset.consume_ty(TokenVoid) {
 		return VOID_TY.clone();
@@ -1130,7 +1137,7 @@ pub fn stmt(tokenset: &mut TokenSet) -> Node {
 			Env::env_dec();
 			return Node::new_stmt(compstmts);
 		}
-		TokenInt | TokenChar | TokenStruct => {
+		TokenInt | TokenChar | TokenStruct | TokenTypeof => {
 			return declaration(tokenset, true);
 		}
 		TokenSemi => {

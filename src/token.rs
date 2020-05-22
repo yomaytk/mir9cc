@@ -152,6 +152,7 @@ pub enum TokenType {
 	TokenDefine,
 	TokenNewLine,
 	TokenParam(bool),	// TokenParam(stringize)
+	TokenTypeof,
 	TokenNoSignal,
 	TokenEof,
 }
@@ -176,6 +177,7 @@ impl From<String> for TokenType {
 			"break" => { TokenBreak }
 			"include" => { TokenInclude }
 			"define" => { TokenDefine }
+			"typeof" => { TokenTypeof }
 			_ => { TokenIdent }
 		}
 	}
@@ -248,11 +250,16 @@ impl TokenSet {
 	}
 	pub fn is_typename(&mut self) -> bool {
 		let token = &self.tokens[self.pos];
-		if token.ty == TokenInt {
-			self.pos += 1;
-			return true;
+		match token.ty {
+			TokenInt | TokenChar | TokenVoid 
+			| TokenStruct | TokenTypeof => {
+				self.pos += 1;
+				return true;
+			}
+			_ => {
+				return false;
+			}
 		}
-		return false;
 	}
 	pub fn getstring(&self) -> String {
 		let token = &self.tokens[self.pos];

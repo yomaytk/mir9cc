@@ -84,6 +84,10 @@ fn same_type(ty1: Type, ty2: Type) -> bool {
 	}
 }
 
+pub fn get_type(node: &Node) -> Type {
+	return walk(node).nodesctype(None);
+}
+
 pub fn do_walk(node: &Node, decay: bool) -> Node {
 	match &node.op {
 		Num(val) => { return Node::new_num(*val); }
