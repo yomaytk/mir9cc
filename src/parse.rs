@@ -1265,7 +1265,7 @@ pub fn toplevel(tokenset: &mut TokenSet) -> Node {
 		return Node::new_null();
 	}
 	// global variable
-	let var = Var::new(ctype.clone(), 0, false, Some(ident.clone()), Some(String::new()));
+	let var = Var::new(ctype.clone(), 0, false, Some(ident.clone()), None);
 	Env::add_var(ident, var.clone());
 	GVARS.lock().unwrap().push(var);
 	return Node::new_null();

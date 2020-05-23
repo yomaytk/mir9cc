@@ -253,13 +253,19 @@ pub fn gen_x86(program: &Program) {
 	println!(".intel_syntax noprefix");
 	
 	// global variable
-	println!(".data");
 	for gvar in &program.gvars {
 		if gvar.is_extern {
 			continue;
 		}
-		println!("{}:", gvar.labelname.clone().unwrap());
-		emit!(".ascii \"{}\"", escape(gvar.strname.clone().unwrap(), gvar.ctype.size));
+		if let Some(s) = &gvar.strname {
+			println!(".data");
+			println!("{}:", gvar.labelname.clone().unwrap());
+			emit!(".ascii \"{}\"", escape(s.clone(), gvar.ctype.size));
+		} else {
+			println!(".bss");
+			println!("{}:", gvar.labelname.clone().unwrap());
+			emit!(".zero {}", gvar.ctype.size);
+		}
 	}
 
 	for i in 0..program.funs.len() {
