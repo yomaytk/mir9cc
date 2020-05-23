@@ -16,17 +16,17 @@ lazy_static! {
 	pub static ref PATH: Mutex<HashMap<usize, String>> = Mutex::new(HashMap::new());
 }
 
-struct Context {
+struct Env {
 	pub input: Vec<Token>,
 	pub output: Vec<Token>,
 	pub pos: usize,
 	pub defined: HashMap<String, Macro>,
-	pub next: Option<Box<Context>>,
+	pub next: Option<Box<Env>>,
 }
 
-impl Context {
-	fn new(input: Vec<Token>, next: Option<Box<Context>>) -> Self {
-		Context {
+impl Env {
+	fn new(input: Vec<Token>, next: Option<Box<Env>>) -> Self {
+		Env {
 			input: input,
 			output: vec![],
 			pos: 0,
@@ -237,22 +237,22 @@ impl Macro {
 	fn new_param(n: i32, stringize: bool, program_id: usize, pos: usize, end: usize, line: usize) -> Token {
 		return Token::new(TokenParam(stringize), n, program_id, pos, end, line);
 	}
-	fn define_funclike(ctx: &mut Context, name: String) {
+	fn define_funclike(env: &mut Env, name: String) {
 
 		let mut params = vec![];
 		loop {
-			let name = ctx.ident();
+			let name = env.ident();
 			params.push(name);
-			if ctx.consume_ty(TokenLeftBrac) {
+			if env.consume_ty(TokenLeftBrac) {
 				break;
 			}
-			ctx.assert_ty(TokenComma);
+			env.assert_ty(TokenComma);
 		}
-		let body = ctx.read_until_eol();
+		let body = env.read_until_eol();
 		let mut m = Macro::new(MacroType::FunLike, Some(params), body);
 		m.replace_macro_params();
 		m.replace_hash_ident();
-		ctx.defined.insert(name, m);
+		env.defined.insert(name, m);
 	}
 	// Replaces macro parameter tokens with TK_PARAM tokens.
 	fn replace_macro_params(&mut self) {
@@ -296,10 +296,10 @@ impl Macro {
 		}
 		self.body = v;
 	}
-	fn define_objlike(ctx: &mut Context, name: String) {
-		let body = ctx.read_until_eol();
+	fn define_objlike(env: &mut Env, name: String) {
+		let body = env.read_until_eol();
 		let m = Macro::new(MacroType::ObjLike, None, body);
-		ctx.defined.insert(name, m);
+		env.defined.insert(name, m);
 	}
 	fn default_judge(&self) -> bool {
 		return self.body.is_empty();
@@ -347,52 +347,52 @@ pub fn add_program(path: String) {
 
 pub fn preprocess(tokens: Vec<Token>) -> Vec<Token> {
 	
-	let mut ctx = Context::new(tokens, None);
+	let mut env = Env::new(tokens, None);
 
-	while !ctx.eof() {
+	while !env.eof() {
 		
 		// ident
-		if let TokenIdent = ctx.input[ctx.pos].ty {
-			let token = ctx.input[ctx.pos].clone();
+		if let TokenIdent = env.input[env.pos].ty {
+			let token = env.input[env.pos].clone();
 			let name = String::from(&PROGRAMS.lock().unwrap()[token.program_id][token.pos..token.pos+token.val as usize]);
 			let mut m: Macro = Default::default();
-			ctx.pos += 1;
-			if let Some(m2) = ctx.defined.get(&name) {
+			env.pos += 1;
+			if let Some(m2) = env.defined.get(&name) {
 				m = m2.clone();
 			}
 			if m.default_judge() {
-				ctx.output.push(token);
+				env.output.push(token);
 			} else {
-				ctx.apply(m, name);
+				env.apply(m, name);
 			}
 			continue;
 		}
 		// #
-		if let TokenSharp = ctx.input[ctx.pos].ty {
-			ctx.pos += 1;
+		if let TokenSharp = env.input[env.pos].ty {
+			env.pos += 1;
 		} else {
-			let token = ctx.input[ctx.pos].clone();
-			ctx.pos += 1;
-			ctx.output.push(token);
+			let token = env.input[env.pos].clone();
+			env.pos += 1;
+			env.output.push(token);
 			continue;
 		}
 		// define
-		if let TokenDefine = ctx.input[ctx.pos].ty {
-			ctx.pos += 1;
-			ctx.define();
+		if let TokenDefine = env.input[env.pos].ty {
+			env.pos += 1;
+			env.define();
 			continue;
 		}
 		// include
-		if let TokenInclude = ctx.input[ctx.pos].ty {
-			ctx.pos += 1;
-			ctx.include();
+		if let TokenInclude = env.input[env.pos].ty {
+			env.pos += 1;
+			env.include();
 			continue;
 		}
-		let token = &ctx.input[ctx.pos];
+		let token = &env.input[env.pos];
 		let program_id = token.program_id;
 		let line = token.line;
-		error(get_path(program_id), line, &format!("macro expected at {}...", &PROGRAMS.lock().unwrap()[ctx.input[ctx.pos].program_id][ctx.input[ctx.pos].pos..ctx.input[ctx.pos].pos+5]));
+		error(get_path(program_id), line, &format!("macro expected at {}...", &PROGRAMS.lock().unwrap()[env.input[env.pos].program_id][env.input[env.pos].pos..env.input[env.pos].pos+5]));
 	}
 	
-	return ctx.output;
+	return env.output;
 }
