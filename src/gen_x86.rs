@@ -1,6 +1,7 @@
 use super::gen_ir::{*, IrOp::*};
 use super::parse::roundup;
 use super::mir::*;
+use super::parse::*;
 
 use std::collections::HashMap;
 use std::sync::Mutex;
@@ -143,7 +144,6 @@ pub fn gen(fun: &Function, label: usize) {
 				emit!("mov {}, rax", REG64[lhs]);
 			}
 			IrRet => {
-				*LABEL.lock().unwrap() += 1;
 				emit!("mov rax, {}", REG64[lhs]);
 				emit!("jmp {}", ret);
 			}

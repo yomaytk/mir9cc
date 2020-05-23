@@ -106,7 +106,8 @@ lazy_static! {
 	pub static ref ENV: Mutex<Env> = Mutex::new(Env::new_env(None));
 	pub static ref STACKSIZE: Mutex<usize> = Mutex::new(0);
 	pub static ref GVARS: Mutex<Vec<Var>> = Mutex::new(vec![]);
-	pub static ref STRLABEL: Mutex<usize> = Mutex::new(0);
+	pub static ref LABEL: Mutex<usize> = Mutex::new(0);
+	pub static ref BREAK_VEC: Mutex<Vec<usize>> = Mutex::new(vec![]);
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -212,13 +213,13 @@ pub enum NodeType {
 	Func(Type, String, Vec<Node>, Box<Node>, usize),							// Func(ctype, ident, is_extern, args, body, stacksize)
 	LogAnd(Box<Node>, Box<Node>),												// LogAnd(lhs, rhs)
 	LogOr(Box<Node>, Box<Node>),												// LogOr(lhs, rhs)
-	For(Box<Node>, Box<Node>, Box<Node>, Box<Node>),							// For(init, cond, inc, body)
+	For(Box<Node>, Box<Node>, Box<Node>, Box<Node>, usize),						// For(init, cond, inc, body, jmp_point)
 	VarDef(String, Var, Option<Box<Node>>),										// VarDef(name, var, init)
 	Deref(Type, Box<Node>),														// Deref(ctype, lhs)
 	Addr(Type, Box<Node>),														// Addr(ctype, lhs)
 	EqEq(Box<Node>, Box<Node>),													// EqEq(lhs, rhs)
 	Ne(Box<Node>, Box<Node>),													// Ne(lhs, rhs)
-	DoWhile(Box<Node>, Box<Node>),												// Dowhile(boyd, cond)
+	DoWhile(Box<Node>, Box<Node>, usize),										// Dowhile(boyd, cond, jmp_point)
 	Dot(Type, Box<Node>, String),												// Dot(ctype, expr, name)
 	Not(Box<Node>),																// Not(expr)
 	Ternary(Type, Box<Node>, Box<Node>, Box<Node>),								// Ternary(ctype, cond, then, els)
@@ -227,7 +228,7 @@ pub enum NodeType {
 	IncDec(Type, i32, Box<Node>),												// IncDec(ctype, selector, expr)
 	Decl(Type, String, Vec<Node>),												// Decl(ctype, ident, args)
 	Var(Var),																	// Var(var)
-	Break,																		// Break
+	Break(usize),																// Break(jmp_point)
 	NULL,																		// NULL
 }
 
@@ -341,9 +342,9 @@ impl Node {
 			op: NodeType::LogOr(Box::new(lhs), Box::new(rhs))
 		}
 	}
-	pub fn new_for(init: Node, cond: Node, inc: Node, body: Node) -> Self {
+	pub fn new_for(init: Node, cond: Node, inc: Node, body: Node, jmp_point: usize) -> Self {
 		Self {
-			op: NodeType::For(Box::new(init), Box::new(cond), Box::new(inc), Box::new(body))
+			op: NodeType::For(Box::new(init), Box::new(cond), Box::new(inc), Box::new(body), jmp_point)
 		}
 	}
 	pub fn new_vardef(name: String, var: Var, rhs: Option<Node>) -> Self {
@@ -374,9 +375,9 @@ impl Node {
 			op: NodeType::Ne(Box::new(lhs), Box::new(rhs))
 		}
 	}
-	pub fn new_dowhile(body: Node, cond: Node) -> Self {
+	pub fn new_dowhile(body: Node, cond: Node, jmp_point: usize) -> Self {
 		Self {
-			op: NodeType::DoWhile(Box::new(body), Box::new(cond))
+			op: NodeType::DoWhile(Box::new(body), Box::new(cond), jmp_point)
 		}
 	}
 	pub fn new_stmtexpr(ctype: Type, body: Node) -> Self {
@@ -424,9 +425,9 @@ impl Node {
 			op: NodeType::Var(var)
 		}
 	}
-	pub fn new_break() -> Self {
+	pub fn new_break(jmp_point: usize) -> Self {
 		Self {
-			op: NodeType::Break
+			op: NodeType::Break(jmp_point)
 		}
 	}
 	pub fn new_null() -> Self {
@@ -609,8 +610,7 @@ fn string_literal(tokenset: &mut TokenSet) -> Node {
 	let strname = tokenset.getstring();
 	let ctype = CHAR_TY.clone().ary_of(strname.len() + 1);
 	tokenset.pos += 1;
-	*STRLABEL.lock().unwrap() += 1;
-	let labelname = format!(".L.str{}", *STRLABEL.lock().unwrap());
+	let labelname = format!(".L.str{}", new_label());
 	let var = Var::new(ctype, 0, false, Some(labelname), Some(strname));
 	GVARS.lock().unwrap().push(var.clone());
 	return Node::new_var(var);
@@ -648,6 +648,33 @@ fn function_call(tokenset: &mut TokenSet) -> Node {
 	}
 	tokenset.assert_ty(TokenLeftBrac);
 	return Node::new_call(var.ctype, name, args);
+}
+
+fn break_inc() -> usize {
+	*LABEL.lock().unwrap() += 1;
+	BREAK_VEC.lock().unwrap().push(*LABEL.lock().unwrap());
+	return *LABEL.lock().unwrap();
+}
+
+fn get_break_label() -> usize {
+	if let Some(jmp_point) = BREAK_VEC.lock().unwrap().last() {
+		return *jmp_point;
+	} else {
+		eprintln!("cannot find jmp point of break.");
+		std::process::exit(0);
+	}
+}
+
+fn break_dec() {
+	if let None = BREAK_VEC.lock().unwrap().pop() {
+		eprintln!("cannot find jmp point of break.");
+		std::process::exit(0);
+	}
+}
+
+pub fn new_label() -> usize {
+	*LABEL.lock().unwrap() += 1;
+	return *LABEL.lock().unwrap();
 }
 
 fn primary(tokenset: &mut TokenSet) -> Node {
@@ -1081,6 +1108,7 @@ pub fn stmt(tokenset: &mut TokenSet) -> Node {
 			tokenset.pos += 1;
 			tokenset.assert_ty(TokenRightBrac);
 			Env::env_inc();
+			let break_label = break_inc();
 			let init;
 			if tokenset.is_typename() {
 				tokenset.pos -= 1;
@@ -1102,27 +1130,32 @@ pub fn stmt(tokenset: &mut TokenSet) -> Node {
 			} 
 			let body = stmt(tokenset);
 			Env::env_dec();
-			return Node::new_for(init, cond, inc, body);
+			break_dec();
+			return Node::new_for(init, cond, inc, body, break_label);
 		}
 		TokenWhile => {
 			tokenset.pos += 1;
+			let break_label = break_inc();
 			let init = Node::new_null();
 			let inc = Node::new_null();
 			tokenset.assert_ty(TokenRightBrac);
 			let cond = expr(tokenset);
 			tokenset.assert_ty(TokenLeftBrac);
 			let body = stmt(tokenset);
-			return Node::new_for(init, cond, inc, body);
+			break_dec();
+			return Node::new_for(init, cond, inc, body, break_label);
 		}
 		TokenDo => {
 			tokenset.pos += 1;
+			let break_label = break_inc();
 			let body = stmt(tokenset);
 			tokenset.assert_ty(TokenWhile);
 			tokenset.assert_ty(TokenRightBrac);
 			let cond = expr(tokenset);
 			tokenset.assert_ty(TokenLeftBrac);
 			tokenset.assert_ty(TokenSemi);
-			return Node::new_dowhile(body, cond);
+			break_dec();
+			return Node::new_dowhile(body, cond, break_label);
 		}
 		TokenRightCurlyBrace => {
 			tokenset.pos += 1;
@@ -1152,7 +1185,7 @@ pub fn stmt(tokenset: &mut TokenSet) -> Node {
 		}
 		TokenBreak => {
 			tokenset.pos += 1;
-			return Node::new_break();
+			return Node::new_break(get_break_label());
 		}
 		_ => {
 			if tokenset.consume_ty(TokenIdent) {

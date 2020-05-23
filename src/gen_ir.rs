@@ -22,10 +22,8 @@ use std::fmt;
 
 lazy_static! {
 	pub static ref REGNO: Mutex<usize> = Mutex::new(1);
-	pub static ref LABEL: Mutex<usize> = Mutex::new(1);
 	pub static ref RETURN_LABEL: Mutex<usize> = Mutex::new(0);
 	pub static ref RETURN_REG: Mutex<usize> = Mutex::new(0);
-	pub static ref BREAK_LABEL: Mutex<usize> = Mutex::new(0);
 }
 
 #[allow(dead_code)]
@@ -290,11 +288,6 @@ fn new_regno() -> usize {
 	return *REGNO.lock().unwrap();
 }
 
-fn new_label() -> usize {
-	*LABEL.lock().unwrap() += 1;
-	return *LABEL.lock().unwrap();
-}
-
 // In C, all expressions that can be written on the left-hand side of
 // the '=' operator must have an address in memory. In other words, if
 // you can apply the '&' operator to take an address of some
@@ -540,11 +533,9 @@ fn gen_stmt(node: &Node, code: &mut Vec<Ir>) {
 				gen_stmt(stmt, code);
 			}
 		}
-		NodeType::For(init, cond, inc, body) => {
+		NodeType::For(init, cond, inc, body, break_label) => {
 			let x = new_label();
 			let y = new_label();
-			let orig = *BREAK_LABEL.lock().unwrap();
-			*BREAK_LABEL.lock().unwrap() = new_label();
 			gen_stmt(init, code);
 			label(x, code);
 			match cond.op {
@@ -559,20 +550,16 @@ fn gen_stmt(node: &Node, code: &mut Vec<Ir>) {
 			gen_stmt(inc, code);
 			jmp(x, code);
 			label(y, code);
-			label(*BREAK_LABEL.lock().unwrap(), code);
-			*BREAK_LABEL.lock().unwrap() = orig;
+			label(*break_label, code);
 		}
-		NodeType::DoWhile(body, cond) => {
+		NodeType::DoWhile(body, cond, break_label) => {
 			let x = new_label();
-			let orig = *BREAK_LABEL.lock().unwrap();
-			*BREAK_LABEL.lock().unwrap() = new_label();
 			label(x, code);
 			gen_stmt(body, code);
 			let r = gen_expr(cond, code);
 			code.push(Ir::new(IrIf, r, x));
 			kill(r, code);
-			label(*BREAK_LABEL.lock().unwrap(), code);
-			*BREAK_LABEL.lock().unwrap() = orig;
+			label(*break_label, code);
 		}
 		NodeType::VarDef(_, var, init) => {
 			if let Some(rhs) = init {
@@ -584,13 +571,8 @@ fn gen_stmt(node: &Node, code: &mut Vec<Ir>) {
 				kill(r2, code);
 			}
 		}
-		NodeType::Break => {
-			if *BREAK_LABEL.lock().unwrap() == 0 {
-				// error(&format!("stray 'break' statement"));
-				// for debug.
-				panic!("stray 'break' statement");
-			}
-			jmp(*BREAK_LABEL.lock().unwrap(), code);
+		NodeType::Break(jmp_point) => {
+			jmp(*jmp_point, code);
 		}
 		enode => { panic!("unexpeceted node {:?}", enode); }
 	}
