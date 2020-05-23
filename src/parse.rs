@@ -10,10 +10,17 @@ use std::sync::Mutex;
 // This is a recursive-descendent parser which constructs abstract
 // syntax tree from input tokenset.
 //
-// This parser knows only about BNF of the C grammer and doesn't care
-// about its semantics. Therefore, some invalid expressions, such as
-// `1+2=3`, are accepted by this parser, but that's intentional.
-// Semantic errors are detected in a later pass.
+// Variable names are resolved at this stage. We create a Var object
+// when we see a variable definition and use it when we see a variable
+// reference.
+//
+// Types are added to variables and literals. For other nodes, Sema
+// will add type for them.
+//
+// Semantic checking is omitted from this parser to make the code in
+// this file closely resemble the C's BNF. Invalid expressions, such
+// as `1+2=3`, are accepted at this stage. Such errors are detected in
+// a later pass.
 
 macro_rules! env_find {
 	($s:expr, $m:ident, $null:expr) => {
