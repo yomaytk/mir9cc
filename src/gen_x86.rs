@@ -1,7 +1,6 @@
 use super::gen_ir::{*, IrOp::*};
 use super::parse::roundup;
 use super::mir::*;
-use super::parse::*;
 
 use std::collections::HashMap;
 use std::sync::Mutex;

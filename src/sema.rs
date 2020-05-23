@@ -170,8 +170,8 @@ pub fn do_walk(node: &Node, decay: bool) -> Node {
 			check_int(&rhs_);
 			return Node::new_or(lhs_, rhs_); 
 		}
-		For(init, cond, inc, body, break_label) => {
-			return Node::new_for(walk(init), walk(cond), walk(inc), walk(body), *break_label);
+		For(init, cond, inc, body, break_label, continue_label) => {
+			return Node::new_for(walk(init), walk(cond), walk(inc), walk(body), *break_label, *continue_label);
 		}
 		VarDef(name, var, init) => {
 			let mut rexpr = None;
@@ -210,8 +210,8 @@ pub fn do_walk(node: &Node, decay: bool) -> Node {
 		Ne(lhs, rhs) => {
 			return Node::new_neq(walk(lhs), walk(rhs));
 		}
-		DoWhile(body, cond, break_label) => {
-			return Node::new_dowhile(walk(body), walk(cond), *break_label);
+		DoWhile(body, cond, break_label, continue_label) => {
+			return Node::new_dowhile(walk(body), walk(cond), *break_label, *continue_label);
 		}
 		Dot(_, expr, name) => {
 			let expr2 = walk(expr);
@@ -263,7 +263,7 @@ pub fn do_walk(node: &Node, decay: bool) -> Node {
 			lhs.checklval();
 			return Node::new_incdec(lhs.nodesctype(None), *selector, lhs);
 		}
-		Break(jmp_point) => {
+		Break(_) | Continue(_) => {
 			return node.clone();
 		}
 		NULL => {

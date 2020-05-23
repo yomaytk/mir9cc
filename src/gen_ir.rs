@@ -533,29 +533,29 @@ fn gen_stmt(node: &Node, code: &mut Vec<Ir>) {
 				gen_stmt(stmt, code);
 			}
 		}
-		NodeType::For(init, cond, inc, body, break_label) => {
+		NodeType::For(init, cond, inc, body, break_label, continue_label) => {
 			let x = new_label();
-			let y = new_label();
 			gen_stmt(init, code);
 			label(x, code);
 			match cond.op {
 				NodeType::NULL => {}
 				_ => {
 					let r2 = gen_expr(cond, code);
-					code.push(Ir::new(IrUnless, r2, y));
+					code.push(Ir::new(IrUnless, r2, *break_label));
 					kill(r2, code);
 				}
 			}
 			gen_stmt(body, code);
+			label(*continue_label, code);
 			gen_stmt(inc, code);
 			jmp(x, code);
-			label(y, code);
 			label(*break_label, code);
 		}
-		NodeType::DoWhile(body, cond, break_label) => {
+		NodeType::DoWhile(body, cond, break_label, continue_label) => {
 			let x = new_label();
 			label(x, code);
 			gen_stmt(body, code);
+			label(*continue_label, code);
 			let r = gen_expr(cond, code);
 			code.push(Ir::new(IrIf, r, x));
 			kill(r, code);
@@ -571,8 +571,11 @@ fn gen_stmt(node: &Node, code: &mut Vec<Ir>) {
 				kill(r2, code);
 			}
 		}
-		NodeType::Break(jmp_point) => {
-			jmp(*jmp_point, code);
+		NodeType::Break(break_label) => {
+			jmp(*break_label, code);
+		}
+		NodeType::Continue(continue_label) => {
+			jmp(*continue_label, code);
 		}
 		enode => { panic!("unexpeceted node {:?}", enode); }
 	}

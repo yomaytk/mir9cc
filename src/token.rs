@@ -153,6 +153,7 @@ pub enum TokenType {
 	TokenNewLine,
 	TokenParam(bool),	// TokenParam(stringize)
 	TokenTypeof,
+	TokenContinue,
 	TokenNoSignal,
 	TokenEof,
 }
@@ -178,6 +179,7 @@ impl From<String> for TokenType {
 			"include" => { TokenInclude }
 			"define" => { TokenDefine }
 			"typeof" => { TokenTypeof }
+			"continue" => { TokenContinue }
 			_ => { TokenIdent }
 		}
 	}

@@ -108,6 +108,7 @@ lazy_static! {
 	pub static ref GVARS: Mutex<Vec<Var>> = Mutex::new(vec![]);
 	pub static ref LABEL: Mutex<usize> = Mutex::new(0);
 	pub static ref BREAK_VEC: Mutex<Vec<usize>> = Mutex::new(vec![]);
+	pub static ref CONTINUE_VEC: Mutex<Vec<usize>> = Mutex::new(vec![]);
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -213,13 +214,13 @@ pub enum NodeType {
 	Func(Type, String, Vec<Node>, Box<Node>, usize),							// Func(ctype, ident, is_extern, args, body, stacksize)
 	LogAnd(Box<Node>, Box<Node>),												// LogAnd(lhs, rhs)
 	LogOr(Box<Node>, Box<Node>),												// LogOr(lhs, rhs)
-	For(Box<Node>, Box<Node>, Box<Node>, Box<Node>, usize),						// For(init, cond, inc, body, jmp_point)
+	For(Box<Node>, Box<Node>, Box<Node>, Box<Node>, usize, usize),				// For(init, cond, inc, body, break_label, continue_label)
 	VarDef(String, Var, Option<Box<Node>>),										// VarDef(name, var, init)
 	Deref(Type, Box<Node>),														// Deref(ctype, lhs)
 	Addr(Type, Box<Node>),														// Addr(ctype, lhs)
 	EqEq(Box<Node>, Box<Node>),													// EqEq(lhs, rhs)
 	Ne(Box<Node>, Box<Node>),													// Ne(lhs, rhs)
-	DoWhile(Box<Node>, Box<Node>, usize),										// Dowhile(boyd, cond, jmp_point)
+	DoWhile(Box<Node>, Box<Node>, usize, usize),								// Dowhile(boyd, cond, break_label, continue_label)
 	Dot(Type, Box<Node>, String),												// Dot(ctype, expr, name)
 	Not(Box<Node>),																// Not(expr)
 	Ternary(Type, Box<Node>, Box<Node>, Box<Node>),								// Ternary(ctype, cond, then, els)
@@ -227,8 +228,9 @@ pub enum NodeType {
 	Neg(Box<Node>),																// Neg(expr)
 	IncDec(Type, i32, Box<Node>),												// IncDec(ctype, selector, expr)
 	Decl(Type, String, Vec<Node>),												// Decl(ctype, ident, args)
-	Var(Var),																	// Var(var)
-	Break(usize),																// Break(jmp_point)
+	Var(Var),																	// Var(var),
+	Break(usize),																// Break(jmp_point),
+	Continue(usize),															// Continue(jmp_point),
 	NULL,																		// NULL
 }
 
@@ -342,9 +344,9 @@ impl Node {
 			op: NodeType::LogOr(Box::new(lhs), Box::new(rhs))
 		}
 	}
-	pub fn new_for(init: Node, cond: Node, inc: Node, body: Node, jmp_point: usize) -> Self {
+	pub fn new_for(init: Node, cond: Node, inc: Node, body: Node, break_label: usize, continue_label: usize) -> Self {
 		Self {
-			op: NodeType::For(Box::new(init), Box::new(cond), Box::new(inc), Box::new(body), jmp_point)
+			op: NodeType::For(Box::new(init), Box::new(cond), Box::new(inc), Box::new(body), break_label, continue_label)
 		}
 	}
 	pub fn new_vardef(name: String, var: Var, rhs: Option<Node>) -> Self {
@@ -375,9 +377,9 @@ impl Node {
 			op: NodeType::Ne(Box::new(lhs), Box::new(rhs))
 		}
 	}
-	pub fn new_dowhile(body: Node, cond: Node, jmp_point: usize) -> Self {
+	pub fn new_dowhile(body: Node, cond: Node, break_label: usize, continue_label: usize) -> Self {
 		Self {
-			op: NodeType::DoWhile(Box::new(body), Box::new(cond), jmp_point)
+			op: NodeType::DoWhile(Box::new(body), Box::new(cond), break_label, continue_label)
 		}
 	}
 	pub fn new_stmtexpr(ctype: Type, body: Node) -> Self {
@@ -425,9 +427,14 @@ impl Node {
 			op: NodeType::Var(var)
 		}
 	}
-	pub fn new_break(jmp_point: usize) -> Self {
+	pub fn new_break(break_label: usize) -> Self {
 		Self {
-			op: NodeType::Break(jmp_point)
+			op: NodeType::Break(break_label)
+		}
+	}
+	pub fn new_continue(continue_label: usize) -> Self {
+		Self {
+			op: NodeType::Continue(continue_label)
 		}
 	}
 	pub fn new_null() -> Self {
@@ -650,24 +657,40 @@ fn function_call(tokenset: &mut TokenSet) -> Node {
 	return Node::new_call(var.ctype, name, args);
 }
 
-fn break_inc() -> usize {
-	*LABEL.lock().unwrap() += 1;
-	BREAK_VEC.lock().unwrap().push(*LABEL.lock().unwrap());
-	return *LABEL.lock().unwrap();
+fn loop_inc() -> (usize, usize) {
+	*LABEL.lock().unwrap() += 2;
+	let x = *LABEL.lock().unwrap()-1;
+	let y = x+1;
+	BREAK_VEC.lock().unwrap().push(x);
+	CONTINUE_VEC.lock().unwrap().push(y);
+	return (x, y);
 }
 
 fn get_break_label() -> usize {
-	if let Some(jmp_point) = BREAK_VEC.lock().unwrap().last() {
-		return *jmp_point;
+	if let Some(break_label) = BREAK_VEC.lock().unwrap().last() {
+		return *break_label;
 	} else {
 		eprintln!("cannot find jmp point of break.");
 		std::process::exit(0);
 	}
 }
 
-fn break_dec() {
+fn get_continue_label() -> usize {
+	if let Some(continue_label) = CONTINUE_VEC.lock().unwrap().last() {
+		return *continue_label;
+	} else {
+		eprintln!("cannot find jmp point of break.");
+		std::process::exit(0);
+	}
+}
+
+fn loop_dec() {
 	if let None = BREAK_VEC.lock().unwrap().pop() {
 		eprintln!("cannot find jmp point of break.");
+		std::process::exit(0);
+	}
+	if let None = CONTINUE_VEC.lock().unwrap().pop() {
+		eprintln!("cannot find jmp point of continue.");
 		std::process::exit(0);
 	}
 }
@@ -1108,7 +1131,7 @@ pub fn stmt(tokenset: &mut TokenSet) -> Node {
 			tokenset.pos += 1;
 			tokenset.assert_ty(TokenRightBrac);
 			Env::env_inc();
-			let break_label = break_inc();
+			let (break_label, continue_label) = loop_inc();
 			let init;
 			if tokenset.is_typename() {
 				tokenset.pos -= 1;
@@ -1130,32 +1153,32 @@ pub fn stmt(tokenset: &mut TokenSet) -> Node {
 			} 
 			let body = stmt(tokenset);
 			Env::env_dec();
-			break_dec();
-			return Node::new_for(init, cond, inc, body, break_label);
+			loop_dec();
+			return Node::new_for(init, cond, inc, body, break_label, continue_label);
 		}
 		TokenWhile => {
 			tokenset.pos += 1;
-			let break_label = break_inc();
+			let (break_label, continue_label) = loop_inc();
 			let init = Node::new_null();
 			let inc = Node::new_null();
 			tokenset.assert_ty(TokenRightBrac);
 			let cond = expr(tokenset);
 			tokenset.assert_ty(TokenLeftBrac);
 			let body = stmt(tokenset);
-			break_dec();
-			return Node::new_for(init, cond, inc, body, break_label);
+			loop_dec();
+			return Node::new_for(init, cond, inc, body, break_label, continue_label);
 		}
 		TokenDo => {
 			tokenset.pos += 1;
-			let break_label = break_inc();
+			let (break_label, continue_label) = loop_inc();
 			let body = stmt(tokenset);
 			tokenset.assert_ty(TokenWhile);
 			tokenset.assert_ty(TokenRightBrac);
 			let cond = expr(tokenset);
 			tokenset.assert_ty(TokenLeftBrac);
 			tokenset.assert_ty(TokenSemi);
-			break_dec();
-			return Node::new_dowhile(body, cond, break_label);
+			loop_dec();
+			return Node::new_dowhile(body, cond, break_label, continue_label);
 		}
 		TokenRightCurlyBrace => {
 			tokenset.pos += 1;
@@ -1186,6 +1209,10 @@ pub fn stmt(tokenset: &mut TokenSet) -> Node {
 		TokenBreak => {
 			tokenset.pos += 1;
 			return Node::new_break(get_break_label());
+		}
+		TokenContinue => {
+			tokenset.pos += 1;
+			return Node::new_continue(get_continue_label());
 		}
 		_ => {
 			if tokenset.consume_ty(TokenIdent) {
