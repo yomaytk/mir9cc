@@ -81,7 +81,7 @@ fn same_type(ty1: Type, ty2: Type) -> bool {
 }
 
 pub fn get_type(node: &Node) -> Type {
-	return walk(node).nodesctype(None);
+	return walk_noconv(node).nodesctype(None);
 }
 
 pub fn do_walk(node: &Node, decay: bool) -> Node {
@@ -190,17 +190,6 @@ pub fn do_walk(node: &Node, decay: bool) -> Node {
 			lhs2.checklval();
 			return Node::new_addr(lhs2.nodesctype(None).ptr_to(), lhs2);
 		}
-		Sizeof(.., lhs) => {
-			let lhs2 = walk_noconv(lhs);
-			let ctype = lhs2.nodesctype(None);
-			match ctype.ty {
-				Ty::NULL => { panic!("The size of an untyped value cannot be calculated."); }
-				_ => {
-					let val = ctype.size;
-					return Node::new_num(val as i32);
-				}
-			}
-		}
 		EqEq(lhs, rhs) => {
 			return Node::new_eqeq(walk(lhs), walk(rhs));
 		}
@@ -209,14 +198,6 @@ pub fn do_walk(node: &Node, decay: bool) -> Node {
 		}
 		DoWhile(body, cond) => {
 			return Node::new_dowhile(walk(body), walk(cond));
-		}
-		Alignof(expr) => {
-			let expr2 = walk_noconv(expr);
-			let ctype = expr2.nodesctype(None);
-			match ctype.ty {
-				Ty::NULL => { panic!("_Alignof should be used for Node has Ctype."); }
-				_ => { return Node::new_num(ctype.align as i32); }
-			}
 		}
 		Dot(_, expr, name) => {
 			let expr2 = walk(expr);

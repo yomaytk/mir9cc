@@ -216,11 +216,9 @@ pub enum NodeType {
 	VarDef(String, Var, Option<Box<Node>>),										// VarDef(name, var, init)
 	Deref(Type, Box<Node>),														// Deref(ctype, lhs)
 	Addr(Type, Box<Node>),														// Addr(ctype, lhs)
-	Sizeof(Type, usize, Box<Node>),												// Sizeof(ctype, val, lhs)
 	EqEq(Box<Node>, Box<Node>),													// EqEq(lhs, rhs)
 	Ne(Box<Node>, Box<Node>),													// Ne(lhs, rhs)
 	DoWhile(Box<Node>, Box<Node>),												// Dowhile(boyd, cond)
-	Alignof(Box<Node>),															// Alignof(expr)
 	Dot(Type, Box<Node>, String),												// Dot(ctype, expr, name)
 	Not(Box<Node>),																// Not(expr)
 	Ternary(Type, Box<Node>, Box<Node>, Box<Node>),								// Ternary(ctype, cond, then, els)
@@ -245,9 +243,8 @@ impl Node {
 		match &self.op {
 			| NodeType::BinaryTree(ctype, ..) 
 			| NodeType::Deref(ctype,..) | NodeType::Addr(ctype, ..) 
-			| NodeType::Sizeof(ctype, ..) | NodeType::Dot(ctype, ..) 
-			| NodeType::Ternary(ctype, ..) | NodeType::IncDec(ctype, ..) 
-			| NodeType::EqTree(ctype, ..) => { 
+			| NodeType::Dot(ctype, ..) | NodeType::Ternary(ctype, ..) 
+			| NodeType::IncDec(ctype, ..) | NodeType::EqTree(ctype, ..) => { 
 				return ctype.clone(); 
 			}
 			| NodeType::Var(var) | NodeType::VarDef(_, var, ..) => {
@@ -364,11 +361,6 @@ impl Node {
 			op: NodeType::Addr(ctype, Box::new(lhs))
 		}
 	}
-	pub fn new_sizeof(ctype: Type, val: usize, lhs: Node) -> Self {
-		Self {
-			op: NodeType::Sizeof(ctype, val, Box::new(lhs))
-		}
-	}
 	pub fn new_eqeq(lhs: Node, rhs: Node) -> Self {
 		Self {
 			op: NodeType::EqEq(Box::new(lhs), Box::new(rhs))
@@ -387,11 +379,6 @@ impl Node {
 	pub fn new_stmtexpr(ctype: Type, body: Node) -> Self {
 		Self {
 			op: NodeType::StmtExpr(ctype, Box::new(body))
-		}
-	}
-	pub fn new_alignof(expr: Node) -> Self {
-		Self {
-			op: NodeType::Alignof(Box::new(expr))
 		}
 	}
 	pub fn new_dot(ctype: Type, expr: Node, member: String) -> Self {
@@ -746,10 +733,10 @@ fn unary(tokenset: &mut TokenSet) -> Node {
 		return Node::new_addr(INT_TY.clone(), unary(tokenset));
 	}
 	if tokenset.consume_ty(TokenSizeof) {
-		return Node::new_sizeof(INT_TY.clone(), 0, unary(tokenset));
+		return Node::new_num(get_type(&unary(tokenset)).size as i32);
 	}
 	if tokenset.consume_ty(TokenAlignof) {
-		return Node::new_alignof(unary(tokenset));
+		return Node::new_num(get_type(&unary(tokenset)).align as i32);
 	}
 	if tokenset.consume_ty(TokenNot) {
 		return Node::new_not(unary(tokenset));
