@@ -47,20 +47,19 @@ pub fn walk_noconv(node: &Node) -> Node {
 	return do_walk(node, false)
 }
 
-fn bin_ptr_swap(ctype: &mut Type, mut lhs: Node, mut rhs: Node) -> (Node, Node) {
+fn bin_ptr_swap<'a>(ctype: &mut Type, lhs: &'a mut Node, rhs: &'a mut Node) {
 	match (lhs.nodesctype(None).ty, rhs.nodesctype(None).ty) {
 		(Ty::PTR, _) => {}
 		(_, Ty::PTR) => {
 			*ctype = rhs.nodesctype(None);
-			lhs = std::mem::replace(&mut rhs, lhs);
+			*lhs = std::mem::replace(rhs, Node::new_null());
 		}
 		_ => { 
-			return (lhs, rhs); 
+			return; 
 		}
 	}
 	let scale_ptr = ctype.ptr_to.as_ref().unwrap().size as i32;
-	rhs = Node::new_bit(INT_TY.clone(), TokenStar, rhs, Node::new_num(scale_ptr));
-	return (lhs, rhs);
+	*rhs = Node::new_bit(INT_TY.clone(), TokenStar, rhs.clone(), Node::new_num(scale_ptr));
 }
 
 fn same_type(ty1: Type, ty2: Type) -> bool {
@@ -93,9 +92,7 @@ pub fn do_walk(node: &Node, decay: bool) -> Node {
 			let mut ctype = INT_TY.clone();
 			ctype = lhs2.nodesctype(Some(ctype));
 			if let TokenAdd = op {
-				let (lhs2_, rhs2_) = bin_ptr_swap(&mut ctype, lhs2, rhs2);
-				lhs2 = lhs2_;
-				rhs2 = rhs2_;
+				bin_ptr_swap(&mut ctype, &mut lhs2, &mut rhs2);
 				if let Ty::PTR = rhs2.nodesctype(None).ty {
 					panic!("pointer + pointer is not defined.");
 				}
@@ -110,9 +107,7 @@ pub fn do_walk(node: &Node, decay: bool) -> Node {
 						return Node::new_bit(ctype, TokenDiv, node, Node::new_num(scale_ptr));
 					}
 					_ => {
-						let (lhs2_, rhs2_) = bin_ptr_swap(&mut ctype, lhs2, rhs2);
-						lhs2 = lhs2_;
-						rhs2 = rhs2_;
+						bin_ptr_swap(&mut ctype, &mut lhs2, &mut rhs2);
 					}
 				}
 			}
