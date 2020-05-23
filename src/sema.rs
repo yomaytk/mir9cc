@@ -83,6 +83,13 @@ pub fn get_type(node: &Node) -> Type {
 	return walk_noconv(node).nodesctype(None);
 }
 
+fn check_int(node: &Node) {
+	let ctype = node.nodesctype(None);
+	if ctype.ty != Ty::INT && ctype.ty != Ty::CHAR {
+		panic!("{:?} is not an Integer.", node);
+	}
+}
+
 pub fn do_walk(node: &Node, decay: bool) -> Node {
 	match &node.op {
 		Num(val) => { return Node::new_num(*val); }
@@ -149,8 +156,20 @@ pub fn do_walk(node: &Node, decay: bool) -> Node {
 			}
 			return Node::new_call(ctype.clone(), name.clone(), v);
 		}
-		LogAnd(lhs, rhs) => { return Node::new_and(walk(lhs), walk(rhs)); }
-		LogOr(lhs, rhs) => { return Node::new_or(walk(lhs), walk(rhs)); }
+		LogAnd(lhs, rhs) => {
+			let lhs_ = walk(lhs);
+			let rhs_ = walk(rhs);
+			check_int(&lhs_);
+			check_int(&rhs_);
+			return Node::new_and(lhs_, rhs_); 
+		}
+		LogOr(lhs, rhs) => {
+			let lhs_ = walk(lhs);
+			let rhs_ = walk(rhs);
+			check_int(&lhs_);
+			check_int(&rhs_);
+			return Node::new_or(lhs_, rhs_); 
+		}
 		For(init, cond, inc, body) => {
 			return Node::new_for(walk(init), walk(cond), walk(inc), walk(body));
 		}

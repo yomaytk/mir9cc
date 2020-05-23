@@ -241,7 +241,7 @@ impl Node {
 	
 	pub fn nodesctype(&self, basetype: Option<Type>) -> Type {
 		match &self.op {
-			| NodeType::BinaryTree(ctype, ..) 
+			| NodeType::BinaryTree(ctype, ..)
 			| NodeType::Deref(ctype,..) | NodeType::Addr(ctype, ..) 
 			| NodeType::Dot(ctype, ..) | NodeType::Ternary(ctype, ..) 
 			| NodeType::IncDec(ctype, ..) | NodeType::EqTree(ctype, ..) => { 
@@ -249,6 +249,9 @@ impl Node {
 			}
 			| NodeType::Var(var) | NodeType::VarDef(_, var, ..) => {
 				return  var.ctype.clone();
+			}
+			| NodeType::Num(_) => {
+				return INT_TY.clone();
 			}
 			_ => { 
 				if let Some(ty) = basetype {
