@@ -47,7 +47,7 @@ pub fn walk_noconv(node: &Node) -> Node {
 	return do_walk(node, false)
 }
 
-fn bin_ptr_swap<'a>(ctype: &mut Type, lhs: &'a mut Node, rhs: &'a mut Node) {
+fn bin_ptr_swap(ctype: &mut Type, lhs: &mut Node, rhs: &mut Node) {
 	match (lhs.nodesctype(None).ty, rhs.nodesctype(None).ty) {
 		(Ty::PTR, _) => {}
 		(_, Ty::PTR) => {
