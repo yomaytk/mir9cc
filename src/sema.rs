@@ -43,7 +43,7 @@ pub fn walk(node: &Node) -> Node {
 	return do_walk(node, true)
 }
 
-pub fn walk_noconv(node: &Node) -> Node {
+pub fn walk_nodecay(node: &Node) -> Node {
 	return do_walk(node, false)
 }
 
@@ -80,7 +80,7 @@ fn same_type(ty1: Type, ty2: Type) -> bool {
 }
 
 pub fn get_type(node: &Node) -> Type {
-	return walk_noconv(node).nodesctype(None);
+	return walk_nodecay(node).nodesctype(None);
 }
 
 fn check_int(node: &Node) {
@@ -136,7 +136,7 @@ pub fn do_walk(node: &Node, decay: bool) -> Node {
 			return maybe_decay(node.clone(), decay);
 		}
 		EqTree(_, lhs, rhs) => {
-			let lhs2 = walk_noconv(lhs);
+			let lhs2 = walk_nodecay(lhs);
 			lhs2.checklval();
 			let rhs2 = walk(rhs);
 			return Node::new_eq(lhs2.nodesctype(None).clone(), lhs2, rhs2);
