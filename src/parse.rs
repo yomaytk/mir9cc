@@ -225,7 +225,6 @@ pub enum NodeType {
 	Not(Box<Node>),																// Not(expr)
 	Ternary(Type, Box<Node>, Box<Node>, Box<Node>),								// Ternary(ctype, cond, then, els)
 	TupleExpr(Type, Box<Node>, Box<Node>),										// TupleExpr(ctype, lhs, rhs)
-	Neg(Box<Node>),																// Neg(expr)
 	IncDec(Type, i32, Box<Node>),												// IncDec(ctype, selector, expr)
 	Decl(Type, String, Vec<Node>),												// Decl(ctype, ident, args)
 	Var(Var),																	// Var(var),
@@ -405,11 +404,6 @@ impl Node {
 	pub fn new_tuple(ctype: Type, lhs: Node, rhs: Node) -> Self {
 		Self {
 			op: NodeType::TupleExpr(ctype, Box::new(lhs), Box::new(rhs))
-		}
-	}
-	pub fn new_neg(expr: Node) -> Self {
-		Self {
-			op: NodeType::Neg(Box::new(expr))
 		}
 	}
 	pub fn new_incdec(ctype: Type, selector: i32, expr: Node) -> Self {
@@ -777,7 +771,7 @@ fn unary(tokenset: &mut TokenSet) -> Node {
 		return Node::new_eq(NULL_TY.clone(), lhs, rhs);
 	}
 	if tokenset.consume_ty(TokenSub) {
-		return Node::new_neg(unary(tokenset));
+		return Node::new_bit(NULL_TY.clone(), TokenSub, Node::new_num(0), unary(tokenset));
 	}
 	if tokenset.consume_ty(TokenStar) {
 		return Node::new_deref(INT_TY.clone(), unary(tokenset));

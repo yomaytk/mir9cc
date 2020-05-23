@@ -255,9 +255,6 @@ pub fn do_walk(node: &Node, decay: bool) -> Node {
 		TupleExpr(_, lhs, rhs) => {
 			return binwalk(Node::new_tuple, lhs, rhs, 1);
 		}
-		Neg(expr) => {
-			return Node::new_neg(walk(expr));
-		}
 		IncDec(_, selector, expr) => {
 			let lhs = walk(expr);
 			lhs.checklval();

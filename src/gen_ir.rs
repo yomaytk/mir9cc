@@ -455,11 +455,6 @@ fn gen_expr(node: &Node, code: &mut Vec<Ir>) -> usize {
 			kill(gen_expr(lhs, code), code);
 			return gen_expr(rhs, code);
 		}
-		NodeType::Neg(expr) => {
-			let r = gen_expr(expr, code);
-			code.push(Ir::new(IrNeg, r, 0));
-			return r;
-		}
 		NodeType::IncDec(ctype, selector, lhs) => {
 			if *selector == 1 { return gen_post_inc(ctype, lhs, code, 1); }
 			else { return gen_post_inc(ctype, lhs, code, -1); }
