@@ -160,7 +160,7 @@ pub fn do_walk(node: &Node, decay: bool) -> Node {
 			if lty_.ty == Ty::BOOL {
 				rhs_ = Node::new_cast(BOOL_TY.clone(), rhs_);
 			}
-			return Node::new_eq(lty_, lhs_, rhs_);
+			return Node::new_assign(lty_, lhs_, rhs_);
 		}
 		IfThen(cond, then, elthen) => {
 			match elthen {
@@ -180,16 +180,12 @@ pub fn do_walk(node: &Node, decay: bool) -> Node {
 		For(init, cond, inc, body, break_label, continue_label) => {
 			return Node::new_for(walk(init), walk(cond), walk(inc), walk(body), *break_label, *continue_label);
 		}
-		VarDef(name, var, init) => {
-			let mut rexpr = None;
-			if let Some(rhs) = init {
-				let mut expr = walk(rhs);
-				if var.ctype.ty == Ty::BOOL {
-					expr = Node::new_cast(BOOL_TY.clone(), expr);
-				}
-				rexpr = Some(expr);
+		// Only for function parameter
+		VarDef(_, _, init) => {
+			if let Some(_) = init {
+				panic!("init must be None.")
 			}
-			return Node::new_vardef(name.clone(), var.clone(), rexpr)
+			return node.clone();
 		}
 		Deref(_, lhs) => {
 			let lhs2 = walk(lhs);

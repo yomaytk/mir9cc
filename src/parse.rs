@@ -317,7 +317,7 @@ impl Node {
 			op: NodeType::Ident(ident)
 		}
 	}
-	pub fn new_eq(ctype: Type, lhs: Node, rhs: Node) -> Self {
+	pub fn new_assign(ctype: Type, lhs: Node, rhs: Node) -> Self {
 		Self {
 			op: NodeType::Assign(ctype, Box::new(lhs), Box::new(rhs))
 		}
@@ -417,7 +417,7 @@ impl Node {
 			op: NodeType::Decl(ctype, ident, args)
 		}
 	}
-	pub fn new_var(var: Var) -> Self {
+	pub fn new_varref(var: Var) -> Self {
 		Self {
 			op: NodeType::VarRef(var)
 		}
@@ -623,7 +623,7 @@ fn string_literal(tokenset: &mut TokenSet) -> Node {
 	let labelname = format!(".L.str{}", new_label());
 	let var = Var::new(ctype, 0, false, Some(labelname), Some(strname));
 	GVARS.lock().unwrap().push(var.clone());
-	return Node::new_var(var);
+	return Node::new_varref(var);
 }
 
 fn local_variable(tokenset: &mut TokenSet) -> Node {
@@ -633,7 +633,7 @@ fn local_variable(tokenset: &mut TokenSet) -> Node {
 	if let Ty::NULL = var.ctype.ty {
 		panic!("{} is not defined.", name);
 	}
-	return Node::new_var(var);
+	return Node::new_varref(var);
 }
 
 fn function_call(tokenset: &mut TokenSet) -> Node {
@@ -772,12 +772,12 @@ fn unary(tokenset: &mut TokenSet) -> Node {
 	if tokenset.consume_ty(TokenInc) {
 		let lhs = unary(tokenset);
 		let rhs = Node::new_bit(NULL_TY.clone(), TokenAdd, lhs.clone(), Node::new_num(1));
-		return Node::new_eq(NULL_TY.clone(), lhs, rhs);
+		return Node::new_assign(NULL_TY.clone(), lhs, rhs);
 	}
 	if tokenset.consume_ty(TokenDec) {
 		let lhs = unary(tokenset);
 		let rhs = Node::new_bit(NULL_TY.clone(), TokenSub, lhs.clone(), Node::new_num(1));
-		return Node::new_eq(NULL_TY.clone(), lhs, rhs);
+		return Node::new_assign(NULL_TY.clone(), lhs, rhs);
 	}
 	if tokenset.consume_ty(TokenSub) {
 		return Node::new_bit(NULL_TY.clone(), TokenSub, Node::new_num(0), unary(tokenset));
@@ -944,11 +944,11 @@ fn assign(tokenset: &mut TokenSet) -> Node {
 		let rhs = assign(tokenset);
 		match op {
 			TokenAssign => {
-				lhs = Node::new_eq(NULL_TY.clone(), lhs, rhs);
+				lhs = Node::new_assign(NULL_TY.clone(), lhs, rhs);
 			}
 			_ => {
 				let llhs = Node::new_bit(NULL_TY.clone(), op, lhs.clone(), rhs);
-				lhs = Node::new_eq(NULL_TY.clone(), lhs, llhs);
+				lhs = Node::new_assign(NULL_TY.clone(), lhs, llhs);
 			}
 		}
 	}
@@ -1088,18 +1088,25 @@ fn declaration(tokenset: &mut TokenSet, newvar: bool) -> Node {
 	let ident_node = declarator(tokenset, ty);
 	tokenset.assert_ty(TokenSemi);
 	// panic!("{:#?}", ident_node);
-	
-	if newvar {
-		if let NodeType::VarDef(name, mut var, init) = ident_node.op {
-			// add new var to ENV
-			var.offset = Env::add_var(name.clone(), var.clone());
-			return Node {
-				op: NodeType::VarDef(name, var, init)
-			};
+
+	// for struct member and typedef
+	if !newvar {
+		return ident_node;
+	}
+	match ident_node.op {
+		NodeType::VarDef(name, var, None) => {
+			Env::add_var(name, var);
+			return Node::new_null();
+		}
+		NodeType::VarDef(name, mut var, Some(init)) => {
+			var.offset = Env::add_var(name, var.clone());
+			let varnode = Node::new_varref(var);
+			return Node::new_expr(Node::new_assign(NULL_TY.clone(), varnode, *init));
+		}
+		_ => {
+			panic!("declaration node type must be VarDef.");
 		}
 	}
-
-	return ident_node;
 }
 
 fn expr_stmt(tokenset: &mut TokenSet) -> Node {

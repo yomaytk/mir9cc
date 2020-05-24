@@ -379,11 +379,7 @@ fn gen_expr(node: &Node, code: &mut Vec<Ir>) -> usize {
 					return lhi;
 				}
 				_ => {
-					let lhi = gen_expr(lhs, code);
-					let rhi = gen_expr(rhs, code);
-					Ir::add(Ir::bittype(ty), lhi, rhi, code);
-					kill(rhi, code);
-					return lhi;
+					return gen_binop(Ir::bittype(ty), lhs, rhs, code);
 				}
 			}
 		},
@@ -398,8 +394,8 @@ fn gen_expr(node: &Node, code: &mut Vec<Ir>) -> usize {
 			return lhi;
 		},
 		NodeType::Assign(ctype, lhs, rhs) => {
-			let lhi = gen_lval(lhs, code);
 			let rhi = gen_expr(rhs, code);
+			let lhi = gen_lval(lhs, code);
 			store(ctype, lhi, rhi, code);
 			kill(lhi, code);
 			return rhi;
@@ -576,16 +572,6 @@ fn gen_stmt(node: &Node, code: &mut Vec<Ir>) {
 			Ir::add(IrIf, r, x, code);
 			kill(r, code);
 			label(*break_label, code);
-		}
-		NodeType::VarDef(_, var, init) => {
-			if let Some(rhs) = init {
-				let r2 = gen_expr(rhs, code);
-				let r1 = new_regno();
-				Ir::add(IrBpRel, r1, var.offset, code);
-				store(&var.ctype, r1, r2, code);
-				kill(r1, code);
-				kill(r2, code);
-			}
 		}
 		NodeType::Break(break_label) => {
 			jmp(*break_label, code);
