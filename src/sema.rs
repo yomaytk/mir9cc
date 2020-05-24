@@ -149,7 +149,7 @@ pub fn do_walk(node: &Node, decay: bool) -> Node {
 			}
 			return Node::new_stmtexpr(ctype, body);
 		}
-		Var(_) => {
+		VarRef(_) => {
 			return maybe_decay(node.clone(), decay);
 		}
 		Assign(_, lhs, rhs) => {

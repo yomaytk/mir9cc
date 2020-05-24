@@ -237,7 +237,7 @@ pub enum NodeType {
 	TupleExpr(Type, Box<Node>, Box<Node>),										// TupleExpr(ctype, lhs, rhs)
 	IncDec(Type, i32, Box<Node>),												// IncDec(ctype, selector, expr)
 	Decl(Type, String, Vec<Node>),												// Decl(ctype, ident, args)
-	Var(Var),																	// Var(var),
+	VarRef(Var),																// VarRef(var),
 	Break(usize),																// Break(jmp_point),
 	Continue(usize),															// Continue(jmp_point),
 	Cast(Type, Box<Node>),														// Cast(ctype, expr),
@@ -260,7 +260,7 @@ impl Node {
 			| NodeType::IncDec(ctype, ..) | NodeType::Assign(ctype, ..) => { 
 				return ctype.clone(); 
 			}
-			| NodeType::Var(var) | NodeType::VarDef(_, var, ..) => {
+			| NodeType::VarRef(var) | NodeType::VarDef(_, var, ..) => {
 				return  var.ctype.clone();
 			}
 			| NodeType::Num(_) => {
@@ -278,7 +278,7 @@ impl Node {
 
 	pub fn checklval(&self) {
 		match &self.op {
-			NodeType::Var(..) | NodeType::Deref(..) | NodeType::Dot(..) => {}
+			NodeType::VarRef(..) | NodeType::Deref(..) | NodeType::Dot(..) => {}
 			_ => { 
 				// error("not an lvalue");
 				// for debug.
@@ -419,7 +419,7 @@ impl Node {
 	}
 	pub fn new_var(var: Var) -> Self {
 		Self {
-			op: NodeType::Var(var)
+			op: NodeType::VarRef(var)
 		}
 	}
 	pub fn new_break(break_label: usize) -> Self {

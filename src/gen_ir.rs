@@ -315,7 +315,7 @@ fn gen_lval(node: &Node, code: &mut Vec<Ir>) -> usize {
 		NodeType::Deref(_, expr) => {
 			return gen_expr(expr, code);
 		}
-		NodeType::Var(var) => {
+		NodeType::VarRef(var) => {
 			let r = new_regno();
 			if var.is_local {
 				Ir::add(IrBpRel, r, var.offset, code);
@@ -387,7 +387,7 @@ fn gen_expr(node: &Node, code: &mut Vec<Ir>) -> usize {
 				}
 			}
 		},
-		NodeType::Var(var) => {
+		NodeType::VarRef(var) => {
 			let lhi = gen_lval(node, code);
 			load(&var.ctype, lhi, lhi, code);
 			return lhi;
