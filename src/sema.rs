@@ -22,9 +22,6 @@ pub fn maybe_decay(node: Node, decay: bool) -> Node {
 		Ty::ARY if decay => {
 			return Node::new_addr(ctype.ary_to.as_ref().unwrap().as_ref().clone().ptr_to(), node);
 		}
-		Ty::NULL => {
-			panic!("maybe_decay type error {:#?}", node);
-		}
 		_ => { return node; }
 	}
 }
@@ -129,8 +126,17 @@ pub fn do_walk(node: &Node, decay: bool) -> Node {
 			}
 			return Node::new_stmt(v);
 		}
-		StmtExpr(ctype, body) => {
-			return Node::new_stmtexpr(ctype.clone(), walk(body));
+		StmtExpr(_, body) => {
+			let mut ctype = VOID_TY.clone();
+			let body = walk(body);
+			if let NodeType::CompStmt(stmts) = &body.op {
+				if let Some(node) = stmts.last() {
+					ctype = node.nodesctype(None);
+				}
+			} else {
+				panic!("body.op of StmtExpr must be CompStmt.");
+			}
+			return Node::new_stmtexpr(ctype, body);
 		}
 		Var(_) => {
 			return maybe_decay(node.clone(), decay);

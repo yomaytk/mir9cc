@@ -460,20 +460,19 @@ fn gen_expr(node: &Node, code: &mut Vec<Ir>) -> usize {
 			else { return gen_post_inc(ctype, lhs, code, -1); }
 		}
 		NodeType::StmtExpr(_, body) => {
-			let orig_label = *RETURN_LABEL.lock().unwrap();
-			let orig_reg = *RETURN_REG.lock().unwrap();
-			*LABEL.lock().unwrap() += 1;
-			*REGNO.lock().unwrap() += 1;
-			*RETURN_LABEL.lock().unwrap() = *LABEL.lock().unwrap();
-			*RETURN_REG.lock().unwrap() = *REGNO.lock().unwrap();
-			let r = *RETURN_REG.lock().unwrap();
-
-			gen_stmt(body, code);
-			label(*RETURN_LABEL.lock().unwrap(), code);
-
-			*RETURN_LABEL.lock().unwrap() = orig_label;
-			*RETURN_REG.lock().unwrap() = orig_reg;
-
+			if let NodeType::CompStmt(stmts) = &body.op {
+				let len = stmts.len();
+				for i in 0..len-1 {
+					gen_stmt(&stmts[i], code);
+				}
+				if len > 0 {
+					if let NodeType::Expr(ref expr) = stmts.last().unwrap().op {
+						return gen_expr(expr, code);
+					}
+				}
+			}
+			let r = new_regno();
+			code.push(Ir::new(IrImm, r, 0));
 			return r;
 		}
 		_ => { panic!("gen_expr NodeType error at {:?}", node.op); }

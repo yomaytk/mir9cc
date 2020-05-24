@@ -259,7 +259,7 @@ impl Node {
 				if let Some(ty) = basetype {
 					return ty;
 				} else {
-					return NULL_TY.clone();
+					return VOID_TY.clone();
 				}
 			}
 		} 
@@ -699,7 +699,7 @@ fn primary(tokenset: &mut TokenSet) -> Node {
 	if tokenset.consume_ty(TokenRightBrac) {
 		if tokenset.consume_ty(TokenRightCurlyBrace) {
 			tokenset.pos -= 1;
-			let body = Node::new_stmtexpr(NULL_TY.clone(), compound_stmt(tokenset, true));
+			let body = Node::new_stmtexpr(VOID_TY.clone(), compound_stmt(tokenset, true));
 			tokenset.assert_ty(TokenLeftBrac);
 			return body;
 		}
