@@ -272,7 +272,7 @@ impl Macro {
 			}
 		}
 	}
-	// Process '#' followed by a macro parameter
+	// Replace '#' followed by a macro parameter
 	fn replace_hash_ident(&mut self) {
 		let mut v = vec![];
 		let mut i = 0;
