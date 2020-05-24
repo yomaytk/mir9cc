@@ -148,6 +148,13 @@ int main() {
 	EXPECT(5, ({ char x = 5; return x; }));
 	EXPECT(42, ({ int x = 0; char *p = &x; p[0] = 42; return x; }));
 
+	EXPECT(0, '\0');
+	EXPECT(0, '\00');
+	EXPECT(0, '\000');
+	EXPECT(1, '\1');
+	EXPECT(7, '\7');
+	EXPECT(64, '\100');
+
 	EXPECT('a', ({ char *p = "abc"; return p[0]; }));
 	EXPECT('b', ({ char *p = "abc"; return p[1]; }));
 	EXPECT('c', ({ char *p = "abc"; return p[2]; }));
@@ -257,8 +264,6 @@ int main() {
 	EXPECT(5, ({ int x; typeof(x) y = 5; return y; }));
 	EXPECT(1, ({ char x; typeof(x) y = 257; return y; }));
 	EXPECT(2, ({ char x; typeof(x) y[2]; y[0]=257; y[1]=1; return y[0]+y[1]; }));
-
-	printf("OK\n");
 
 	return 0;
 }
