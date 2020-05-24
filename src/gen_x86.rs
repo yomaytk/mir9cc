@@ -189,7 +189,7 @@ pub fn gen(fun: &Function, label: usize) {
 			IrLe => {
 				emit_cmp(ir, String::from("setle"));
 			}
-			IrEqEq => {
+			IrEqual => {
 				emit_cmp(ir, String::from("sete"));
 			}
 			IrNe => {

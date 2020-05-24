@@ -135,7 +135,7 @@ pub fn do_walk(node: &Node, decay: bool) -> Node {
 		Var(_) => {
 			return maybe_decay(node.clone(), decay);
 		}
-		EqTree(_, lhs, rhs) => {
+		Assign(_, lhs, rhs) => {
 			let lhs2 = walk_nodecay(lhs);
 			lhs2.checklval();
 			let rhs2 = walk(rhs);
@@ -204,8 +204,8 @@ pub fn do_walk(node: &Node, decay: bool) -> Node {
 			lhs2.checklval();
 			return Node::new_addr(lhs2.nodesctype(None).ptr_to(), lhs2);
 		}
-		EqEq(lhs, rhs) => {
-			return Node::new_eqeq(walk(lhs), walk(rhs));
+		Equal(lhs, rhs) => {
+			return Node::new_equal(walk(lhs), walk(rhs));
 		}
 		Ne(lhs, rhs) => {
 			return Node::new_neq(walk(lhs), walk(rhs));

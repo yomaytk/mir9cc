@@ -34,7 +34,7 @@ lazy_static! {
 		(IrOp::IrCall { name: format!(""), len: 0, args: vec![] }, IrInfo::new("CALL", IrType::Call)),
 		(IrOp::IrStoreArg(0), IrInfo::new("STOREARG", IrType::ImmImm)),
 		(IrOp::IrLabelAddr(String::new()), IrInfo::new("LABELADDR", IrType::LabelAddr)),
-		(IrOp::IrEqEq, IrInfo::new("EQEQ", IrType::RegReg)),
+		(IrOp::IrEqual, IrInfo::new("Equal", IrType::RegReg)),
 		(IrOp::IrNe, IrInfo::new("Ne", IrType::RegReg)),
 		(IrOp::IrIf, IrInfo::new("IF", IrType::Reg)),
 		(IrOp::IrOr, IrInfo::new("OR", IrType::RegReg)),

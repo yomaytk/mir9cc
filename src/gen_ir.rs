@@ -46,7 +46,7 @@ pub enum IrOp {
 	IrCall { name: String, len: usize, args: Vec<usize> },
 	IrStoreArg(usize),
 	IrLt,
-	IrEqEq, 
+	IrEqual, 
 	IrNe,
 	IrIf,
 	IrLabelAddr(String),
@@ -390,7 +390,7 @@ fn gen_expr(node: &Node, code: &mut Vec<Ir>) -> usize {
 			load(ctype, lhi, lhi, code);
 			return lhi;
 		},
-		NodeType::EqTree(ctype, lhs, rhs) => {
+		NodeType::Assign(ctype, lhs, rhs) => {
 			let lhi = gen_lval(lhs, code);
 			let rhi = gen_expr(rhs, code);
 			store(ctype, lhi, rhi, code);
@@ -421,8 +421,8 @@ fn gen_expr(node: &Node, code: &mut Vec<Ir>) -> usize {
 		NodeType::Addr(_, lhs) => {
 			return gen_lval(lhs, code);
 		}
-		NodeType::EqEq(lhs, rhs) => {
-			return gen_binop(IrEqEq, lhs, rhs, code);
+		NodeType::Equal(lhs, rhs) => {
+			return gen_binop(IrEqual, lhs, rhs, code);
 		}
 		NodeType::Ne(lhs, rhs) => {
 			return gen_binop(IrNe, lhs, rhs, code);
@@ -431,7 +431,7 @@ fn gen_expr(node: &Node, code: &mut Vec<Ir>) -> usize {
 			let r1 = gen_expr(expr, code);
 			let r2 = new_regno();
 			code.push(Ir::new(IrImm, r2, 0));
-			code.push(Ir::new(IrEqEq, r1, r2));
+			code.push(Ir::new(IrEqual, r1, r2));
 			kill(r2, code);
 			return r1;
 		}

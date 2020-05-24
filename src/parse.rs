@@ -208,7 +208,7 @@ pub enum NodeType {
 	CompStmt(Vec<Node>),														// CompStmt(stmts)
 	StmtExpr(Type, Box<Node>),													// StmtExpr(ctype, body)
 	Ident(String),																// Ident(s)
-	EqTree(Type, Box<Node>, Box<Node>),											// EqTree(ctype, lhs, rhs)
+	Assign(Type, Box<Node>, Box<Node>),											// Assign(ctype, lhs, rhs)
 	IfThen(Box<Node>, Box<Node>, Option<Box<Node>>),							// IfThen(cond, then, elthen)
 	Call(Type, String, Vec<Node>),												// Call(ctype, ident, args)
 	Func(Type, String, Vec<Node>, Box<Node>, usize),							// Func(ctype, ident, is_extern, args, body, stacksize)
@@ -218,7 +218,7 @@ pub enum NodeType {
 	VarDef(String, Var, Option<Box<Node>>),										// VarDef(name, var, init)
 	Deref(Type, Box<Node>),														// Deref(ctype, lhs)
 	Addr(Type, Box<Node>),														// Addr(ctype, lhs)
-	EqEq(Box<Node>, Box<Node>),													// EqEq(lhs, rhs)
+	Equal(Box<Node>, Box<Node>),												// Equal(lhs, rhs)
 	Ne(Box<Node>, Box<Node>),													// Ne(lhs, rhs)
 	DoWhile(Box<Node>, Box<Node>, usize, usize),								// Dowhile(boyd, cond, break_label, continue_label)
 	Dot(Type, Box<Node>, String),												// Dot(ctype, expr, name)
@@ -246,7 +246,7 @@ impl Node {
 			| NodeType::BinaryTree(ctype, ..)
 			| NodeType::Deref(ctype,..) | NodeType::Addr(ctype, ..) 
 			| NodeType::Dot(ctype, ..) | NodeType::Ternary(ctype, ..) 
-			| NodeType::IncDec(ctype, ..) | NodeType::EqTree(ctype, ..) => { 
+			| NodeType::IncDec(ctype, ..) | NodeType::Assign(ctype, ..) => { 
 				return ctype.clone(); 
 			}
 			| NodeType::Var(var) | NodeType::VarDef(_, var, ..) => {
@@ -308,7 +308,7 @@ impl Node {
 	}
 	pub fn new_eq(ctype: Type, lhs: Node, rhs: Node) -> Self {
 		Self {
-			op: NodeType::EqTree(ctype, Box::new(lhs), Box::new(rhs))
+			op: NodeType::Assign(ctype, Box::new(lhs), Box::new(rhs))
 		}
 	}
 	pub fn new_if(cond: Node, then: Node, elthen: Option<Node>) -> Self {
@@ -366,9 +366,9 @@ impl Node {
 			op: NodeType::Addr(ctype, Box::new(lhs))
 		}
 	}
-	pub fn new_eqeq(lhs: Node, rhs: Node) -> Self {
+	pub fn new_equal(lhs: Node, rhs: Node) -> Self {
 		Self {
-			op: NodeType::EqEq(Box::new(lhs), Box::new(rhs))
+			op: NodeType::Equal(Box::new(lhs), Box::new(rhs))
 		}
 	}
 	pub fn new_neq(lhs: Node, rhs: Node) -> Self {
@@ -601,7 +601,7 @@ fn assignment_op(tokenset: &mut TokenSet) -> Option<TokenType> {
 	else if tokenset.consume_ty(TokenAndEq) { return Some(TokenAmpersand); }
 	else if tokenset.consume_ty(TokenOrEq) { return Some(TokenOr); }
 	else if tokenset.consume_ty(TokenXorEq) { return Some(TokenXor); }
-	else if tokenset.consume_ty(TokenEq) { return Some(TokenEq); }
+	else if tokenset.consume_ty(TokenAssign) { return Some(TokenAssign); }
 	else { return None; }
 }
 
@@ -862,8 +862,8 @@ fn equarity(tokenset: &mut TokenSet) -> Node {
 	let mut lhs = relational(tokenset);
 	
 	loop {
-		if tokenset.consume_ty(TokenEqEq) {
-			lhs = Node::new_eqeq(lhs, relational(tokenset));
+		if tokenset.consume_ty(TokenEqual) {
+			lhs = Node::new_equal(lhs, relational(tokenset));
 		} else if tokenset.consume_ty(TokenNe) {
 			lhs = Node::new_neq(lhs, relational(tokenset));
 		} else {
@@ -934,7 +934,7 @@ fn assign(tokenset: &mut TokenSet) -> Node {
 	if let Some(op) = assignment_op(tokenset) {
 		let rhs = assign(tokenset);
 		match op {
-			TokenEq => {
+			TokenAssign => {
 				lhs = Node::new_eq(NULL_TY.clone(), lhs, rhs);
 			}
 			_ => {
@@ -1008,7 +1008,7 @@ fn ident(tokenset: &mut TokenSet) -> String {
 
 fn decl_init(tokenset: &mut TokenSet, node: &mut Node) {
 	if let NodeType::VarDef(.., ref mut init) = node.op {
-		if tokenset.consume_ty(TokenEq) {
+		if tokenset.consume_ty(TokenAssign) {
 			let rhs = assign(tokenset);
 			std::mem::replace(init, Some(Box::new(rhs)));
 		}
