@@ -354,10 +354,9 @@ fn c_char(p: &mut core::str::Chars, pos: &mut usize) -> u8 {
 }
 
 fn isoctal(c: char) -> bool {
-	if let '0'..='7' = c {
-		return true;
-	} else {
-		return false;
+	match c {
+		'0'..='7' => true,
+		_ => false,
 	}
 }
 
