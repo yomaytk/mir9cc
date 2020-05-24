@@ -144,10 +144,14 @@ pub fn do_walk(node: &Node, decay: bool) -> Node {
 			return maybe_decay(node.clone(), decay);
 		}
 		Assign(_, lhs, rhs) => {
-			let lhs2 = walk_nodecay(lhs);
-			lhs2.checklval();
-			let rhs2 = walk(rhs);
-			return Node::new_eq(lhs2.nodesctype(None).clone(), lhs2, rhs2);
+			let lhs_ = walk_nodecay(lhs);
+			lhs_.checklval();
+			let mut rhs_ = walk(rhs);
+			let lty_ = lhs_.nodesctype(None);
+			if lty_.ty == Ty::BOOL {
+				rhs_ = Node::new_cast(BOOL_TY.clone(), rhs_);
+			}
+			return Node::new_eq(lty_, lhs_, rhs_);
 		}
 		IfThen(cond, then, elthen) => {
 			match elthen {
@@ -184,7 +188,11 @@ pub fn do_walk(node: &Node, decay: bool) -> Node {
 		VarDef(name, var, init) => {
 			let mut rexpr = None;
 			if let Some(rhs) = init {
-				rexpr = Some(walk(rhs));
+				let mut expr = walk(rhs);
+				if var.ctype.ty == Ty::BOOL {
+					expr = Node::new_cast(BOOL_TY.clone(), expr);
+				}
+				rexpr = Some(expr);
 			}
 			return Node::new_vardef(name.clone(), var.clone(), rexpr)
 		}

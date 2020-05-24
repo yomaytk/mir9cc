@@ -154,6 +154,7 @@ pub enum TokenType {
 	TokenParam(bool),	// TokenParam(stringize)
 	TokenTypeof,
 	TokenContinue,
+	TokenBool,
 	TokenNoSignal,
 	TokenEof,
 }
@@ -180,6 +181,7 @@ impl From<String> for TokenType {
 			"define" => { TokenDefine }
 			"typeof" => { TokenTypeof }
 			"continue" => { TokenContinue }
+			"_Bool" => { TokenBool }
 			_ => { TokenIdent }
 		}
 	}

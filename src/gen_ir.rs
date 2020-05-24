@@ -467,6 +467,17 @@ fn gen_expr(node: &Node, code: &mut Vec<Ir>) -> usize {
 			if *selector == 1 { return gen_post_inc(ctype, lhs, code, 1); }
 			else { return gen_post_inc(ctype, lhs, code, -1); }
 		}
+		NodeType::Cast(ctype, expr) => {
+			let r1 = gen_expr(expr, code);
+			if ctype.ty != Ty::BOOL {
+				return r1;
+			}
+			let r2 = new_regno();
+			Ir::add(IrImm, r2, 0, code);
+			Ir::add(IrNe, r1, r2, code);
+			kill(r2, code);
+			return r1;
+		}
 		NodeType::StmtExpr(_, body) => {
 			if let NodeType::CompStmt(stmts) = &body.op {
 				let len = stmts.len();

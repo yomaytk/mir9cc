@@ -95,6 +95,16 @@ lazy_static! {
 		len: 0,
 		is_extern: false,
 	};
+	pub static ref BOOL_TY: Type = Type {
+		ty: Ty::BOOL,
+		ptr_to: None,
+		ary_to: None,
+		size: 1,
+		align: 1,
+		offset: 0,
+		len: 0,
+		is_extern: false,
+	};
 	pub static ref NULL_VAR: Var = Var {
 		ctype: NULL_TY.clone(),
 		offset: 0,
@@ -174,6 +184,7 @@ pub enum Ty {
 	CHAR,
 	STRUCT(String, Vec<Node>),
 	VOID,
+	BOOL,
 	NULL,
 }
 
@@ -181,7 +192,8 @@ impl PartialEq for Ty {
 	fn eq(&self, other: &Self) -> bool {
 		match (self, other) {
 			(Ty::INT, Ty::INT) | (Ty::PTR, Ty::PTR) | (Ty::ARY, Ty::ARY)
-			| (Ty::CHAR, Ty::CHAR) | (Ty::VOID, Ty::VOID) | (Ty::NULL, Ty::NULL) => {
+			| (Ty::CHAR, Ty::CHAR) | (Ty::VOID, Ty::VOID) | (Ty::NULL, Ty::NULL) 
+			| (Ty::BOOL, Ty::BOOL) => {
 				return true;
 			}
 			(Ty::STRUCT(tag1, _), Ty::STRUCT(tag2, _)) => {
@@ -230,7 +242,8 @@ pub enum NodeType {
 	Var(Var),																	// Var(var),
 	Break(usize),																// Break(jmp_point),
 	Continue(usize),															// Continue(jmp_point),
-	NULL,																		// NULL
+	Cast(Type, Box<Node>),														// Cast(ctype, expr),
+	NULL,																		// NULL,
 }
 
 #[derive(Debug, Clone)]
@@ -431,6 +444,11 @@ impl Node {
 			op: NodeType::Continue(continue_label)
 		}
 	}
+	pub fn new_cast(ctype: Type, expr: Node) -> Self {
+		Self {
+			op: NodeType::Cast(ctype, Box::new(expr))
+		}
+	}
 	pub fn new_null() -> Self {
 		Self {
 			op: NodeType::NULL
@@ -565,6 +583,9 @@ pub fn decl_specifiers(tokenset: &mut TokenSet) -> Type {
 		let expr = assign(tokenset);
 		tokenset.assert_ty(TokenLeftBrac);
 		return get_type(&expr);
+	}
+	if tokenset.consume_ty(TokenBool) {
+		return BOOL_TY.clone();
 	}
 	if tokenset.consume_ty(TokenVoid) {
 		return VOID_TY.clone();
@@ -1184,7 +1205,7 @@ pub fn stmt(tokenset: &mut TokenSet) -> Node {
 			Env::env_dec();
 			return Node::new_stmt(compstmts);
 		}
-		TokenInt | TokenChar | TokenStruct | TokenTypeof => {
+		TokenInt | TokenChar | TokenStruct | TokenTypeof | TokenBool => {
 			return declaration(tokenset, true);
 		}
 		TokenSemi => {

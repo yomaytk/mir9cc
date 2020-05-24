@@ -59,7 +59,6 @@ int main() {
 	EXPECT(2, ({ int i=0; if (1) i=2; else i=3; i; }));
 	EXPECT(3, ({ int i=0; if (0) i=2; else i=3; i; }));
 
-
 	EXPECT(5, plus(2, 3));
 	EXPECT(1, one());
 	EXPECT(3, one()+two());
@@ -273,5 +272,14 @@ int main() {
 	EXPECT(1, ({ char x; typeof(x) y = 257; y; }));
 	EXPECT(2, ({ char x; typeof(x) y[2]; y[0]=257; y[1]=1; y[0]+y[1]; }));
 
+	EXPECT(0, ({ _Bool x = 0; x; }));
+	EXPECT(1, ({ _Bool x = 1; x; }));
+	EXPECT(0, ({ _Bool x; x = 0; x; }));
+	EXPECT(1, ({ _Bool x; x = 2; x; }));
+	EXPECT(0, ({ _Bool x; int y = 0; x = y; x; }));
+	EXPECT(1, ({ _Bool x; int y = -1; x = y; x; }));
+	EXPECT(0, ({ _Bool x; _Bool y = 0; x = y; x; }));
+	EXPECT(1, ({ _Bool x; _Bool y = 1; x = y; x; }));
+	
 	return 0;
 }
