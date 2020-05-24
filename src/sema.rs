@@ -101,9 +101,11 @@ pub fn do_walk(node: &Node, decay: bool) -> Node {
 					panic!("pointer + pointer is not defined.");
 				}
 			} else if let TokenSub = op {
-				match (lhs2.nodesctype(None).ty, rhs2.nodesctype(None).ty) {
+				let lty = lhs2.nodesctype(None);
+				let rty = rhs2.nodesctype(None);
+				match (&lty.ty, &rty.ty) {
 					(Ty::PTR, Ty::PTR) => {
-						if !same_type(lhs2.nodesctype(None).clone(), rhs2.nodesctype(None).clone()) {
+						if !same_type(lty, rty) {
 							panic!("both type of operand of ptr - ptr should be same")
 						}
 						let node = Node::new_bit(ctype.clone(), TokenSub, lhs2, rhs2);
