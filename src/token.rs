@@ -326,13 +326,21 @@ fn c_char(p: &mut core::str::Chars, pos: &mut usize) -> u8 {
 		// escaped char literal
 		return *c_ as u8;
 	}
-	if let '0'..='7' = c {
+	if c == 'x' {
+		let mut val = 0;
+		for _ in 0..2 {
+			c = next_char(p, pos);
+			val = val * 16 + hex(c);
+		}
+		return val;
+	}
+	if isoctal(c) {
 		// octal-escaped-sequence in a char literal
 		let mut val = c as u8 - '0' as u8;
 		let mut pp = p.clone();
 		for _ in 0..2 {
 			c = next_char(&mut pp, pos);
-			if let '0'..='7' = c {
+			if isoctal(c) {
 				val = 8 * val + c as u8 - '0' as u8;
 				p.next();
 			} else {
@@ -343,6 +351,32 @@ fn c_char(p: &mut core::str::Chars, pos: &mut usize) -> u8 {
 		return val;
 	}
 	panic!("invalid char.");
+}
+
+fn isoctal(c: char) -> bool {
+	if let '0'..='7' = c {
+		return true;
+	} else {
+		return false;
+	}
+}
+
+fn hex(c: char) -> u8 {
+	if let '0'..='9' = c {
+		return c as u8 - '0' as u8;
+	} else if let 'a'..='f' = c {
+		return c as u8 - 'a' as u8 + 10;
+	} else if let 'A'..='F' = c {
+		return c as u8 - 'A' as u8 + 10;
+	}
+	panic!("{} c is not hex char.");
+}
+
+fn isxdigit(c: char) -> bool {
+	match c {
+		'0'..='9' | 'a'..='f' | 'A'..='F' => true,
+		_ => false
+	}
 }
 
 fn read_char (p: &mut core::str::Chars, program_id: usize, pos: &mut usize) -> Token {
@@ -452,15 +486,17 @@ fn hexadecimal(p: &mut core::str::Chars, program_id: usize, pos: &mut usize, inp
 	let possub = *pos;
 
 	while let Some(c) = pp.next() {
-		match (ishex, c) {
-			(_, '0' ..= '9') => { p.next(); num = num * 16 + c as i32 - '0' as i32; }
-			(_, 'a' ..= 'f') => { p.next(); num = num * 16 + c as i32 - 'a' as i32 + 10; }
-			(_, 'A' ..= 'F') => { p.next(); num = num * 16 + c as i32 - 'A' as i32 + 10; }
-			(true, _) => { break; }
-			(false, _) => { error(get_path(program_id), *LINE.lock().unwrap(), &format!("bad hexadecimal number at {}..", &input[*pos..*pos+5])); }
+		if isxdigit(c) {
+			next_char(p, pos);
+			num = num * 16 + hex(c) as i32;
+			ishex = true;
+		} else {
+			if ishex {
+				break;
+			} else {
+				error(get_path(program_id), *LINE.lock().unwrap(), &format!("bad hexadecimal number at {}..", &input[*pos..*pos+5]));
+			}
 		}
-		ishex = true;
-		*pos += 1;
 	}
 
 	return Token::new(TokenNum, num, program_id, possub-2, *pos, *LINE.lock().unwrap());
