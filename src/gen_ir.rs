@@ -77,7 +77,7 @@ impl Ir {
 			rhs: rhs,
 		}
 	}
-	fn bittype(ty: TokenType) -> IrOp {
+	fn bittype(ty: &TokenType) -> IrOp {
 		match ty {
 			TokenAdd => { IrAdd(false) },
 			TokenSub => { IrSub(false) },
@@ -175,6 +175,9 @@ impl Ir {
 			}
 		}
 	}
+	fn add(op: IrOp, lhs: usize, rhs: usize, code: &mut Vec<Ir>) {
+		code.push(Ir::new(op, lhs, rhs));
+	} 
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -229,33 +232,33 @@ impl Function {
 }
 
 fn kill(r: usize, code: &mut Vec<Ir>) {
-	code.push(Ir::new(IrKill, r, 0));
+	Ir::add(IrKill, r, 0, code);
 }
 
 fn label(r: usize, code: &mut Vec<Ir>) {
-	code.push(Ir::new(IrLabel, r, 0));
+	Ir::add(IrLabel, r, 0, code);
 }
 
 fn jmp(x: usize, code: &mut Vec<Ir>) {
-	code.push(Ir::new(IrJmp, x, 0));
+	Ir::add(IrJmp, x, 0, code);
 }
 
 fn load(ctype: &Type, dst: usize, src: usize, code: &mut Vec<Ir>) {
-	code.push(Ir::new(IrOp::IrLoad(ctype.size), dst, src));
+	Ir::add(IrOp::IrLoad(ctype.size), dst, src, code);
 }
 
 fn store(ctype: &Type, dst: usize, src: usize, code: &mut Vec<Ir>) {
-	code.push(Ir::new(IrOp::IrStore(ctype.size), dst, src));
+	Ir::add(IrOp::IrStore(ctype.size), dst, src, code);
 }
 
 fn store_arg(ctype: &Type, offset: usize, id: usize, code: &mut Vec<Ir>) {
-	code.push(Ir::new(IrOp::IrStoreArg(ctype.size), offset, id));
+	Ir::add(IrOp::IrStoreArg(ctype.size), offset, id, code);
 }
 
 fn gen_binop(irop: IrOp, lhs: &Node, rhs: &Node, code: &mut Vec<Ir>) -> usize {
 	let r1 = gen_expr(lhs, code);
 	let r2 = gen_expr(rhs, code);
-	code.push(Ir::new(irop, r1, r2));
+	Ir::add(irop, r1, r2, code);
 	kill(r2, code);
 	return r1;
 }
@@ -271,7 +274,7 @@ fn gen_pre_inc(ctype: &Type, lhs: &Node, code: &mut Vec<Ir>, num: i32) -> usize 
 	let r1 = gen_lval(lhs, code);
 	let r2 = new_regno();
 	load(ctype, r2, r1, code);
-	code.push(Ir::new(IrAdd(true), r2, num as usize * gen_inc_scale(ctype)));
+	Ir::add(IrAdd(true), r2, num as usize * gen_inc_scale(ctype), code);
 	store(ctype, r1, r2, code);
 	kill(r1, code);
 	return r2;
@@ -279,7 +282,7 @@ fn gen_pre_inc(ctype: &Type, lhs: &Node, code: &mut Vec<Ir>, num: i32) -> usize 
 
 fn gen_post_inc(ctype: &Type, lhs: &Node, code: &mut Vec<Ir>, num: i32) -> usize {
 	let r = gen_pre_inc(ctype, lhs, code, num);
-	code.push(Ir::new(IrSub(true), r, num as usize * gen_inc_scale(ctype)));
+	Ir::add(IrSub(true), r, num as usize * gen_inc_scale(ctype), code);
 	return r;
 }
 
@@ -315,15 +318,15 @@ fn gen_lval(node: &Node, code: &mut Vec<Ir>) -> usize {
 		NodeType::Var(var) => {
 			let r = new_regno();
 			if var.is_local {
-				code.push(Ir::new(IrBpRel, r, var.offset));
+				Ir::add(IrBpRel, r, var.offset, code);
 			} else {
-				code.push(Ir::new(IrLabelAddr(var.labelname.clone().unwrap()), r, 0));
+				Ir::add(IrLabelAddr(var.labelname.clone().unwrap()), r, 0, code);
 			}
 			return r;
 		}
 		NodeType::Dot(ctype, expr, _) => {
 			let r1 = gen_lval(expr, code);
-			code.push(Ir::new(IrAdd(true), r1, ctype.offset));
+			Ir::add(IrAdd(true), r1, ctype.offset, code);
 			return r1;
 		}
 		_ => { panic!("not an lvalue")}
@@ -343,12 +346,12 @@ fn gen_expr(node: &Node, code: &mut Vec<Ir>) -> usize {
 		NodeType::LogAnd(lhs, rhs) => {
 			let r1 = gen_expr(lhs, code);
 			let x = new_label();
-			code.push(Ir::new(IrUnless, r1, x));
+			Ir::add(IrUnless, r1, x, code);
 			let r2 = gen_expr(rhs, code);
-			code.push(Ir::new(IrMov, r1, r2));
+			Ir::add(IrMov, r1, r2, code);
 			kill(r2, code);
-			code.push(Ir::new(IrUnless, r1, x));
-			code.push(Ir::new(IrImm, r1, 1));
+			Ir::add(IrUnless, r1, x, code);
+			Ir::add(IrImm, r1, 1, code);
 			label(x, code);
 			return r1;
 		}
@@ -356,15 +359,15 @@ fn gen_expr(node: &Node, code: &mut Vec<Ir>) -> usize {
 			let r1 = gen_expr(lhs, code);
 			let x = new_label();
 			let y = new_label();
-			code.push(Ir::new(IrUnless, r1, x));
-			code.push(Ir::new(IrImm, r1, 1));
+			Ir::add(IrUnless, r1, x, code);
+			Ir::add(IrImm, r1, 1, code);
 			jmp(y, code);
 			label(x, code);
 			let r2 = gen_expr(rhs, code);
-			code.push(Ir::new(IrMov, r1, r2));
+			Ir::add(IrMov, r1, r2, code);
 			kill(r2, code);
-			code.push(Ir::new(IrUnless, r1, y));
-			code.push(Ir::new(IrImm, r1, 1));
+			Ir::add(IrUnless, r1, y, code);
+			Ir::add(IrImm, r1, 1, code);
 			label(y, code);
 			return r1;
 		}
@@ -373,10 +376,10 @@ fn gen_expr(node: &Node, code: &mut Vec<Ir>) -> usize {
 			let rhi = gen_expr(rhs, code);
 			if let TokenTilde = ty {
 				kill(rhi, code);
-				code.push(Ir::new(IrXor(true, -1), lhi, 1));
+				Ir::add(IrXor(true, -1), lhi, 1, code);
 				return lhi;
 			}
-			code.push(Ir::new(Ir::bittype(ty.clone()), lhi, rhi));
+			Ir::add(Ir::bittype(ty), lhi, rhi, code);
 			kill(rhi, code);
 			return lhi;
 		},
@@ -403,11 +406,16 @@ fn gen_expr(node: &Node, code: &mut Vec<Ir>) -> usize {
 				args.push(gen_expr(arg, code));
 			}
 			let r = new_regno();
-			code.push(Ir::new(IrCall{ 
-				name: (*ident).clone(), 
-				len: args.len(),
-				args: args.clone()
-			} , r, 0));
+			Ir::add(
+				IrCall{ 
+					name: (*ident).clone(), 
+					len: args.len(),
+					args: args.clone()
+				}, 
+				r, 
+				0, 
+				code
+			);
 			for arg in args {
 				kill(arg, code);
 			}
@@ -430,8 +438,8 @@ fn gen_expr(node: &Node, code: &mut Vec<Ir>) -> usize {
 		NodeType::Not(expr) => {
 			let r1 = gen_expr(expr, code);
 			let r2 = new_regno();
-			code.push(Ir::new(IrImm, r2, 0));
-			code.push(Ir::new(IrEqual, r1, r2));
+			Ir::add(IrImm, r2, 0, code);
+			Ir::add(IrEqual, r1, r2, code);
 			kill(r2, code);
 			return r1;
 		}
@@ -439,14 +447,14 @@ fn gen_expr(node: &Node, code: &mut Vec<Ir>) -> usize {
 			let x = new_label();
 			let y = new_label();
 			let r = gen_expr(cond, code);
-			code.push(Ir::new(IrUnless, r, x));
+			Ir::add(IrUnless, r, x, code);
 			let r2 = gen_expr(then, code);
-			code.push(Ir::new(IrMov, r, r2));
+			Ir::add(IrMov, r, r2, code);
 			kill(r2, code);
 			jmp(y, code);
 			label(x, code);
 			let r3 = gen_expr(els, code);
-			code.push(Ir::new(IrMov, r, r3));
+			Ir::add(IrMov, r, r3, code);
 			kill(r3, code);
 			label(y, code);
 			return r;
@@ -472,7 +480,7 @@ fn gen_expr(node: &Node, code: &mut Vec<Ir>) -> usize {
 				}
 			}
 			let r = new_regno();
-			code.push(Ir::new(IrImm, r, 0));
+			Ir::add(IrImm, r, 0, code);
 			return r;
 		}
 		_ => { panic!("gen_expr NodeType error at {:?}", node.op); }
@@ -491,13 +499,12 @@ fn gen_stmt(node: &Node, code: &mut Vec<Ir>) {
 			let lhi = gen_expr(lhs.as_ref(), code);
 			
 			if *RETURN_LABEL.lock().unwrap() > 0 {
-				code.push(Ir::new(IrMov, *RETURN_REG.lock().unwrap(), lhi));
+				Ir::add(IrMov, *RETURN_REG.lock().unwrap(), lhi, code);
 				kill(lhi, code);
 				jmp(*RETURN_LABEL.lock().unwrap(), code);
 				return;
 			}
-
-			code.push(Ir::new(IrRet, lhi, 0));
+			Ir::add(IrRet, lhi, 0, code);
 			kill(lhi, code);
 		}
 		NodeType::Expr(lhs) => {
@@ -507,7 +514,7 @@ fn gen_stmt(node: &Node, code: &mut Vec<Ir>) {
 			let lhi = gen_expr(cond, code);
 			let x1 = new_label();
 			let x2 = new_label();
-			code.push(Ir::new(IrUnless, lhi, x1));
+			Ir::add(IrUnless, lhi, x1, code);
 			kill(lhi, code);
 			gen_stmt(then, code);
 			match elthen {
@@ -535,7 +542,7 @@ fn gen_stmt(node: &Node, code: &mut Vec<Ir>) {
 				NodeType::NULL => {}
 				_ => {
 					let r2 = gen_expr(cond, code);
-					code.push(Ir::new(IrUnless, r2, *break_label));
+					Ir::add(IrUnless, r2, *break_label, code);
 					kill(r2, code);
 				}
 			}
@@ -551,7 +558,7 @@ fn gen_stmt(node: &Node, code: &mut Vec<Ir>) {
 			gen_stmt(body, code);
 			label(*continue_label, code);
 			let r = gen_expr(cond, code);
-			code.push(Ir::new(IrIf, r, x));
+			Ir::add(IrIf, r, x, code);
 			kill(r, code);
 			label(*break_label, code);
 		}
@@ -559,7 +566,7 @@ fn gen_stmt(node: &Node, code: &mut Vec<Ir>) {
 			if let Some(rhs) = init {
 				let r2 = gen_expr(rhs, code);
 				let r1 = new_regno();
-				code.push(Ir::new(IrBpRel, r1, var.offset));
+				Ir::add(IrBpRel, r1, var.offset, code);
 				store(&var.ctype, r1, r2, code);
 				kill(r1, code);
 				kill(r2, code);
