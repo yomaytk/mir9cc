@@ -343,45 +343,49 @@ fn gen_expr(node: &Node, code: &mut Vec<Ir>) -> usize {
 			code.push(ir);
 			return r;
 		},
-		NodeType::LogAnd(lhs, rhs) => {
-			let r1 = gen_expr(lhs, code);
-			let x = new_label();
-			Ir::add(IrUnless, r1, x, code);
-			let r2 = gen_expr(rhs, code);
-			Ir::add(IrMov, r1, r2, code);
-			kill(r2, code);
-			Ir::add(IrUnless, r1, x, code);
-			Ir::add(IrImm, r1, 1, code);
-			label(x, code);
-			return r1;
-		}
-		NodeType::LogOr(lhs, rhs) => {
-			let r1 = gen_expr(lhs, code);
-			let x = new_label();
-			let y = new_label();
-			Ir::add(IrUnless, r1, x, code);
-			Ir::add(IrImm, r1, 1, code);
-			jmp(y, code);
-			label(x, code);
-			let r2 = gen_expr(rhs, code);
-			Ir::add(IrMov, r1, r2, code);
-			kill(r2, code);
-			Ir::add(IrUnless, r1, y, code);
-			Ir::add(IrImm, r1, 1, code);
-			label(y, code);
-			return r1;
-		}
 		NodeType::BinaryTree(_, ty, lhs, rhs) => {
-			let lhi = gen_expr(lhs, code);
-			let rhi = gen_expr(rhs, code);
-			if let TokenTilde = ty {
-				kill(rhi, code);
-				Ir::add(IrXor(true, -1), lhi, 1, code);
-				return lhi;
+			match ty {
+				TokenLogAnd => {
+					let r1 = gen_expr(lhs, code);
+					let x = new_label();
+					Ir::add(IrUnless, r1, x, code);
+					let r2 = gen_expr(rhs, code);
+					Ir::add(IrMov, r1, r2, code);
+					kill(r2, code);
+					Ir::add(IrUnless, r1, x, code);
+					Ir::add(IrImm, r1, 1, code);
+					label(x, code);
+					return r1;
+				}
+				TokenLogOr => {
+					let r1 = gen_expr(lhs, code);
+					let x = new_label();
+					let y = new_label();
+					Ir::add(IrUnless, r1, x, code);
+					Ir::add(IrImm, r1, 1, code);
+					jmp(y, code);
+					label(x, code);
+					let r2 = gen_expr(rhs, code);
+					Ir::add(IrMov, r1, r2, code);
+					kill(r2, code);
+					Ir::add(IrUnless, r1, y, code);
+					Ir::add(IrImm, r1, 1, code);
+					label(y, code);
+					return r1;
+				}
+				TokenTilde => {
+					let lhi = gen_expr(lhs, code);
+					Ir::add(IrXor(true, -1), lhi, 1, code);
+					return lhi;
+				}
+				_ => {
+					let lhi = gen_expr(lhs, code);
+					let rhi = gen_expr(rhs, code);
+					Ir::add(Ir::bittype(ty), lhi, rhi, code);
+					kill(rhi, code);
+					return lhi;
+				}
 			}
-			Ir::add(Ir::bittype(ty), lhi, rhi, code);
-			kill(rhi, code);
-			return lhi;
 		},
 		NodeType::Var(var) => {
 			let lhi = gen_lval(node, code);

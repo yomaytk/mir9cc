@@ -224,8 +224,6 @@ pub enum NodeType {
 	IfThen(Box<Node>, Box<Node>, Option<Box<Node>>),							// IfThen(cond, then, elthen)
 	Call(Type, String, Vec<Node>),												// Call(ctype, ident, args)
 	Func(Type, String, Vec<Node>, Box<Node>, usize),							// Func(ctype, ident, is_extern, args, body, stacksize)
-	LogAnd(Box<Node>, Box<Node>),												// LogAnd(lhs, rhs)
-	LogOr(Box<Node>, Box<Node>),												// LogOr(lhs, rhs)
 	For(Box<Node>, Box<Node>, Box<Node>, Box<Node>, usize, usize),				// For(init, cond, inc, body, break_label, continue_label)
 	VarDef(String, Var, Option<Box<Node>>),										// VarDef(name, var, init)
 	Deref(Type, Box<Node>),														// Deref(ctype, lhs)
@@ -344,16 +342,6 @@ impl Node {
 	pub fn new_func(ctype: Type, ident: String, args: Vec<Node>, body: Node, stacksize: usize) -> Self {
 		Self {
 			op: NodeType::Func(ctype, ident, args, Box::new(body), stacksize)
-		}
-	}
-	pub fn new_and(lhs: Node, rhs: Node) -> Self {
-		Self {
-			op: NodeType::LogAnd(Box::new(lhs), Box::new(rhs))
-		}
-	}
-	pub fn new_or(lhs: Node, rhs: Node) -> Self {
-		Self {
-			op: NodeType::LogOr(Box::new(lhs), Box::new(rhs))
 		}
 	}
 	pub fn new_for(init: Node, cond: Node, inc: Node, body: Node, break_label: usize, continue_label: usize) -> Self {
@@ -924,7 +912,7 @@ fn logand(tokenset: &mut TokenSet) -> Node {
 	let mut lhs = bitor(tokenset);
 
 	while tokenset.consume_ty(TokenLogAnd) {
-		lhs = Node::new_and(lhs, bitor(tokenset));
+		lhs = Node::new_bit(INT_TY.clone(), TokenLogAnd, lhs, bitor(tokenset));
 	}
 	return lhs;
 }
@@ -933,7 +921,7 @@ fn logor(tokenset: &mut TokenSet) -> Node {
 	let mut lhs = logand(tokenset);
 
 	while tokenset.consume_ty(TokenLogOr) {
-		lhs = Node::new_or(lhs, logand(tokenset));
+		lhs = Node::new_bit(INT_TY.clone(), TokenLogOr, lhs, logand(tokenset));
 	}
 	return lhs;
 }

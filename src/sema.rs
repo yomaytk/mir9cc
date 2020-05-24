@@ -82,7 +82,7 @@ pub fn get_type(node: &Node) -> Type {
 
 fn check_int(node: &Node) {
 	let ctype = node.nodesctype(None);
-	if ctype.ty != Ty::INT && ctype.ty != Ty::CHAR {
+	if ctype.ty != Ty::INT && ctype.ty != Ty::CHAR && ctype.ty != Ty::BOOL {
 		panic!("{:?} is not an Integer.", node);
 	}
 }
@@ -95,29 +95,38 @@ pub fn do_walk(node: &Node, decay: bool) -> Node {
 			let mut rhs2 = walk(rhs);
 			let mut ctype = INT_TY.clone();
 			ctype = lhs2.nodesctype(Some(ctype));
-			if let TokenAdd = op {
-				bin_ptr_swap(&mut ctype, &mut lhs2, &mut rhs2);
-				if let Ty::PTR = rhs2.nodesctype(None).ty {
-					panic!("pointer + pointer is not defined.");
+			match op {
+				TokenAdd => {
+					bin_ptr_swap(&mut ctype, &mut lhs2, &mut rhs2);
+					if let Ty::PTR = rhs2.nodesctype(None).ty {
+						panic!("pointer + pointer is not defined.");
+					}
+					return Node::new_bit(ctype, op.clone(), lhs2, rhs2);
 				}
-			} else if let TokenSub = op {
-				let lty = lhs2.nodesctype(None);
-				let rty = rhs2.nodesctype(None);
-				match (&lty.ty, &rty.ty) {
-					(Ty::PTR, Ty::PTR) => {
-						if !same_type(lty, rty) {
-							panic!("both type of operand of ptr - ptr should be same")
+				TokenSub => {
+					let lty = lhs2.nodesctype(None);
+					let rty = rhs2.nodesctype(None);
+					match (&lty.ty, &rty.ty) {
+						(Ty::PTR, Ty::PTR) => {
+							if !same_type(lty, rty) {
+								panic!("both type of operand of ptr - ptr should be same")
+							}
+							let node = Node::new_bit(ctype.clone(), TokenSub, lhs2, rhs2);
+							let scale_ptr = ctype.ptr_to.as_ref().unwrap().size as i32;
+							return Node::new_bit(ctype, TokenDiv, node, Node::new_num(scale_ptr));
 						}
-						let node = Node::new_bit(ctype.clone(), TokenSub, lhs2, rhs2);
-						let scale_ptr = ctype.ptr_to.as_ref().unwrap().size as i32;
-						return Node::new_bit(ctype, TokenDiv, node, Node::new_num(scale_ptr));
+						_ => {
+							bin_ptr_swap(&mut ctype, &mut lhs2, &mut rhs2);
+						}
 					}
-					_ => {
-						bin_ptr_swap(&mut ctype, &mut lhs2, &mut rhs2);
-					}
+					return Node::new_bit(ctype, op.clone(), lhs2, rhs2);
+				}
+				_ => {
+					check_int(&lhs2);
+					check_int(&rhs2);
+					return Node::new_bit(ctype, op.clone(), lhs2, rhs2);
 				}
 			}
-			return Node::new_bit(ctype, op.clone(), lhs2, rhs2);
 		}
 		Ret(lhs) => { return Node::new_ret(walk(lhs)); }
 		Expr(lhs) => { return Node::new_expr(walk(lhs)); }
@@ -167,20 +176,6 @@ pub fn do_walk(node: &Node, decay: bool) -> Node {
 				v.push(walk(arg));
 			}
 			return Node::new_call(ctype.clone(), name.clone(), v);
-		}
-		LogAnd(lhs, rhs) => {
-			let lhs_ = walk(lhs);
-			let rhs_ = walk(rhs);
-			check_int(&lhs_);
-			check_int(&rhs_);
-			return Node::new_and(lhs_, rhs_); 
-		}
-		LogOr(lhs, rhs) => {
-			let lhs_ = walk(lhs);
-			let rhs_ = walk(rhs);
-			check_int(&lhs_);
-			check_int(&rhs_);
-			return Node::new_or(lhs_, rhs_); 
 		}
 		For(init, cond, inc, body, break_label, continue_label) => {
 			return Node::new_for(walk(init), walk(cond), walk(inc), walk(body), *break_label, *continue_label);
