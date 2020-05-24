@@ -296,25 +296,12 @@ fn read_string (p: &mut core::str::Chars, program_id: usize, pos: &mut usize) ->
 	let start = *pos;
 	let mut sb = String::new();
 
-	while let Some(c) = p.next() {
+	loop {
+		let c = c_char(p, pos) as char;
 		if c == '"'	{
-			*pos += 1;
 			break;
 		}
-		if c != '\\' {
-			sb.push(c);
-			*pos += 1;
-			continue;
-		}
-		let c2 = p.next().unwrap();
-		if c2 == '\0' {
-			error(get_path(program_id), *LINE.lock().unwrap(), "premature end of input.");
-		} else if let Some(c3) = ESCAPED.lock().unwrap().get(&c2) {
-			sb.push(*c3);
-		} else {
-			sb.push(c2.clone());
-		}
-		*pos += 2;
+		sb.push(c);
 	}
 	return Token::new(TokenString(sb), 0, program_id, start, *pos, *LINE.lock().unwrap());
 }
@@ -328,25 +315,25 @@ fn next_char(p: &mut core::str::Chars, pos: &mut usize) -> char {
 	}
 }
 
-fn c_char(p: &mut core::str::Chars, pos: &mut usize) -> i32 {
+fn c_char(p: &mut core::str::Chars, pos: &mut usize) -> u8 {
 	let mut c = next_char(p, pos);
 	if c != '\\' {
 		// normal char literal ex. 'a', 'b' ...
-		return c as i32; 
+		return c as u8; 
 	}
 	c = next_char(p, pos);
 	if let Some(c_) = ESCAPED.lock().unwrap().get(&c) {
 		// escaped char literal
-		return *c_ as i32;
+		return *c_ as u8;
 	}
 	if let '0'..='7' = c {
 		// octal-escaped-sequence in a char literal
-		let mut val = c as i32 - '0' as i32;
+		let mut val = c as u8 - '0' as u8;
 		let mut pp = p.clone();
 		for _ in 0..2 {
 			c = next_char(&mut pp, pos);
 			if let '0'..='7' = c {
-				val = 8 * val + c as i32 - '0' as i32;
+				val = 8 * val + c as u8 - '0' as u8;
 				p.next();
 			} else {
 				*pos -= 1;
@@ -360,7 +347,7 @@ fn c_char(p: &mut core::str::Chars, pos: &mut usize) -> i32 {
 
 fn read_char (p: &mut core::str::Chars, program_id: usize, pos: &mut usize) -> Token {
 	let start = *pos;
-	let val = c_char(p, pos);
+	let val = c_char(p, pos) as i32;
 	assert!(p.next().unwrap() == '\'');
 	*pos += 1;
 	return Token::new(TokenNum, val, program_id, start, *pos, *LINE.lock().unwrap());
