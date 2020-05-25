@@ -86,7 +86,7 @@ lazy_static! {
 		is_extern: false,
 	};
 	pub static ref STRUCT_TY: Type = Type {
-		ty: Ty::STRUCT(String::new(), Vec::new()),
+		ty: Ty::STRUCT(String::new(), HashMap::new()),
 		ptr_to: None,
 		ary_to: None,
 		size: 0,
@@ -182,7 +182,7 @@ pub enum Ty {
 	PTR,
 	ARY,
 	CHAR,
-	STRUCT(String, Vec<Node>),
+	STRUCT(String, HashMap<String, Type>),
 	VOID,
 	BOOL,
 	NULL,
@@ -534,7 +534,7 @@ pub fn decl_specifiers(tokenset: &mut TokenSet) -> Type {
 	}
 	if tokenset.consume_ty(TokenStruct){
 		
-		let mut members = vec![];
+		let mut mb_map = HashMap::new();
 		let mut tag = String::new();
 		// tag
 		if tokenset.consume_ty(TokenIdent) {
@@ -545,10 +545,12 @@ pub fn decl_specifiers(tokenset: &mut TokenSet) -> Type {
 		// struct member
 		if tokenset.consume_ty(TokenRightCurlyBrace) {
 			while !tokenset.consume_ty(TokenLeftCurlyBrace) {
-				members.push(declaration(tokenset, false));
+				if let NodeType::VarDef(name, var, _) = declaration(tokenset, false).op {
+					mb_map.insert(name, var.ctype);
+				}
 			}
 		}
-		match (members.is_empty(), tag.is_empty()) {
+		match (mb_map.is_empty(), tag.is_empty()) {
 			(true, true) => {
 				// error("bat struct definition.");
 				// for debug.
@@ -558,7 +560,7 @@ pub fn decl_specifiers(tokenset: &mut TokenSet) -> Type {
 				return env_find!(tag.clone(), tags, NULL_TY.clone());
 			}
 			(false, c) => {
-				let struct_type = new_struct(tag.clone(), members);
+				let struct_type = new_struct(tag.clone(), mb_map);
 				if !c {
 					Env::add_tags(tag, struct_type.clone());
 				}
@@ -581,22 +583,20 @@ pub fn decl_specifiers(tokenset: &mut TokenSet) -> Type {
 	return NULL_TY.clone();
 }
 
-pub fn new_struct(tag: String, mut members: Vec<Node>) -> Type {
+pub fn new_struct(tag: String, mut mb_map: HashMap<String, Type>) -> Type {
+	
 	let mut ty_align = 0;
-
 	let mut off = 0;
-	for i in 0..members.len() {
-		if let NodeType::VarDef(_, var, ..) = &mut members[i].op {
-			let ctype = &mut var.ctype;
-			off = roundup(off, ctype.align);
-			ctype.offset = off;
-			off += ctype.size;
-			ty_align = std::cmp::max(ty_align, ctype.align);
-		}
+
+	for (_, ctype) in mb_map.iter_mut() {
+		off = roundup(off, ctype.align);
+		ctype.offset = off;
+		off += ctype.size;
+		ty_align = std::cmp::max(ty_align, ctype.align);
 	}
 	let ty_size = roundup(off, ty_align);
 
-	return Type::new(Ty::STRUCT(tag, members), None, None, ty_size ,ty_align , 0, 0, false);
+	return Type::new(Ty::STRUCT(tag, mb_map), None, None, ty_size, ty_align , 0, 0, false);
 }
 
 fn assignment_op(tokenset: &mut TokenSet) -> Option<TokenType> {

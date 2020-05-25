@@ -223,20 +223,10 @@ pub fn do_walk(node: &Node, decay: bool) -> Node {
 		Dot(_, expr, name) => {
 			let expr2 = walk(expr);
 			match expr2.nodesctype(None).ty {
-				Ty::STRUCT(_, members) => {
-					if members.is_empty() {
-						// error("incomplete type.");
-						// for debug.
-						panic!("incomplete type.")
-					}
-					for membernode in members {
-						if let NodeType::VarDef(name_, var, ..) = membernode.op {
-							if &name[..] != &name_[..] {
-								continue;
-							}
-							let lhs = Node::new_dot(var.ctype.clone(), expr2, name_);
-							return maybe_decay(lhs, decay);
-						}
+				Ty::STRUCT(_, mb_map) => {
+					if let Some(ctype) = mb_map.get(name) {
+						let lhs = Node::new_dot(ctype.clone(), expr2, name.clone());
+						return maybe_decay(lhs, decay);
 					}
 					// error(&format!("member missing."));
 					// for debug.
