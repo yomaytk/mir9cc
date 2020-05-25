@@ -180,13 +180,6 @@ pub fn do_walk(node: &Node, decay: bool) -> Node {
 		For(init, cond, inc, body, break_label, continue_label) => {
 			return Node::new_for(walk(init), walk(cond), walk(inc), walk(body), *break_label, *continue_label);
 		}
-		// Only for function parameter
-		VarDef(_, _, init) => {
-			if let Some(_) = init {
-				panic!("init must be None.")
-			}
-			return node.clone();
-		}
 		Deref(_, lhs) => {
 			let lhs2 = walk(lhs);
 			let ctype = lhs2.nodesctype(None);
@@ -270,19 +263,15 @@ pub fn do_walk(node: &Node, decay: bool) -> Node {
 pub fn sema(program: &mut Program) {
 	
 	let mut nodes = vec![];
-	
-	for topnode in &mut program.nodes {
+	let program_nodes = std::mem::replace(&mut program.nodes, vec![]);
 
-		match &topnode.op {
+	for topnode in program_nodes {
+
+		match topnode.op {
 			Func(ctype, ident, args, body, stacksize) => {
-				// eval args
-				let mut argv = vec![];
-				for arg in args {
-					argv.push(walk(arg));
-				}
 				// eval body
-				let body = walk(body);
-				let node = Node::new_func(ctype.clone(), ident.clone(), argv, body, *stacksize);
+				let body = walk(&body);
+				let node = Node::new_func(ctype.clone(), ident.clone(), args, body, stacksize);
 				nodes.push(node);
 			}
 			NULL => { continue; }

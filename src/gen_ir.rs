@@ -597,16 +597,7 @@ pub fn gen_ir(program: &mut Program) {
 					continue;
 				}
 				for i in 0..args.len() {
-					match &args[i].op {
-						NodeType::VarDef(_, var, _) => {
-							store_arg(&var.ctype, var.offset, i, &mut code);
-						}
-						_ => {
-							// error(&format!("Illegal function parameter."));
-							// for debug. 
-							panic!("Illegal function parameter.");
-						}
-					}
+					store_arg(&args[i].ctype, args[i].offset, i, &mut code);
 				}
 				gen_stmt(body, &mut code);
 				let func = Function::new(name.clone(), code, *stacksize);

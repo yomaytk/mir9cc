@@ -223,7 +223,7 @@ pub enum NodeType {
 	Assign(Type, Box<Node>, Box<Node>),											// Assign(ctype, lhs, rhs)
 	IfThen(Box<Node>, Box<Node>, Option<Box<Node>>),							// IfThen(cond, then, elthen)
 	Call(Type, String, Vec<Node>),												// Call(ctype, ident, args)
-	Func(Type, String, Vec<Node>, Box<Node>, usize),							// Func(ctype, ident, is_extern, args, body, stacksize)
+	Func(Type, String, Vec<Var>, Box<Node>, usize),							// Func(ctype, ident, is_extern, args, body, stacksize)
 	For(Box<Node>, Box<Node>, Box<Node>, Box<Node>, usize, usize),				// For(init, cond, inc, body, break_label, continue_label)
 	VarDef(String, Var, Option<Box<Node>>),										// VarDef(name, var, init)
 	Deref(Type, Box<Node>),														// Deref(ctype, lhs)
@@ -339,7 +339,7 @@ impl Node {
 			op: NodeType::Call(ctype, ident, args)
 		}
 	}
-	pub fn new_func(ctype: Type, ident: String, args: Vec<Node>, body: Node, stacksize: usize) -> Self {
+	pub fn new_func(ctype: Type, ident: String, args: Vec<Var>, body: Node, stacksize: usize) -> Self {
 		Self {
 			op: NodeType::Func(ctype, ident, args, Box::new(body), stacksize)
 		}
@@ -1257,20 +1257,18 @@ pub fn compound_stmt(tokenset: &mut TokenSet, newenv: bool) -> Node {
 	return Node::new_stmt(compstmts);
 }
 
-pub fn param_declaration(tokenset: &mut TokenSet) -> Node {
+pub fn param_declaration(tokenset: &mut TokenSet) -> Var {
 	
 	// type
 	let ty = decl_specifiers(tokenset);
 	let node = declarator(tokenset, ty);
-	let ctype = node.nodesctype(None);
-	if let NodeType::VarDef(name, mut var, init) = node.op {
-		if let Ty::ARY = &ctype.ty {
-			var.ctype = ctype.ary_to.unwrap().clone().ptr_to();
+
+	if let NodeType::VarDef(name, mut var, _init) = node.op {
+		if let Ty::ARY = &var.ctype.ty {
+			var.ctype = var.ctype.ary_to.unwrap().clone().ptr_to();
 		}
 		var.offset = Env::add_var(name.clone(), var.clone());
-		return Node {
-			op: NodeType::VarDef(name, var, init)
-		};
+		return var;
 	} else {
 		panic!("{:?} should be NodeType::VarDef", node);
 	}
