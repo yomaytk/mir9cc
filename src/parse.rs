@@ -1189,14 +1189,7 @@ pub fn stmt(tokenset: &mut TokenSet) -> Node {
 			return Node::new_dowhile(body, cond, break_label, continue_label);
 		}
 		TokenRightCurlyBrace => {
-			tokenset.pos += 1;
-			Env::env_inc();
-			let mut compstmts = vec![];
-			while !tokenset.consume_ty(TokenLeftCurlyBrace) {
-				compstmts.push(stmt(tokenset));
-			}
-			Env::env_dec();
-			return Node::new_stmt(compstmts);
+			return compound_stmt(tokenset, true);
 		}
 		TokenInt | TokenChar | TokenStruct | TokenTypeof | TokenBool => {
 			return declaration(tokenset, true);
@@ -1242,14 +1235,8 @@ pub fn compound_stmt(tokenset: &mut TokenSet, newenv: bool) -> Node {
 	if newenv {
 		Env::env_inc();
 	}
-	loop {
-		match tokenset.consume_ty(TokenLeftCurlyBrace) {
-			true => { break; },
-			false => { 
-				let stmt = stmt(tokenset);
-				compstmts.push(stmt);
-			}
-		}
+	while !tokenset.consume_ty(TokenLeftCurlyBrace) {
+		compstmts.push(stmt(tokenset));
 	}
 	Env::env_dec();
 	return Node::new_stmt(compstmts);
