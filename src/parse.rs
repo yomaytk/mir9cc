@@ -53,7 +53,6 @@ lazy_static! {
 		align: 4,
 		offset: 0,
 		len: 0,
-		is_extern: false,
 	};
 	pub static ref CHAR_TY: Type = Type {
 		ty: Ty::CHAR,
@@ -63,7 +62,6 @@ lazy_static! {
 		align: 1,
 		offset: 0,
 		len: 0,
-		is_extern: false,
 	};
 	pub static ref VOID_TY: Type = Type {
 		ty: Ty::VOID,
@@ -73,7 +71,6 @@ lazy_static! {
 		align: 0,
 		offset: 0,
 		len: 0,
-		is_extern: false,
 	};
 	pub static ref NULL_TY: Type = Type {
 		ty: Ty::NULL,
@@ -83,7 +80,6 @@ lazy_static! {
 		align: 0,
 		offset: 0,
 		len: 0,
-		is_extern: false,
 	};
 	pub static ref STRUCT_TY: Type = Type {
 		ty: Ty::STRUCT(String::new(), HashMap::new()),
@@ -93,7 +89,6 @@ lazy_static! {
 		align: 0,
 		offset: 0,
 		len: 0,
-		is_extern: false,
 	};
 	pub static ref BOOL_TY: Type = Type {
 		ty: Ty::BOOL,
@@ -103,7 +98,6 @@ lazy_static! {
 		align: 1,
 		offset: 0,
 		len: 0,
-		is_extern: false,
 	};
 	pub static ref NULL_VAR: Var = Var {
 		ctype: NULL_TY.clone(),
@@ -111,7 +105,6 @@ lazy_static! {
 		is_local: true,
 		labelname: None,
 		strname: None,
-		is_extern: false,
 	};
 	pub static ref ENV: Mutex<Env> = Mutex::new(Env::new_env(None));
 	pub static ref STACKSIZE: Mutex<usize> = Mutex::new(0);
@@ -130,11 +123,10 @@ pub struct Type {
 	pub align: usize,
 	pub offset: usize,
 	pub len: usize,
-	pub is_extern: bool,
 }
 
 impl Type {
-	pub fn new(ty: Ty, ptr_to: Option<Box<Type>>, ary_to: Option<Box<Type>>, size: usize, align: usize, offset: usize, len: usize, is_extern: bool) -> Self {
+	pub fn new(ty: Ty, ptr_to: Option<Box<Type>>, ary_to: Option<Box<Type>>, size: usize, align: usize, offset: usize, len: usize) -> Self {
 		Self {
 			ty,
 			ptr_to,
@@ -143,11 +135,9 @@ impl Type {
 			align,
 			offset,
 			len,
-			is_extern,
 		}
 	}
 	pub fn ptr_to(self) -> Self {
-		let is_extern = self.is_extern;
 		Self {
 			ty: Ty::PTR,
 			ptr_to: Some(Box::new(self)),
@@ -156,13 +146,11 @@ impl Type {
 			align: 8,
 			offset: 0,
 			len: 0,
-			is_extern,
 		}
 	}
 	pub fn ary_of(self, len: usize) -> Self {
 		let size = self.size;
 		let align = self.align;
-		let is_extern = self.is_extern;
 		Self {
 			ty: Ty::ARY,
 			ptr_to: None,
@@ -171,7 +159,6 @@ impl Type {
 			align,
 			offset: 0,
 			len,
-			is_extern,
 		}
 	}
 }
@@ -451,19 +438,16 @@ pub struct Var {
 	pub is_local: bool,
 	pub labelname: Option<String>,
 	pub strname: Option<String>,
-	pub is_extern: bool,
 }
 
 impl Var {
 	pub fn new(ctype: Type, offset: usize, is_local: bool, labelname: Option<String>, strname: Option<String>) -> Self {
-		let is_extern = ctype.is_extern;
 		Self {
 			ctype,
 			offset,
 			is_local,
 			labelname,
 			strname,
-			is_extern,
 		}
 	}
 }
@@ -600,7 +584,7 @@ pub fn new_struct(tag: String, mut mb_vec: Vec<(String, Type)>) -> Type {
 	
 	let ty_size = roundup(off, ty_align);
 
-	return Type::new(Ty::STRUCT(tag, mb_map), None, None, ty_size, ty_align , 0, 0, false);
+	return Type::new(Ty::STRUCT(tag, mb_map), None, None, ty_size, ty_align , 0, 0);
 }
 
 fn assignment_op(tokenset: &mut TokenSet) -> Option<TokenType> {
@@ -1037,7 +1021,6 @@ fn new_ptr_to_replace_type(ctype: &Type, true_ty: Type) -> Type {
 				ctype.align,
 				ctype.offset,
 				ctype.len,
-				ctype.is_extern,
 			)
 		}
 	}
@@ -1244,7 +1227,7 @@ pub fn param_declaration(tokenset: &mut TokenSet) -> Var {
 	let ty = decl_specifiers(tokenset);
 	let node = declarator(tokenset, ty);
 
-	if let NodeType::VarDef(name, mut var, _init) = node.op {
+	if let NodeType::VarDef(name, mut var, _) = node.op {
 		if let Ty::ARY = &var.ctype.ty {
 			var.ctype = var.ctype.ary_to.unwrap().clone().ptr_to();
 		}
@@ -1264,7 +1247,6 @@ pub fn toplevel(tokenset: &mut TokenSet) -> Node {
 
 	// Ctype
 	let mut ctype = decl_specifiers(tokenset);
-	ctype.is_extern = is_extern;
 	
 	while tokenset.consume_ty(TokenStar) {
 		ctype = ctype.ptr_to();
@@ -1312,7 +1294,9 @@ pub fn toplevel(tokenset: &mut TokenSet) -> Node {
 	// global variable
 	let var = Var::new(ctype.clone(), 0, false, Some(ident.clone()), None);
 	Env::add_var(ident, var.clone());
-	GVARS.lock().unwrap().push(var);
+	if !is_extern {
+		GVARS.lock().unwrap().push(var);
+	}
 	return Node::new_null();
 }
 

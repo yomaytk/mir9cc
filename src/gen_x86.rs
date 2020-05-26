@@ -253,9 +253,6 @@ pub fn gen_x86(program: Program) {
 	
 	// global variable
 	for gvar in program.gvars {
-		if gvar.is_extern {
-			continue;
-		}
 		if let Some(s) = gvar.strname {
 			println!(".data");
 			println!("{}:", gvar.labelname.unwrap());
