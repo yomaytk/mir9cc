@@ -1140,13 +1140,11 @@ pub fn stmt(tokenset: &mut TokenSet) -> Node {
 			tokenset.assert_ty(TokenRightBrac);
 			Env::env_inc();
 			let (break_label, continue_label) = loop_inc();
-			let init;
+			let mut init = Node::new_null();
 			if tokenset.is_typename() {
 				tokenset.pos -= 1;
 				init = declaration(tokenset, true);
-			} else if tokenset.consume_ty(TokenSemi) {
-				init = Node::new_null();
-			} else {
+			} else if !tokenset.consume_ty(TokenSemi) {
 				init = expr_stmt(tokenset);
 			}
 			let mut cond = Node::new_null();
@@ -1156,7 +1154,7 @@ pub fn stmt(tokenset: &mut TokenSet) -> Node {
 			}
 			let mut inc = Node::new_null();
 			if !tokenset.consume_ty(TokenLeftBrac) {
-				inc = stmt(tokenset);
+				inc = expr_stmt(tokenset);
 				tokenset.assert_ty(TokenLeftBrac);
 			} 
 			let body = stmt(tokenset);
@@ -1167,14 +1165,12 @@ pub fn stmt(tokenset: &mut TokenSet) -> Node {
 		TokenWhile => {
 			tokenset.pos += 1;
 			let (break_label, continue_label) = loop_inc();
-			let init = Node::new_null();
-			let inc = Node::new_null();
 			tokenset.assert_ty(TokenRightBrac);
 			let cond = expr(tokenset);
 			tokenset.assert_ty(TokenLeftBrac);
 			let body = stmt(tokenset);
 			loop_dec();
-			return Node::new_for(init, cond, inc, body, break_label, continue_label);
+			return Node::new_for(Node::new_null(), cond, Node::new_null(), body, break_label, continue_label);
 		}
 		TokenDo => {
 			tokenset.pos += 1;
