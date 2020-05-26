@@ -649,18 +649,12 @@ fn function_call(tokenset: &mut TokenSet) -> Node {
 	}
 	// function call
 	let mut args = vec![];
-	//// arity = 0;
-	if tokenset.consume_ty(TokenLeftBrac){
-		return Node::new_call(NULL_TY.clone(), name, args);
+	while !tokenset.consume_ty(TokenLeftBrac) {
+		if !args.is_empty() {
+			tokenset.assert_ty(TokenComma);
+		}
+		args.push(assign(tokenset));
 	}
-	//// arity > 0;
-	let arg1 = assign(tokenset);
-	args.push(arg1);
-	while tokenset.consume_ty(TokenComma) {
-		let argv = assign(tokenset);
-		args.push(argv);
-	}
-	tokenset.assert_ty(TokenLeftBrac);
 	return Node::new_call(var.ctype, name, args);
 }
 
@@ -1310,18 +1304,17 @@ pub fn toplevel(tokenset: &mut TokenSet) -> Node {
 
 		Env::env_inc();
 		// argument
-		if !tokenset.consume_ty(TokenLeftBrac) {
-			loop {
-				args.push(param_declaration(tokenset));
-				if tokenset.consume_ty(TokenLeftBrac){ break; }
+		while !tokenset.consume_ty(TokenLeftBrac) {
+			if !args.is_empty() {
 				tokenset.assert_ty(TokenComma);
 			}
+			args.push(param_declaration(tokenset));
 		}
 		// function decl
 		if tokenset.consume_ty(TokenSemi) {
 			return Node::new_null();
 		}
-		// body
+		// function def
 		let body = compound_stmt(tokenset, false);
 		return Node::new_func(ctype, ident, args, body, *STACKSIZE.lock().unwrap());
 	}
