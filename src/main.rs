@@ -89,5 +89,5 @@ fn main() {
 	// }
 	
 	// code generator
-	gen_x86(&program);
+	gen_x86(program);
 }

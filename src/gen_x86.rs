@@ -247,22 +247,22 @@ pub fn gen(fun: &Function, label: usize) {
 	emit!("ret");
 }
 
-pub fn gen_x86(program: &Program) {
+pub fn gen_x86(program: Program) {
 	
 	println!(".intel_syntax noprefix");
 	
 	// global variable
-	for gvar in &program.gvars {
+	for gvar in program.gvars {
 		if gvar.is_extern {
 			continue;
 		}
-		if let Some(s) = &gvar.strname {
+		if let Some(s) = gvar.strname {
 			println!(".data");
-			println!("{}:", gvar.labelname.clone().unwrap());
-			emit!(".ascii \"{}\"", escape(s.clone(), gvar.ctype.size));
+			println!("{}:", gvar.labelname.unwrap());
+			emit!(".ascii \"{}\"", escape(s, gvar.ctype.size));
 		} else {
 			println!(".bss");
-			println!("{}:", gvar.labelname.clone().unwrap());
+			println!("{}:", gvar.labelname.unwrap());
 			emit!(".zero {}", gvar.ctype.size);
 		}
 	}
