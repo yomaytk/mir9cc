@@ -534,7 +534,7 @@ pub fn decl_specifiers(tokenset: &mut TokenSet) -> Type {
 	}
 	if tokenset.consume_ty(TokenStruct){
 		
-		let mut mb_map = HashMap::new();
+		let mut mb_vec = vec![];
 		let mut tag = String::new();
 		// tag
 		if tokenset.consume_ty(TokenIdent) {
@@ -546,11 +546,11 @@ pub fn decl_specifiers(tokenset: &mut TokenSet) -> Type {
 		if tokenset.consume_ty(TokenRightCurlyBrace) {
 			while !tokenset.consume_ty(TokenLeftCurlyBrace) {
 				if let NodeType::VarDef(name, var, _) = declaration(tokenset, false).op {
-					mb_map.insert(name, var.ctype);
+					mb_vec.push((name, var.ctype));
 				}
 			}
 		}
-		match (mb_map.is_empty(), tag.is_empty()) {
+		match (mb_vec.is_empty(), tag.is_empty()) {
 			(true, true) => {
 				// error("bat struct definition.");
 				// for debug.
@@ -560,7 +560,7 @@ pub fn decl_specifiers(tokenset: &mut TokenSet) -> Type {
 				return env_find!(tag.clone(), tags, NULL_TY.clone());
 			}
 			(false, c) => {
-				let struct_type = new_struct(tag.clone(), mb_map);
+				let struct_type = new_struct(tag.clone(), mb_vec);
 				if !c {
 					Env::add_tags(tag, struct_type.clone());
 				}
@@ -583,17 +583,21 @@ pub fn decl_specifiers(tokenset: &mut TokenSet) -> Type {
 	return NULL_TY.clone();
 }
 
-pub fn new_struct(tag: String, mut mb_map: HashMap<String, Type>) -> Type {
+pub fn new_struct(tag: String, mut mb_vec: Vec<(String, Type)>) -> Type {
 	
 	let mut ty_align = 0;
 	let mut off = 0;
-
-	for (_, ctype) in mb_map.iter_mut() {
+	let mut mb_map = HashMap::new();
+	mb_vec.reverse();
+	
+	while let Some((name, mut ctype)) = mb_vec.pop() {
 		off = roundup(off, ctype.align);
 		ctype.offset = off;
 		off += ctype.size;
 		ty_align = std::cmp::max(ty_align, ctype.align);
+		mb_map.insert(name, ctype);
 	}
+	
 	let ty_size = roundup(off, ty_align);
 
 	return Type::new(Ty::STRUCT(tag, mb_map), None, None, ty_size, ty_align , 0, 0, false);
