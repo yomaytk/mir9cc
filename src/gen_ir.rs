@@ -528,17 +528,12 @@ fn gen_stmt(node: &Node, code: &mut Vec<Ir>) {
 			Ir::add(IrUnless, lhi, x1, code);
 			kill(lhi, code);
 			gen_stmt(then, code);
-			match elthen {
-				Some(elnode) => {
-					jmp(x2, code);
-					label(x1, code);
-					gen_stmt(elnode, code);
-					label(x2, code);
-				},
-				None => {
-					label(x1, code);
-				}
+			jmp(x2, code);
+			label(x1, code);
+			if let Some(elnode) = elthen {
+				gen_stmt(elnode, code);
 			}
+			label(x2, code);
 		}
 		NodeType::CompStmt(lhs) => {
 			for stmt in lhs {
