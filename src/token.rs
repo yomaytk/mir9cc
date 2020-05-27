@@ -155,6 +155,8 @@ pub enum TokenType {
 	TokenTypeof,
 	TokenContinue,
 	TokenBool,
+	TokenSwitch,
+	TokenCase,
 	TokenNoSignal,
 	TokenEof,
 }
@@ -182,6 +184,8 @@ impl From<String> for TokenType {
 			"typeof" => { TokenTypeof }
 			"continue" => { TokenContinue }
 			"_Bool" => { TokenBool }
+			"switch" => { TokenSwitch }
+			"case" => { TokenCase }
 			_ => { TokenIdent }
 		}
 	}

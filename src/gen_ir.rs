@@ -323,8 +323,7 @@ fn gen_expr(node: &Node, code: &mut Vec<Ir>) -> i32 {
 	match &node.op {
 		NodeType::Num(val) => {
 			let r = new_regno();
-			let ir = Ir::new(IrImm, r, *val);
-			code.push(ir);
+			Ir::emit(IrImm, r, *val, code);
 			return r;
 		},
 		NodeType::BinaryTree(_, ty, lhs, rhs) => {
@@ -546,6 +545,23 @@ fn gen_stmt(node: &Node, code: &mut Vec<Ir>) {
 			Ir::emit(IrIf, r, x, code);
 			kill(r, code);
 			label(*break_label, code);
+		}
+		NodeType::Switch(cond, body, cases, break_label) => {
+			let r = gen_expr(cond, code);
+			for (val, case_label) in cases {
+				let x = gen_expr(val, code);
+				Ir::emit(IrEqual, x, r, code);
+				Ir::emit(IrIf, x, *case_label, code);
+				kill(x, code);
+			}
+			kill(r, code);
+			jmp(*break_label, code);
+			gen_stmt(body, code);
+			label(*break_label, code);
+		}
+		NodeType::Case(_, body, case_label) => {
+			label(*case_label, code);
+			gen_stmt(body, code);
 		}
 		NodeType::Break(break_label) => {
 			jmp(*break_label, code);

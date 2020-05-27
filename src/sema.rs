@@ -213,6 +213,12 @@ pub fn do_walk(node: &Node, decay: bool) -> Node {
 		DoWhile(body, cond, break_label, continue_label) => {
 			return Node::new_dowhile(walk(body), walk(cond), *break_label, *continue_label);
 		}
+		Switch(cond, body, cases, break_label) => {
+			return Node::new_switch(walk(cond), walk(body), cases.clone(), *break_label);
+		}
+		Case(val, body, case_label) => {
+			return Node::new_case(*val.clone(), walk(body), *case_label);
+		}
 		Dot(_, expr, name) => {
 			let expr2 = walk(expr);
 			match expr2.nodesctype(None).ty {

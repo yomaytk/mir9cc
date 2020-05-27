@@ -112,6 +112,7 @@ lazy_static! {
 	pub static ref LABEL: Mutex<i32> = Mutex::new(0);
 	pub static ref BREAK_VEC: Mutex<Vec<i32>> = Mutex::new(vec![]);
 	pub static ref CONTINUE_VEC: Mutex<Vec<i32>> = Mutex::new(vec![]);
+	pub static ref SWITCHES: Mutex<Vec<Vec<(Node, i32)>>> = Mutex::new(vec![]);
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -210,14 +211,14 @@ pub enum NodeType {
 	Assign(Type, Box<Node>, Box<Node>),											// Assign(ctype, lhs, rhs)
 	IfThen(Box<Node>, Box<Node>, Option<Box<Node>>),							// IfThen(cond, then, elthen)
 	Call(Type, String, Vec<Node>),												// Call(ctype, ident, args)
-	Func(Type, String, Vec<Var>, Box<Node>, i32),							// Func(ctype, ident, is_extern, args, body, stacksize)
-	For(Box<Node>, Box<Node>, Box<Node>, Box<Node>, i32, i32),				// For(init, cond, inc, body, break_label, continue_label)
+	Func(Type, String, Vec<Var>, Box<Node>, i32),								// Func(ctype, ident, is_extern, args, body, stacksize)
+	For(Box<Node>, Box<Node>, Box<Node>, Box<Node>, i32, i32),					// For(init, cond, inc, body, break_label, continue_label)
 	VarDef(String, Var, Option<Box<Node>>),										// VarDef(name, var, init)
 	Deref(Type, Box<Node>),														// Deref(ctype, lhs)
 	Addr(Type, Box<Node>),														// Addr(ctype, lhs)
 	Equal(Box<Node>, Box<Node>),												// Equal(lhs, rhs)
 	Ne(Box<Node>, Box<Node>),													// Ne(lhs, rhs)
-	DoWhile(Box<Node>, Box<Node>, i32, i32),								// Dowhile(boyd, cond, break_label, continue_label)
+	DoWhile(Box<Node>, Box<Node>, i32, i32),									// Dowhile(boyd, cond, break_label, continue_label)
 	Dot(Type, Box<Node>, String),												// Dot(ctype, expr, name)
 	Not(Box<Node>),																// Not(expr)
 	Ternary(Type, Box<Node>, Box<Node>, Box<Node>),								// Ternary(ctype, cond, then, els)
@@ -225,9 +226,11 @@ pub enum NodeType {
 	IncDec(Type, i32, Box<Node>),												// IncDec(ctype, selector, expr)
 	Decl(Type, String, Vec<Node>),												// Decl(ctype, ident, args)
 	VarRef(Var),																// VarRef(var),
-	Break(i32),																// Break(jmp_point),
-	Continue(i32),															// Continue(jmp_point),
+	Break(i32),																	// Break(jmp_point),
+	Continue(i32),																// Continue(jmp_point),
 	Cast(Type, Box<Node>),														// Cast(ctype, expr),
+	Switch(Box<Node>, Box<Node>, Vec<(Node, i32)>, i32),						// Switch(cond, body, cases, break_label),
+	Case(Box<Node>, Box<Node>, i32),											// Case(val, body, case_label),
 	NULL,																		// NULL,
 }
 
@@ -422,6 +425,16 @@ impl Node {
 	pub fn new_cast(ctype: Type, expr: Node) -> Self {
 		Self {
 			op: NodeType::Cast(ctype, Box::new(expr))
+		}
+	}
+	pub fn new_switch(cond: Node, body: Node, cases: Vec<(Node, i32)>, break_label: i32) -> Self {
+		Self {
+			op: NodeType::Switch(Box::new(cond), Box::new(body), cases, break_label)
+		}
+	}
+	pub fn new_case(val: Node, body: Node, case_label: i32) -> Self {
+		Self {
+			op: NodeType::Case(Box::new(val), Box::new(body), case_label)
 		}
 	}
 	pub fn new_null() -> Self {
@@ -680,9 +693,48 @@ fn loop_dec() {
 	}
 }
 
+fn switch_loop_inc() -> i32 {
+	*LABEL.lock().unwrap() += 1;
+	let x = *LABEL.lock().unwrap();
+	BREAK_VEC.lock().unwrap().push(x);
+	SWITCHES.lock().unwrap().push(vec![]);
+	return x;
+}
+
+fn switch_loop_dec() -> Vec<(Node, i32)> {
+	if let None = BREAK_VEC.lock().unwrap().pop() {
+		eprintln!("cannot find jmp point of break.");
+		std::process::exit(0);
+	}
+	if let Some(cases) = SWITCHES.lock().unwrap().pop() {
+		return cases;
+	} else {
+		eprintln!("cannot find jmp point of switch.");
+		std::process::exit(0);
+	}
+}
+
+fn case_emit(val: Node, break_label: i32) {
+	if let None = SWITCHES.lock().unwrap().last() {
+		eprintln!("cannot find jmp point of switch.");
+		std::process::exit(0);
+	}
+	SWITCHES.lock().unwrap().last_mut().unwrap().push((val, break_label));
+}
+
 pub fn new_label() -> i32 {
 	*LABEL.lock().unwrap() += 1;
 	return *LABEL.lock().unwrap();
+}
+
+fn const_expr(tokenset: &mut TokenSet) -> Node {
+	let expr = expr(tokenset);
+	if let NodeType::Num(_) = &expr.op {
+		return expr;
+	} else {
+		eprintln!("expected Number.");
+		std::process::exit(0);
+	}
 }
 
 fn primary(tokenset: &mut TokenSet) -> Node {
@@ -1166,6 +1218,25 @@ pub fn stmt(tokenset: &mut TokenSet) -> Node {
 			tokenset.assert_ty(TokenSemi);
 			loop_dec();
 			return Node::new_dowhile(body, cond, break_label, continue_label);
+		}
+		TokenSwitch => {
+			tokenset.pos += 1;
+			let break_label = switch_loop_inc();
+			tokenset.assert_ty(TokenRightBrac);
+			let cond = expr(tokenset);
+			tokenset.assert_ty(TokenLeftBrac);
+			let body = stmt(tokenset);
+			let cases = switch_loop_dec();
+			return Node::new_switch(cond, body, cases, break_label);
+		}
+		TokenCase => {
+			tokenset.pos += 1;
+			let val = const_expr(tokenset);
+			tokenset.assert_ty(TokenColon);
+			let body = stmt(tokenset);
+			let case_label = new_label();
+			case_emit(val.clone(), case_label);
+			return Node::new_case(val, body, case_label);
 		}
 		TokenRightCurlyBrace => {
 			return compound_stmt(tokenset, true);

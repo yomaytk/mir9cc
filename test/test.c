@@ -114,6 +114,10 @@ int main() {
 	EXPECT(7, ({ int i=0; for (int j=0; j < 10; j++) { if (j<3) continue; i++; } i; }));
 	EXPECT(45, ({ int i=0; int j=0; while (i<10) { j=j+i; i=i+1; } j;}));
 
+	EXPECT(6, ({ int x=0; switch(3) { case 2: x=5; break; case 3: x=6; break; case 4: x=7; break; } x; }));
+	EXPECT(7, ({ int x=0; switch(3) { case 2: x=5; case 3: x=6; case 4: x=7; } x; }));
+	EXPECT(0, ({ int x=0; switch(3) case 1: x=5; x; }));
+
 	EXPECT(3, ({ int ary[2]; *ary=1; *(ary+1)=2; *ary + *(ary+1);}));
 	EXPECT(3, ({ int *ary; int ary2[5]; ary = ary2; *(ary+1)=1; *(ary+4)=2; *(ary+1) + *(ary+4);}));
 	EXPECT(5, ({ int x; int *p = &x; x = 5; *p;}));
