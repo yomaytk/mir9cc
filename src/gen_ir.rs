@@ -154,7 +154,7 @@ impl Ir {
 			}
 		}
 	}
-	fn add(op: IrOp, lhs: i32, rhs: i32, code: &mut Vec<Ir>) {
+	fn emit(op: IrOp, lhs: i32, rhs: i32, code: &mut Vec<Ir>) {
 		code.push(Ir::new(op, lhs, rhs));
 	} 
 }
@@ -209,33 +209,33 @@ impl Function {
 }
 
 fn kill(r: i32, code: &mut Vec<Ir>) {
-	Ir::add(IrKill, r, 0, code);
+	Ir::emit(IrKill, r, 0, code);
 }
 
 fn label(r: i32, code: &mut Vec<Ir>) {
-	Ir::add(IrLabel, r, 0, code);
+	Ir::emit(IrLabel, r, 0, code);
 }
 
 fn jmp(x: i32, code: &mut Vec<Ir>) {
-	Ir::add(IrJmp, x, 0, code);
+	Ir::emit(IrJmp, x, 0, code);
 }
 
 fn load(ctype: &Type, dst: i32, src: i32, code: &mut Vec<Ir>) {
-	Ir::add(IrOp::IrLoad(ctype.size), dst, src, code);
+	Ir::emit(IrOp::IrLoad(ctype.size), dst, src, code);
 }
 
 fn store(ctype: &Type, dst: i32, src: i32, code: &mut Vec<Ir>) {
-	Ir::add(IrOp::IrStore(ctype.size), dst, src, code);
+	Ir::emit(IrOp::IrStore(ctype.size), dst, src, code);
 }
 
 fn store_arg(ctype: &Type, offset: i32, id: i32, code: &mut Vec<Ir>) {
-	Ir::add(IrOp::IrStoreArg(ctype.size), offset, id, code);
+	Ir::emit(IrOp::IrStoreArg(ctype.size), offset, id, code);
 }
 
 fn gen_binop(irop: IrOp, lhs: &Node, rhs: &Node, code: &mut Vec<Ir>) -> i32 {
 	let r1 = gen_expr(lhs, code);
 	let r2 = gen_expr(rhs, code);
-	Ir::add(irop, r1, r2, code);
+	Ir::emit(irop, r1, r2, code);
 	kill(r2, code);
 	return r1;
 }
@@ -249,8 +249,8 @@ fn gen_inc_scale(ctype: &Type) -> i32 {
 
 fn gen_imm(op: IrOp, r1: i32, num: i32, code: &mut Vec<Ir>) {
 	let r2 = new_regno();
-	Ir::add(IrImm, r2, num, code);
-	Ir::add(op, r1, r2, code);
+	Ir::emit(IrImm, r2, num, code);
+	Ir::emit(op, r1, r2, code);
 	kill(r2, code);
 }
 
@@ -302,9 +302,9 @@ fn gen_lval(node: &Node, code: &mut Vec<Ir>) -> i32 {
 		NodeType::VarRef(var) => {
 			let r = new_regno();
 			if var.is_local {
-				Ir::add(IrBpRel, r, var.offset, code);
+				Ir::emit(IrBpRel, r, var.offset, code);
 			} else {
-				Ir::add(IrLabelAddr(var.labelname.clone().unwrap()), r, 0, code);
+				Ir::emit(IrLabelAddr(var.labelname.clone().unwrap()), r, 0, code);
 			}
 			return r;
 		}
@@ -332,12 +332,12 @@ fn gen_expr(node: &Node, code: &mut Vec<Ir>) -> i32 {
 				TokenLogAnd => {
 					let r1 = gen_expr(lhs, code);
 					let x = new_label();
-					Ir::add(IrUnless, r1, x, code);
+					Ir::emit(IrUnless, r1, x, code);
 					let r2 = gen_expr(rhs, code);
-					Ir::add(IrMov, r1, r2, code);
+					Ir::emit(IrMov, r1, r2, code);
 					kill(r2, code);
-					Ir::add(IrUnless, r1, x, code);
-					Ir::add(IrImm, r1, 1, code);
+					Ir::emit(IrUnless, r1, x, code);
+					Ir::emit(IrImm, r1, 1, code);
 					label(x, code);
 					return r1;
 				}
@@ -345,15 +345,15 @@ fn gen_expr(node: &Node, code: &mut Vec<Ir>) -> i32 {
 					let r1 = gen_expr(lhs, code);
 					let x = new_label();
 					let y = new_label();
-					Ir::add(IrUnless, r1, x, code);
-					Ir::add(IrImm, r1, 1, code);
+					Ir::emit(IrUnless, r1, x, code);
+					Ir::emit(IrImm, r1, 1, code);
 					jmp(y, code);
 					label(x, code);
 					let r2 = gen_expr(rhs, code);
-					Ir::add(IrMov, r1, r2, code);
+					Ir::emit(IrMov, r1, r2, code);
 					kill(r2, code);
-					Ir::add(IrUnless, r1, y, code);
-					Ir::add(IrImm, r1, 1, code);
+					Ir::emit(IrUnless, r1, y, code);
+					Ir::emit(IrImm, r1, 1, code);
 					label(y, code);
 					return r1;
 				}
@@ -385,7 +385,7 @@ fn gen_expr(node: &Node, code: &mut Vec<Ir>) -> i32 {
 				args.push(gen_expr(arg, code));
 			}
 			let r = new_regno();
-			Ir::add(
+			Ir::emit(
 				IrCall{ 
 					name: (*ident).clone(), 
 					len: args.len(),
@@ -417,8 +417,8 @@ fn gen_expr(node: &Node, code: &mut Vec<Ir>) -> i32 {
 		NodeType::Not(expr) => {
 			let r1 = gen_expr(expr, code);
 			let r2 = new_regno();
-			Ir::add(IrImm, r2, 0, code);
-			Ir::add(IrEqual, r1, r2, code);
+			Ir::emit(IrImm, r2, 0, code);
+			Ir::emit(IrEqual, r1, r2, code);
 			kill(r2, code);
 			return r1;
 		}
@@ -426,14 +426,14 @@ fn gen_expr(node: &Node, code: &mut Vec<Ir>) -> i32 {
 			let x = new_label();
 			let y = new_label();
 			let r = gen_expr(cond, code);
-			Ir::add(IrUnless, r, x, code);
+			Ir::emit(IrUnless, r, x, code);
 			let r2 = gen_expr(then, code);
-			Ir::add(IrMov, r, r2, code);
+			Ir::emit(IrMov, r, r2, code);
 			kill(r2, code);
 			jmp(y, code);
 			label(x, code);
 			let r3 = gen_expr(els, code);
-			Ir::add(IrMov, r, r3, code);
+			Ir::emit(IrMov, r, r3, code);
 			kill(r3, code);
 			label(y, code);
 			return r;
@@ -452,8 +452,8 @@ fn gen_expr(node: &Node, code: &mut Vec<Ir>) -> i32 {
 				return r1;
 			}
 			let r2 = new_regno();
-			Ir::add(IrImm, r2, 0, code);
-			Ir::add(IrNe, r1, r2, code);
+			Ir::emit(IrImm, r2, 0, code);
+			Ir::emit(IrNe, r1, r2, code);
 			kill(r2, code);
 			return r1;
 		}
@@ -470,7 +470,7 @@ fn gen_expr(node: &Node, code: &mut Vec<Ir>) -> i32 {
 				}
 			}
 			let r = new_regno();
-			Ir::add(IrImm, r, 0, code);
+			Ir::emit(IrImm, r, 0, code);
 			return r;
 		}
 		_ => { panic!("gen_expr NodeType error at {:?}", node.op); }
@@ -489,12 +489,12 @@ fn gen_stmt(node: &Node, code: &mut Vec<Ir>) {
 			let lhi = gen_expr(lhs.as_ref(), code);
 			
 			if *RETURN_LABEL.lock().unwrap() > 0 {
-				Ir::add(IrMov, *RETURN_REG.lock().unwrap(), lhi, code);
+				Ir::emit(IrMov, *RETURN_REG.lock().unwrap(), lhi, code);
 				kill(lhi, code);
 				jmp(*RETURN_LABEL.lock().unwrap(), code);
 				return;
 			}
-			Ir::add(IrRet, lhi, 0, code);
+			Ir::emit(IrRet, lhi, 0, code);
 			kill(lhi, code);
 		}
 		NodeType::Expr(lhs) => {
@@ -504,7 +504,7 @@ fn gen_stmt(node: &Node, code: &mut Vec<Ir>) {
 			let lhi = gen_expr(cond, code);
 			let x1 = new_label();
 			let x2 = new_label();
-			Ir::add(IrUnless, lhi, x1, code);
+			Ir::emit(IrUnless, lhi, x1, code);
 			kill(lhi, code);
 			gen_stmt(then, code);
 			jmp(x2, code);
@@ -527,7 +527,7 @@ fn gen_stmt(node: &Node, code: &mut Vec<Ir>) {
 				NodeType::NULL => {}
 				_ => {
 					let r2 = gen_expr(cond, code);
-					Ir::add(IrUnless, r2, *break_label, code);
+					Ir::emit(IrUnless, r2, *break_label, code);
 					kill(r2, code);
 				}
 			}
@@ -543,7 +543,7 @@ fn gen_stmt(node: &Node, code: &mut Vec<Ir>) {
 			gen_stmt(body, code);
 			label(*continue_label, code);
 			let r = gen_expr(cond, code);
-			Ir::add(IrIf, r, x, code);
+			Ir::emit(IrIf, r, x, code);
 			kill(r, code);
 			label(*break_label, code);
 		}
