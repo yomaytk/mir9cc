@@ -107,11 +107,11 @@ lazy_static! {
 		strname: None,
 	};
 	pub static ref ENV: Mutex<Env> = Mutex::new(Env::new_env(None));
-	pub static ref STACKSIZE: Mutex<usize> = Mutex::new(0);
+	pub static ref STACKSIZE: Mutex<i32> = Mutex::new(0);
 	pub static ref GVARS: Mutex<Vec<Var>> = Mutex::new(vec![]);
-	pub static ref LABEL: Mutex<usize> = Mutex::new(0);
-	pub static ref BREAK_VEC: Mutex<Vec<usize>> = Mutex::new(vec![]);
-	pub static ref CONTINUE_VEC: Mutex<Vec<usize>> = Mutex::new(vec![]);
+	pub static ref LABEL: Mutex<i32> = Mutex::new(0);
+	pub static ref BREAK_VEC: Mutex<Vec<i32>> = Mutex::new(vec![]);
+	pub static ref CONTINUE_VEC: Mutex<Vec<i32>> = Mutex::new(vec![]);
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -119,14 +119,14 @@ pub struct Type {
 	pub ty: Ty,
 	pub ptr_to: Option<Box<Type>>,
 	pub ary_to: Option<Box<Type>>,
-	pub size: usize,
-	pub align: usize,
-	pub offset: usize,
-	pub len: usize,
+	pub size: i32,
+	pub align: i32,
+	pub offset: i32,
+	pub len: i32,
 }
 
 impl Type {
-	pub fn new(ty: Ty, ptr_to: Option<Box<Type>>, ary_to: Option<Box<Type>>, size: usize, align: usize, offset: usize, len: usize) -> Self {
+	pub fn new(ty: Ty, ptr_to: Option<Box<Type>>, ary_to: Option<Box<Type>>, size: i32, align: i32, offset: i32, len: i32) -> Self {
 		Self {
 			ty,
 			ptr_to,
@@ -148,7 +148,7 @@ impl Type {
 			len: 0,
 		}
 	}
-	pub fn ary_of(self, len: usize) -> Self {
+	pub fn ary_of(self, len: i32) -> Self {
 		let size = self.size;
 		let align = self.align;
 		Self {
@@ -210,14 +210,14 @@ pub enum NodeType {
 	Assign(Type, Box<Node>, Box<Node>),											// Assign(ctype, lhs, rhs)
 	IfThen(Box<Node>, Box<Node>, Option<Box<Node>>),							// IfThen(cond, then, elthen)
 	Call(Type, String, Vec<Node>),												// Call(ctype, ident, args)
-	Func(Type, String, Vec<Var>, Box<Node>, usize),							// Func(ctype, ident, is_extern, args, body, stacksize)
-	For(Box<Node>, Box<Node>, Box<Node>, Box<Node>, usize, usize),				// For(init, cond, inc, body, break_label, continue_label)
+	Func(Type, String, Vec<Var>, Box<Node>, i32),							// Func(ctype, ident, is_extern, args, body, stacksize)
+	For(Box<Node>, Box<Node>, Box<Node>, Box<Node>, i32, i32),				// For(init, cond, inc, body, break_label, continue_label)
 	VarDef(String, Var, Option<Box<Node>>),										// VarDef(name, var, init)
 	Deref(Type, Box<Node>),														// Deref(ctype, lhs)
 	Addr(Type, Box<Node>),														// Addr(ctype, lhs)
 	Equal(Box<Node>, Box<Node>),												// Equal(lhs, rhs)
 	Ne(Box<Node>, Box<Node>),													// Ne(lhs, rhs)
-	DoWhile(Box<Node>, Box<Node>, usize, usize),								// Dowhile(boyd, cond, break_label, continue_label)
+	DoWhile(Box<Node>, Box<Node>, i32, i32),								// Dowhile(boyd, cond, break_label, continue_label)
 	Dot(Type, Box<Node>, String),												// Dot(ctype, expr, name)
 	Not(Box<Node>),																// Not(expr)
 	Ternary(Type, Box<Node>, Box<Node>, Box<Node>),								// Ternary(ctype, cond, then, els)
@@ -225,8 +225,8 @@ pub enum NodeType {
 	IncDec(Type, i32, Box<Node>),												// IncDec(ctype, selector, expr)
 	Decl(Type, String, Vec<Node>),												// Decl(ctype, ident, args)
 	VarRef(Var),																// VarRef(var),
-	Break(usize),																// Break(jmp_point),
-	Continue(usize),															// Continue(jmp_point),
+	Break(i32),																// Break(jmp_point),
+	Continue(i32),															// Continue(jmp_point),
 	Cast(Type, Box<Node>),														// Cast(ctype, expr),
 	NULL,																		// NULL,
 }
@@ -326,12 +326,12 @@ impl Node {
 			op: NodeType::Call(ctype, ident, args)
 		}
 	}
-	pub fn new_func(ctype: Type, ident: String, args: Vec<Var>, body: Node, stacksize: usize) -> Self {
+	pub fn new_func(ctype: Type, ident: String, args: Vec<Var>, body: Node, stacksize: i32) -> Self {
 		Self {
 			op: NodeType::Func(ctype, ident, args, Box::new(body), stacksize)
 		}
 	}
-	pub fn new_for(init: Node, cond: Node, inc: Node, body: Node, break_label: usize, continue_label: usize) -> Self {
+	pub fn new_for(init: Node, cond: Node, inc: Node, body: Node, break_label: i32, continue_label: i32) -> Self {
 		Self {
 			op: NodeType::For(Box::new(init), Box::new(cond), Box::new(inc), Box::new(body), break_label, continue_label)
 		}
@@ -364,7 +364,7 @@ impl Node {
 			op: NodeType::Ne(Box::new(lhs), Box::new(rhs))
 		}
 	}
-	pub fn new_dowhile(body: Node, cond: Node, break_label: usize, continue_label: usize) -> Self {
+	pub fn new_dowhile(body: Node, cond: Node, break_label: i32, continue_label: i32) -> Self {
 		Self {
 			op: NodeType::DoWhile(Box::new(body), Box::new(cond), break_label, continue_label)
 		}
@@ -409,12 +409,12 @@ impl Node {
 			op: NodeType::VarRef(var)
 		}
 	}
-	pub fn new_break(break_label: usize) -> Self {
+	pub fn new_break(break_label: i32) -> Self {
 		Self {
 			op: NodeType::Break(break_label)
 		}
 	}
-	pub fn new_continue(continue_label: usize) -> Self {
+	pub fn new_continue(continue_label: i32) -> Self {
 		Self {
 			op: NodeType::Continue(continue_label)
 		}
@@ -434,14 +434,14 @@ impl Node {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Var {
 	pub ctype: Type,
-	pub offset: usize,
+	pub offset: i32,
 	pub is_local: bool,
 	pub labelname: Option<String>,
 	pub strname: Option<String>,
 }
 
 impl Var {
-	pub fn new(ctype: Type, offset: usize, is_local: bool, labelname: Option<String>, strname: Option<String>) -> Self {
+	pub fn new(ctype: Type, offset: i32, is_local: bool, labelname: Option<String>, strname: Option<String>) -> Self {
 		Self {
 			ctype,
 			offset,
@@ -480,7 +480,7 @@ impl Env {
 		let env = std::mem::replace(&mut *ENV.lock().unwrap(), Env::new_env(None));
 		*ENV.lock().unwrap() = *env.next.unwrap();
 	}
-	fn add_var(ident: String, mut var: Var) -> usize {
+	fn add_var(ident: String, mut var: Var) -> i32 {
 		let mut offset = 1000000;
 		if var.is_local {
 			let stacksize = *STACKSIZE.lock().unwrap();
@@ -500,7 +500,7 @@ impl Env {
 	}
 }
 
-pub fn roundup(x: usize, align: usize) -> usize {
+pub fn roundup(x: i32, align: i32) -> i32 {
 	return (x + align - 1) & !(align - 1);
 }
 
@@ -606,7 +606,7 @@ fn string_literal(tokenset: &mut TokenSet) -> Node {
 	// A string literal is converted to a reference to an anonymous
 	// global variable of type char array.
 	let strname = tokenset.getstring();
-	let ctype = CHAR_TY.clone().ary_of(strname.len() + 1);
+	let ctype = CHAR_TY.clone().ary_of(strname.len() as i32 + 1);
 	tokenset.pos += 1;
 	let labelname = format!(".L.str{}", new_label());
 	let var = Var::new(ctype, 0, false, Some(labelname), Some(strname));
@@ -642,7 +642,7 @@ fn function_call(tokenset: &mut TokenSet) -> Node {
 	return Node::new_call(var.ctype, name, args);
 }
 
-fn loop_inc() -> (usize, usize) {
+fn loop_inc() -> (i32, i32) {
 	*LABEL.lock().unwrap() += 2;
 	let x = *LABEL.lock().unwrap()-1;
 	let y = x+1;
@@ -651,7 +651,7 @@ fn loop_inc() -> (usize, usize) {
 	return (x, y);
 }
 
-fn get_break_label() -> usize {
+fn get_break_label() -> i32 {
 	if let Some(break_label) = BREAK_VEC.lock().unwrap().last() {
 		return *break_label;
 	} else {
@@ -660,7 +660,7 @@ fn get_break_label() -> usize {
 	}
 }
 
-fn get_continue_label() -> usize {
+fn get_continue_label() -> i32 {
 	if let Some(continue_label) = CONTINUE_VEC.lock().unwrap().last() {
 		return *continue_label;
 	} else {
@@ -680,7 +680,7 @@ fn loop_dec() {
 	}
 }
 
-pub fn new_label() -> usize {
+pub fn new_label() -> i32 {
 	*LABEL.lock().unwrap() += 1;
 	return *LABEL.lock().unwrap();
 }
@@ -771,16 +771,16 @@ fn unary(tokenset: &mut TokenSet) -> Node {
 		return Node::new_addr(INT_TY.clone(), unary(tokenset));
 	}
 	if tokenset.consume_ty(TokenSizeof) {
-		return Node::new_num(get_type(&unary(tokenset)).size as i32);
+		return Node::new_num(get_type(&unary(tokenset)).size);
 	}
 	if tokenset.consume_ty(TokenAlignof) {
-		return Node::new_num(get_type(&unary(tokenset)).align as i32);
+		return Node::new_num(get_type(&unary(tokenset)).align);
 	}
 	if tokenset.consume_ty(TokenNot) {
 		return Node::new_not(unary(tokenset));
 	}
 	if tokenset.consume_ty(TokenTilde) {
-		return Node::new_bit(NULL_TY.clone(), TokenTilde, unary(tokenset), Node::new_num(1));
+		return Node::new_bit(NULL_TY.clone(), TokenXor, unary(tokenset), Node::new_num(-1));
 	}
 	return postfix(tokenset);
 }
@@ -966,7 +966,7 @@ fn read_array(tokenset: &mut TokenSet, ty: Type) -> Type {
 		}
 		let len = expr(tokenset);
 		if let NodeType::Num(val) = &len.op {
-			ary_size.push(*val as usize);
+			ary_size.push(*val);
 			tokenset.assert_ty(TokenLeftmiddleBrace);
 			continue;
 		}

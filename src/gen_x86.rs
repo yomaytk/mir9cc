@@ -38,7 +38,7 @@ lazy_static! {
 	]);
 }
 
-fn escape(strname: String, len: usize) -> String {
+fn escape(strname: String, len: i32) -> String {
 	let mut p = strname.chars();
 	let mut name = String::new();
 
@@ -61,18 +61,20 @@ fn escape(strname: String, len: usize) -> String {
 }
 
 fn emit_cmp(ir: &Ir, insn: String) {
-	emit!("cmp {}, {}", REG64[ir.lhs], REG64[ir.rhs]);
-	emit!("{} {}", insn, REG8[ir.lhs]);
-	emit!("movzb {}, {}", REG64[ir.lhs], REG8[ir.lhs]);
+	let lhs = ir.lhs as usize;
+	let rhs = ir.rhs as usize;
+	emit!("cmp {}, {}", REG64[lhs], REG64[rhs]);
+	emit!("{} {}", insn, REG8[lhs]);
+	emit!("movzb {}, {}", REG64[lhs], REG8[lhs]);
 }
 
-fn reg(size: usize, r: usize) -> &'static str {
+fn reg(size: i32, r: usize) -> &'static str {
 	if size == 1 { return REG8[r]; }
 	else if size == 4 { return REG32[r]; }
 	else { return REG64[r]; }
 }
 
-fn argreg(size: usize, r: usize) -> &'static str {
+fn argreg(size: i32, r: usize) -> &'static str {
 	if size == 1 { return ARGREG8[r]; }
 	else if size == 4 { return ARGREG32[r]; }
 	else { return ARGREG64[r]; }
@@ -95,8 +97,8 @@ pub fn gen(fun: &Function, label: usize) {
 	let ret = format!(".Lend{}", label);
 
 	for ir in &fun.irs {
-		let lhs = ir.lhs;
-		let rhs = ir.rhs;
+		let lhs = ir.lhs as usize;
+		let rhs = ir.rhs as usize;
 		match &ir.op {
 			IrImm => {
 				emit!("mov {}, {}", REG64[lhs], rhs);
@@ -104,37 +106,19 @@ pub fn gen(fun: &Function, label: usize) {
 			IrMov => {
 				emit!("mov {}, {}", REG64[lhs], REG64[rhs]);
 			}
-			IrAdd(is_imm) => {
-				if *is_imm {
-					emit!("add {}, {}", REG64[lhs], rhs);
-				} else {
-					emit!("add {}, {}", REG64[lhs], REG64[rhs]);
-				}
+			IrAdd => {
+				emit!("add {}, {}", REG64[lhs], REG64[rhs]);
 			}
-			IrSub(is_imm) => {
-				if *is_imm {
-					emit!("sub {}, {}", REG64[lhs], rhs);
-				} else {
-					emit!("sub {}, {}", REG64[lhs], REG64[rhs]);
-				}
+			IrSub => {
+				emit!("sub {}, {}", REG64[lhs], REG64[rhs]);
 			}
 			IrBpRel => {
 				emit!("lea {}, [rbp-{}]", REG64[lhs], rhs);
 			}
-			IrMul(is_imm) => {
-				if !*is_imm {
-					emit!("mov rax, {}", REG64[rhs]);
-					emit!("imul {}", REG64[lhs]);
-					emit!("mov {}, rax", REG64[lhs]);
-				} else {
-					if rhs < 256 && rhs.count_ones() == 1 {
-						emit!("shl {}, {}", REG64[lhs], rhs.trailing_zeros());
-						continue;
-					}
-					emit!("mov rax, {}", rhs);
-					emit!("imul {}", REG64[lhs]);
-					emit!("mov {}, rax", REG64[lhs]);
-				}
+			IrMul => {
+				emit!("mov rax, {}", REG64[rhs]);
+				emit!("imul {}", REG64[lhs]);
+				emit!("mov {}, rax", REG64[lhs]);
 			}
 			IrDiv => {
 				emit!("mov rax, {}", REG64[lhs]);
@@ -168,7 +152,7 @@ pub fn gen(fun: &Function, label: usize) {
 			IrCall { name, len , args } => {
 
 				for i in 0..*len {
-					emit!("mov {}, {}", ARGREG64[i], REG64[args[i]]);
+					emit!("mov {}, {}", ARGREG64[i], REG64[args[i] as usize]);
 				}
 				
 				emit!("push r10");
@@ -205,12 +189,8 @@ pub fn gen(fun: &Function, label: usize) {
 			IrOr => {
 				emit!("or {}, {}", REG64[lhs], REG64[rhs]);
 			}
-			IrXor(is_imm, posneg) => {
-				if *is_imm {
-					emit!("xor {}, {}", REG64[lhs], rhs as i32 * *posneg);
-				} else {
-					emit!("xor {}, {}", REG64[lhs], REG64[rhs]);
-				}
+			IrXor => {
+				emit!("xor {}, {}", REG64[lhs], REG64[rhs]);
 			}
 			IrAnd => {
 				emit!("and {}, {}", REG64[lhs], REG64[rhs]);

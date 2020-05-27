@@ -16,9 +16,9 @@ macro_rules! hash {
 
 lazy_static! {
     pub static ref IRINFO: Mutex<HashMap<IrOp, IrInfo>> = Mutex::new(hash![
-		(IrOp::IrAdd(true), IrInfo::new("ADD", IrType::Binary)),
-		(IrOp::IrSub(true), IrInfo::new("SUB", IrType::Binary)),
-		(IrOp::IrMul(true), IrInfo::new("MUL", IrType::Binary)),
+		(IrOp::IrAdd, IrInfo::new("ADD", IrType::RegReg)),
+		(IrOp::IrSub, IrInfo::new("SUB", IrType::RegReg)),
+		(IrOp::IrMul, IrInfo::new("MUL", IrType::RegReg)),
 		(IrOp::IrDiv, IrInfo::new("DIV", IrType::RegReg)),
 		(IrOp::IrLt, IrInfo::new("LT", IrType::RegReg)),
 		(IrOp::IrLe, IrInfo::new("LE", IrType::RegReg)),
@@ -38,7 +38,7 @@ lazy_static! {
 		(IrOp::IrNe, IrInfo::new("Ne", IrType::RegReg)),
 		(IrOp::IrIf, IrInfo::new("IF", IrType::Reg)),
 		(IrOp::IrOr, IrInfo::new("OR", IrType::RegReg)),
-		(IrOp::IrXor(true, 0), IrInfo::new("XOR", IrType::Binary)),
+		(IrOp::IrXor, IrInfo::new("XOR", IrType::RegReg)),
 		(IrOp::IrAnd, IrInfo::new("AND", IrType::RegReg)),
 		(IrOp::IrShl, IrInfo::new("SHL", IrType::RegReg)),
 		(IrOp::IrShr, IrInfo::new("SHR", IrType::RegReg)),

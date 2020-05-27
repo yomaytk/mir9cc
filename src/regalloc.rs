@@ -14,17 +14,17 @@ use super::mir::*;
 // registers are exhausted and need to be spilled to memory.
 
 static REG_SIZE: usize = 7;
-static REGMAP_SZ: usize = 8192;
+static REGMAP_SZ: i32 = 8192;
 
 // allocate the register can be used
-fn alloc(reg_map: &mut [i32], used: &mut [bool], ir_reg: usize) -> usize {
+fn alloc(reg_map: &mut [i32], used: &mut [bool], ir_reg: i32) -> i32 {
 	
 	if REGMAP_SZ < ir_reg {
 		panic!("program too big.");
 	}
-	if reg_map[ir_reg] != -1 {
-		if !used[reg_map[ir_reg] as usize] { panic!("the register allocated is not used. at reg_map[{}]", ir_reg); }
-		return reg_map[ir_reg] as usize;
+	if reg_map[ir_reg as usize] != -1 {
+		if !used[reg_map[ir_reg as usize] as usize] { panic!("the register allocated is not used. at reg_map[{}]", ir_reg); }
+		return reg_map[ir_reg as usize];
 	}
 
 	let mut i: usize = 0;
@@ -33,9 +33,9 @@ fn alloc(reg_map: &mut [i32], used: &mut [bool], ir_reg: usize) -> usize {
 			i += 1;
 			continue;
 		}
-		reg_map[ir_reg] = i as i32;
+		reg_map[ir_reg as usize] = i as i32;
 		used[i] = true;
-		return i;
+		return i as i32;
 	}
 	panic!("register exhausted.");
 }
@@ -45,19 +45,6 @@ pub fn visit(reg_map: &mut Vec<i32>, used: &mut Vec<bool>, irs: &mut Vec<Ir>) {
 	for ir in irs {
 		let info = ir.get_irinfo();
 		match info.ty {
-			Binary => {
-				match ir.op {
-					IrAdd(is_imm) | IrSub(is_imm) | IrMul(is_imm) | IrXor(is_imm, _)=> {
-						if is_imm {
-							ir.lhs = alloc(reg_map, used, ir.lhs);
-						} else {
-							ir.lhs = alloc(reg_map, used, ir.lhs);
-							ir.rhs = alloc(reg_map, used, ir.rhs);
-						}
-					}
-					_ => { panic!("binary visit error."); }
-				}
-			}
 			Reg | RegImm | RegLabel | LabelAddr => {
 				ir.lhs = alloc(reg_map, used, ir.lhs);
 			},
@@ -80,8 +67,8 @@ pub fn visit(reg_map: &mut Vec<i32>, used: &mut Vec<bool>, irs: &mut Vec<Ir>) {
 			Label | NoArg | Imm | ImmImm => {}
 		}
 		if ir.op == IrKill {
-			assert!(used[ir.lhs]);
-			used[ir.lhs] = false;
+			assert!(used[ir.lhs as usize]);
+			used[ir.lhs as usize] = false;
 			ir.op = IrNop;
 		}
 	}

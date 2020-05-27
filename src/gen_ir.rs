@@ -21,9 +21,9 @@ use std::fmt;
 // in a later pass.
 
 lazy_static! {
-	pub static ref REGNO: Mutex<usize> = Mutex::new(1);
-	pub static ref RETURN_LABEL: Mutex<usize> = Mutex::new(0);
-	pub static ref RETURN_REG: Mutex<usize> = Mutex::new(0);
+	pub static ref REGNO: Mutex<i32> = Mutex::new(1);
+	pub static ref RETURN_LABEL: Mutex<i32> = Mutex::new(0);
+	pub static ref RETURN_REG: Mutex<i32> = Mutex::new(0);
 }
 
 #[allow(dead_code)]
@@ -31,27 +31,27 @@ lazy_static! {
 pub enum IrOp {
 	IrImm,
 	IrMov,
-	IrAdd(bool),
+	IrAdd,
 	IrBpRel,
-	IrSub(bool),
-	IrMul(bool),
+	IrSub,
+	IrMul,
 	IrDiv,
 	IrRet,
 	IrExpr,
-	IrStore(usize),
-	IrLoad(usize),
+	IrStore(i32),
+	IrLoad(i32),
 	IrLabel,
 	IrUnless,
 	IrJmp,
-	IrCall { name: String, len: usize, args: Vec<usize> },
-	IrStoreArg(usize),
+	IrCall { name: String, len: usize, args: Vec<i32> },
+	IrStoreArg(i32),
 	IrLt,
 	IrEqual, 
 	IrNe,
 	IrIf,
 	IrLabelAddr(String),
 	IrOr,
-	IrXor(bool, i32),
+	IrXor,
 	IrAnd,
 	IrLe,
 	IrShl,
@@ -65,12 +65,12 @@ pub enum IrOp {
 #[derive(Debug)]
 pub struct Ir {
 	pub op: IrOp,
-	pub lhs: usize,
-	pub rhs: usize,
+	pub lhs: i32,
+	pub rhs: i32,
 }
 
 impl Ir {
-	pub fn new(ty: IrOp, lhs: usize, rhs: usize) -> Self {
+	pub fn new(ty: IrOp, lhs: i32, rhs: i32) -> Self {
 		Self {
 			op: ty,
 			lhs: lhs,
@@ -79,9 +79,9 @@ impl Ir {
 	}
 	fn bittype(ty: &TokenType) -> IrOp {
 		match ty {
-			TokenAdd => { IrAdd(false) },
-			TokenSub => { IrSub(false) },
-			TokenStar => { IrMul(false) },
+			TokenAdd => { IrAdd },
+			TokenSub => { IrSub },
+			TokenStar => { IrMul },
 			TokenDiv => { IrDiv },
 			TokenLt => { IrLt },
 			TokenLe => { IrLe },
@@ -90,7 +90,7 @@ impl Ir {
 			TokenMod => { IrMod },
 			TokenAmpersand => { IrAnd },
 			TokenOr => { IrOr },
-			TokenXor => { IrXor(false, 1) },
+			TokenXor => { IrXor },
 			TokenEof => { panic!("tokeneof!!!"); }
 			_ => { panic!("bittype error."); }
 		}
@@ -114,18 +114,6 @@ impl Ir {
 			}
 			IrStoreArg(_) => {
 				return IRINFO.lock().unwrap().get(&IrOp::IrStoreArg(0)).unwrap().clone();
-			}
-			IrAdd(_) => {
-				return IRINFO.lock().unwrap().get(&IrOp::IrAdd(true)).unwrap().clone();
-			}
-			IrSub(_) => {
-				return IRINFO.lock().unwrap().get(&IrOp::IrSub(true)).unwrap().clone();
-			}
-			IrMul(_) => {
-				return IRINFO.lock().unwrap().get(&IrOp::IrMul(true)).unwrap().clone();
-			}
-			IrXor(_, _) => {
-				return IRINFO.lock().unwrap().get(&IrOp::IrXor(true, 0)).unwrap().clone();
 			}
 			_ => {
 				return IRINFO.lock().unwrap().get(&self.op).unwrap().clone();
@@ -164,18 +152,9 @@ impl Ir {
 					_ => { panic!("tostr Mem error."); }
 				} 
 			}
-			Binary => {
-				match self.op {
-					IrAdd(is_imm) | IrSub(is_imm) | IrMul(is_imm) => {
-						if is_imm { format!("{} r{}, {}", irinfo.name, self.lhs, self.rhs) }
-						else { format!("{} r{}, r{}", irinfo.name, self.lhs, self.rhs) }
-					}
-					_ => { panic!("tostr IrBinary error."); }
-				}
-			}
 		}
 	}
-	fn add(op: IrOp, lhs: usize, rhs: usize, code: &mut Vec<Ir>) {
+	fn add(op: IrOp, lhs: i32, rhs: i32, code: &mut Vec<Ir>) {
 		code.push(Ir::new(op, lhs, rhs));
 	} 
 }
@@ -193,7 +172,6 @@ pub enum IrType {
 	ImmImm,
 	LabelAddr,
 	Mem,
-	Binary,
 }
 
 impl fmt::Display for IrType {
@@ -210,7 +188,6 @@ impl fmt::Display for IrType {
 			ImmImm => { write!(f, "ImmImm") },
 			LabelAddr => { write!(f, "LabelAddr") },
 			Mem => { write!(f, "Mem") },
-			Binary => { write!(f, "Binary") },
 		}
 	}
 }
@@ -218,11 +195,11 @@ impl fmt::Display for IrType {
 pub struct Function {
 	pub name: String,
 	pub irs: Vec<Ir>,
-	pub stacksize: usize,
+	pub stacksize: i32,
 }
 
 impl Function {
-	fn new(name: String, irs: Vec<Ir>, stacksize: usize) -> Self {
+	fn new(name: String, irs: Vec<Ir>, stacksize: i32) -> Self {
 		Self {
 			name,
 			irs,
@@ -231,31 +208,31 @@ impl Function {
 	}
 }
 
-fn kill(r: usize, code: &mut Vec<Ir>) {
+fn kill(r: i32, code: &mut Vec<Ir>) {
 	Ir::add(IrKill, r, 0, code);
 }
 
-fn label(r: usize, code: &mut Vec<Ir>) {
+fn label(r: i32, code: &mut Vec<Ir>) {
 	Ir::add(IrLabel, r, 0, code);
 }
 
-fn jmp(x: usize, code: &mut Vec<Ir>) {
+fn jmp(x: i32, code: &mut Vec<Ir>) {
 	Ir::add(IrJmp, x, 0, code);
 }
 
-fn load(ctype: &Type, dst: usize, src: usize, code: &mut Vec<Ir>) {
+fn load(ctype: &Type, dst: i32, src: i32, code: &mut Vec<Ir>) {
 	Ir::add(IrOp::IrLoad(ctype.size), dst, src, code);
 }
 
-fn store(ctype: &Type, dst: usize, src: usize, code: &mut Vec<Ir>) {
+fn store(ctype: &Type, dst: i32, src: i32, code: &mut Vec<Ir>) {
 	Ir::add(IrOp::IrStore(ctype.size), dst, src, code);
 }
 
-fn store_arg(ctype: &Type, offset: usize, id: usize, code: &mut Vec<Ir>) {
+fn store_arg(ctype: &Type, offset: i32, id: i32, code: &mut Vec<Ir>) {
 	Ir::add(IrOp::IrStoreArg(ctype.size), offset, id, code);
 }
 
-fn gen_binop(irop: IrOp, lhs: &Node, rhs: &Node, code: &mut Vec<Ir>) -> usize {
+fn gen_binop(irop: IrOp, lhs: &Node, rhs: &Node, code: &mut Vec<Ir>) -> i32 {
 	let r1 = gen_expr(lhs, code);
 	let r2 = gen_expr(rhs, code);
 	Ir::add(irop, r1, r2, code);
@@ -263,30 +240,37 @@ fn gen_binop(irop: IrOp, lhs: &Node, rhs: &Node, code: &mut Vec<Ir>) -> usize {
 	return r1;
 }
 
-fn gen_inc_scale(ctype: &Type) -> usize {
+fn gen_inc_scale(ctype: &Type) -> i32 {
 	match ctype.ty {
 		Ty::PTR => { return ctype.ptr_to.as_ref().unwrap().size; }
 		_ => { return 1; }
 	}
 }
 
-fn gen_pre_inc(ctype: &Type, lhs: &Node, code: &mut Vec<Ir>, num: i32) -> usize {
+fn gen_imm(op: IrOp, r1: i32, num: i32, code: &mut Vec<Ir>) {
+	let r2 = new_regno();
+	Ir::add(IrImm, r2, num, code);
+	Ir::add(op, r1, r2, code);
+	kill(r2, code);
+}
+
+fn gen_pre_inc(ctype: &Type, lhs: &Node, code: &mut Vec<Ir>, num: i32) -> i32 {
 	let r1 = gen_lval(lhs, code);
 	let r2 = new_regno();
 	load(ctype, r2, r1, code);
-	Ir::add(IrAdd(true), r2, num as usize * gen_inc_scale(ctype), code);
+	gen_imm(IrAdd, r2, num * gen_inc_scale(ctype), code);
 	store(ctype, r1, r2, code);
 	kill(r1, code);
 	return r2;
 }
 
-fn gen_post_inc(ctype: &Type, lhs: &Node, code: &mut Vec<Ir>, num: i32) -> usize {
+fn gen_post_inc(ctype: &Type, lhs: &Node, code: &mut Vec<Ir>, num: i32) -> i32 {
 	let r = gen_pre_inc(ctype, lhs, code, num);
-	Ir::add(IrSub(true), r, num as usize * gen_inc_scale(ctype), code);
+	gen_imm(IrSub, r, num * gen_inc_scale(ctype), code);
 	return r;
 }
 
-fn new_regno() -> usize {
+fn new_regno() -> i32 {
 	*REGNO.lock().unwrap() += 1;
 	return *REGNO.lock().unwrap();
 }
@@ -309,7 +293,7 @@ fn new_regno() -> usize {
 //
 // This function evaluates a given node as an lvalue.
 
-fn gen_lval(node: &Node, code: &mut Vec<Ir>) -> usize {
+fn gen_lval(node: &Node, code: &mut Vec<Ir>) -> i32 {
 	
 	match &node.op {
 		NodeType::Deref(_, expr) => {
@@ -326,7 +310,7 @@ fn gen_lval(node: &Node, code: &mut Vec<Ir>) -> usize {
 		}
 		NodeType::Dot(ctype, expr, _) => {
 			let r1 = gen_lval(expr, code);
-			Ir::add(IrAdd(true), r1, ctype.offset, code);
+			gen_imm(IrAdd, r1, ctype.offset, code);
 			return r1;
 		}
 		_ => { panic!("not an lvalue")}
@@ -334,12 +318,12 @@ fn gen_lval(node: &Node, code: &mut Vec<Ir>) -> usize {
 }
 
 // allocate of index for register to NodeNum
-fn gen_expr(node: &Node, code: &mut Vec<Ir>) -> usize {
+fn gen_expr(node: &Node, code: &mut Vec<Ir>) -> i32 {
 
 	match &node.op {
 		NodeType::Num(val) => {
 			let r = new_regno();
-			let ir = Ir::new(IrImm, r, *val as usize);
+			let ir = Ir::new(IrImm, r, *val);
 			code.push(ir);
 			return r;
 		},
@@ -372,11 +356,6 @@ fn gen_expr(node: &Node, code: &mut Vec<Ir>) -> usize {
 					Ir::add(IrImm, r1, 1, code);
 					label(y, code);
 					return r1;
-				}
-				TokenTilde => {
-					let lhi = gen_expr(lhs, code);
-					Ir::add(IrXor(true, -1), lhi, 1, code);
-					return lhi;
 				}
 				_ => {
 					return gen_binop(Ir::bittype(ty), lhs, rhs, code);
@@ -589,7 +568,7 @@ pub fn gen_ir(program: &mut Program) {
 		match &funode.op {
 			NodeType::Func(_, name, args, body, stacksize) => {
 				for i in 0..args.len() {
-					store_arg(&args[i].ctype, args[i].offset, i, &mut code);
+					store_arg(&args[i].ctype, args[i].offset, i as i32, &mut code);
 				}
 				gen_stmt(body, &mut code);
 				let func = Function::new(name.clone(), code, *stacksize);
