@@ -16,11 +16,17 @@ use super::mir::*;
 static REG_SIZE: usize = 7;
 static REGMAP_SZ: i32 = 8192;
 
+fn kill(used: &mut Vec<bool>, r: usize) {
+	assert!(used[r]);
+	used[r] = false;
+}
+
 // allocate the register can be used
 fn alloc(reg_map: &mut [i32], used: &mut [bool], ir_reg: i32) -> i32 {
 	
 	if REGMAP_SZ < ir_reg {
-		panic!("program too big.");
+		eprintln!("program too big.");
+		std::process::exit(0);
 	}
 	if reg_map[ir_reg as usize] != -1 {
 		if !used[reg_map[ir_reg as usize] as usize] { panic!("the register allocated is not used. at reg_map[{}]", ir_reg); }
@@ -66,10 +72,9 @@ pub fn visit(reg_map: &mut Vec<i32>, used: &mut Vec<bool>, irs: &mut Vec<Ir>) {
 			}
 			Label | NoArg | Imm | ImmImm => {}
 		}
-		if ir.op == IrKill {
-			assert!(used[ir.lhs as usize]);
-			used[ir.lhs as usize] = false;
-			ir.op = IrNop;
+		for r in &ir.kills {
+			let lhs = alloc(reg_map, used, *r);
+			kill(used, lhs as usize);
 		}
 	}
 }

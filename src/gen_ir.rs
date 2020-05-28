@@ -67,6 +67,7 @@ pub struct Ir {
 	pub op: IrOp,
 	pub lhs: i32,
 	pub rhs: i32,
+	pub kills: Vec<i32>		// For liveness tracking
 }
 
 impl Ir {
@@ -75,6 +76,7 @@ impl Ir {
 			op: ty,
 			lhs: lhs,
 			rhs: rhs,
+			kills: vec![],
 		}
 	}
 	fn bittype(ty: &TokenType) -> IrOp {
@@ -209,7 +211,11 @@ impl Function {
 }
 
 fn kill(r: i32, code: &mut Vec<Ir>) {
-	Ir::emit(IrKill, r, 0, code);
+	if let Some(_) = code.last() {
+		code.last_mut().unwrap().kills.push(r);
+	} else {
+		panic!("kill fun error.");
+	}
 }
 
 fn label(r: i32, code: &mut Vec<Ir>) {
