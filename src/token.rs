@@ -580,19 +580,36 @@ fn strip_newline_tokens(tokens: Vec<Token>) -> Vec<Token> {
 	return v;
 }
 
-pub fn stringize(tokens: Vec<Token>) -> Token {
+// Returns true if Token t followed a space or a comment
+// in an original source file.
+fn need_space(token: &Token) -> bool {
+	let start = token.pos as i32 - 1;
+	let program_id = token.program_id;
+	if start >= 0 && &PROGRAMS.lock().unwrap()[program_id][start as usize..start as usize + 1] == " " {
+		return true;
+	} else {
+		return false;
+	}
+}
+
+pub fn stringize(tokens: &Vec<Token>) -> Token {
 	let mut sb = String::new();
 	let start = tokens[0].pos;
 	let program_id = tokens[0].program_id;
 	let line = tokens[0].line;
 	let mut end = start;
-	for token in tokens {
+	for i in 0..tokens.len() {
+		let token = &tokens[i];
+		if token.ty == TokenNewLine {
+			continue;
+		}
+		if i > 0 && need_space(token) {
+			sb.push(' ');
+			end += 1;
+		}
 		sb.push_str(&String::from(&PROGRAMS.lock().unwrap()[program_id][token.pos..token.end]));
-		sb.push(' ');
-		end += token.end-token.pos+1;
+		end += token.end-token.pos;
 	}
-	sb.pop();
-	end -= 1;
 	return Token::new(TokenString(sb), 0, program_id, start, end, line);
 }
 

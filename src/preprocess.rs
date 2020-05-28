@@ -180,7 +180,7 @@ impl Env {
 				self.output.append(&mut args[token.val as usize].clone());
 				continue;
 			} else if token.ty == TokenParam(true) {
-				self.emit(stringize(args[token.val as usize].clone()));
+				self.emit(stringize(&args[token.val as usize]));
 				continue;
 			}
 			
