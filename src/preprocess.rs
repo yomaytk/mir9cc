@@ -37,6 +37,9 @@ impl Env {
 	fn eof(&self) -> bool {
 		return self.pos == self.input.len();
 	}
+	fn emit(&mut self, token: Token) {
+		self.output.push(token);
+	}
 	fn read_until_eol(&mut self) -> Vec<Token> {
 		let mut v = vec![];
 		while !self.eof() {
@@ -152,7 +155,7 @@ impl Env {
 			if self.add_special_macro(&token, num, program_id) {
 				continue;
 			}
-			self.output.push(token);
+			self.emit(token);
 		}
 		return;
 	}
@@ -177,11 +180,11 @@ impl Env {
 				self.output.append(&mut args[token.val as usize].clone());
 				continue;
 			} else if token.ty == TokenParam(true) {
-				self.output.push(stringize(args[token.val as usize].clone()));
+				self.emit(stringize(args[token.val as usize].clone()));
 				continue;
 			}
 			
-			self.output.push(token);
+			self.emit(token);
 		}
 	}
 	fn apply(&mut self, m: Macro, name: String) {
@@ -197,7 +200,7 @@ impl Env {
 	}
 	fn add_special_macro(&mut self, token: &Token, line: usize, program_id: usize) -> bool {
 		if is_ident(token, "__LINE__") {
-			self.output.push(Macro::new_num(line as i32, program_id, token.pos, token.end));
+			self.emit(Macro::new_num(line as i32, program_id, token.pos, token.end));
 			return true;
 		}
 		return false;
@@ -304,22 +307,6 @@ impl Macro {
 	fn default_judge(&self) -> bool {
 		return self.body.is_empty();
 	}
-}
-
-fn stringize(tokens: Vec<Token>) -> Token {
-	let mut sb = String::new();
-	let start = tokens[0].pos;
-	let program_id = tokens[0].program_id;
-	let line = tokens[0].line;
-	let mut end = start;
-	for token in tokens {
-		sb.push_str(&String::from(&PROGRAMS.lock().unwrap()[program_id][token.pos..token.end]));
-		sb.push(' ');
-		end += token.end-token.pos+1;
-	}
-	sb.pop();
-	end -= 1;
-	return Token::new(TokenString(sb), 0, program_id, start, end, line);
 }
 
 fn is_ident(token: &Token, s: &str) -> bool {
