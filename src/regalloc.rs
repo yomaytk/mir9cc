@@ -47,35 +47,33 @@ fn alloc(reg_map: &mut [i32], used: &mut [bool], ir_reg: i32) -> i32 {
 }
 
 // do allocating register to reg_map 
-pub fn visit(reg_map: &mut Vec<i32>, used: &mut Vec<bool>, irs: &mut Vec<Ir>) {
-	for ir in irs {
-		let info = ir.get_irinfo();
-		match info.ty {
-			Reg | RegImm | RegLabel | LabelAddr => {
-				ir.lhs = alloc(reg_map, used, ir.lhs);
-			},
-			RegReg | Mem => {
-				ir.lhs = alloc(reg_map, used, ir.lhs);
-				ir.rhs = alloc(reg_map, used, ir.rhs);
-			},
-			Call => {
-				match &mut ir.op {
-					IrCall { name, len, args } => {
-						let _name = name;
-						ir.lhs = alloc(reg_map, used, ir.lhs);
-						for i in 0..*len {
-							args[i] = alloc(reg_map, used, args[i]);
-						}
-					},
-					_ => { panic!("alloc_regs call error"); }
-				}
+pub fn visit(reg_map: &mut Vec<i32>, used: &mut Vec<bool>, ir: &mut Ir) {
+	let info = ir.get_irinfo();
+	match info.ty {
+		Reg | RegImm | RegLabel | LabelAddr => {
+			ir.lhs = alloc(reg_map, used, ir.lhs);
+		},
+		RegReg | Mem => {
+			ir.lhs = alloc(reg_map, used, ir.lhs);
+			ir.rhs = alloc(reg_map, used, ir.rhs);
+		},
+		Call => {
+			match &mut ir.op {
+				IrCall { name, len, args } => {
+					let _name = name;
+					ir.lhs = alloc(reg_map, used, ir.lhs);
+					for i in 0..*len {
+						args[i] = alloc(reg_map, used, args[i]);
+					}
+				},
+				_ => { panic!("alloc_regs call error"); }
 			}
-			Label | NoArg | Imm | ImmImm => {}
 		}
-		for r in &ir.kills {
-			let lhs = alloc(reg_map, used, *r);
-			kill(used, lhs as usize);
-		}
+		Label | NoArg | Imm | ImmImm => {}
+	}
+	for r in &ir.kills {
+		let lhs = alloc(reg_map, used, *r);
+		kill(used, lhs as usize);
 	}
 }
 
@@ -84,6 +82,8 @@ pub fn alloc_regs(program: &mut Program) {
 	for fun in &mut program.funs {
 		let mut reg_map: Vec<i32> = vec![-1; 8192];
 		let mut used: Vec<bool> = vec![false; 8];
-		visit(&mut reg_map, &mut used, &mut fun.irs);
+		for ir in &mut fun.irs {
+			visit(&mut reg_map, &mut used, ir);
+		}
 	}
 }
