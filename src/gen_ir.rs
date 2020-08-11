@@ -196,15 +196,15 @@ impl fmt::Display for IrType {
 
 pub struct Function {
 	pub name: String,
-	pub irs: Vec<Ir>,
+	pub bbs: Vec<BB>,
 	pub stacksize: i32,
 }
 
 impl Function {
-	fn new(name: String, irs: Vec<Ir>, stacksize: i32) -> Self {
+	pub fn new(name: String, bbs: Vec<BB>, stacksize: i32) -> Self {
 		Self {
 			name,
-			irs,
+			bbs,
 			stacksize,
 		}
 	}
@@ -582,18 +582,19 @@ fn gen_stmt(node: &Node, code: &mut Vec<Ir>) {
 // generate IR Vector
 pub fn gen_ir(program: &mut Program) {
 	
+	*REGNO.lock().unwrap() = 1;
+
 	for funode in &mut program.nodes {
 		
-		let mut code = vec![];
-		*REGNO.lock().unwrap() = 1;
+		let mut bbs = vec![];
 		
 		match &funode.op {
 			NodeType::Func(_, name, args, body, stacksize) => {
 				for i in 0..args.len() {
-					store_arg(&args[i].ctype, args[i].offset, i as i32, &mut code);
+					store_arg(&args[i].ctype, args[i].offset, i as i32, &mut bbs);
 				}
-				gen_stmt(body, &mut code);
-				let func = Function::new(name.clone(), code, *stacksize);
+				gen_stmt(body, &mut bbs);
+				let func = Function::new(name.clone(), bbs, *stacksize);
 				program.funs.push(func);
 			}
 			_ => { panic!(" should be func node at gen_ir: {:?}", funode); }

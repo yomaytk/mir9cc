@@ -16,3 +16,17 @@ impl Program {
 		}
 	}
 }
+
+pub struct BB {
+	pub label: i32,
+	pub irs: Vec<Ir>,
+}
+
+impl BB {
+	pub fn new() -> Self {
+		Self {
+			label: new_label(),
+			irs: vec![],
+		}
+	}
+}

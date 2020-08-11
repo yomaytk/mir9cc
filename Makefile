@@ -24,7 +24,7 @@ test: mir9cc test/test.c test/token.c
 debug: mir9cc test/singletest.c test/sub-test.c
 	@gcc -c -o sub-test.o test/sub-test.c
 	@./target/debug/mir9cc test/singletest.c > debugcompile1.s
-	@#gcc -static -o debugcompile debugcompile1.s sub-test.o
+	@gcc -static -o debugcompile debugcompile1.s sub-test.o
 	@#./debugcompile
 	@#echo
 	@#echo -e "\n$?"
