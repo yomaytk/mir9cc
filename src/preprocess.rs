@@ -152,7 +152,7 @@ impl Env {
 		let program_id = self.input[self.pos-1].program_id;
 		let body = std::mem::replace(&mut m.body, vec![]);
 		for token in body {
-			if self.add_special_macro(&token, num, program_id) {
+			if self.emit_special_macro(&token, num, program_id) {
 				continue;
 			}
 			self.emit(token);
@@ -172,7 +172,7 @@ impl Env {
 		}
 		for token in m.body {
 			
-			if self.add_special_macro(&token, line, program_id) {
+			if self.emit_special_macro(&token, line, program_id) {
 				continue;
 			}
 			
@@ -198,7 +198,7 @@ impl Env {
 			return;
 		}
 	}
-	fn add_special_macro(&mut self, token: &Token, line: usize, program_id: usize) -> bool {
+	fn emit_special_macro(&mut self, token: &Token, line: usize, program_id: usize) -> bool {
 		if is_ident(token, "__LINE__") {
 			self.emit(Macro::new_num(line as i32, program_id, token.pos, token.end));
 			return true;
