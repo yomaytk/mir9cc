@@ -110,9 +110,7 @@ lazy_static! {
 	pub static ref STACKSIZE: Mutex<i32> = Mutex::new(0);
 	pub static ref GVARS: Mutex<Vec<Var>> = Mutex::new(vec![]);
 	pub static ref LABEL: Mutex<i32> = Mutex::new(0);
-	pub static ref BREAK_VEC: Mutex<Vec<i32>> = Mutex::new(vec![]);
-	pub static ref CONTINUE_VEC: Mutex<Vec<i32>> = Mutex::new(vec![]);
-	pub static ref SWITCHES: Mutex<Vec<Vec<(Node, i32)>>> = Mutex::new(vec![]);
+	pub static ref SWITCHES: Mutex<Vec<Vec<Node>>> = Mutex::new(vec![]);
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -212,13 +210,13 @@ pub enum NodeType {
 	IfThen(Box<Node>, Box<Node>, Option<Box<Node>>),							// IfThen(cond, then, elthen)
 	Call(Type, String, Vec<Node>),												// Call(ctype, ident, args)
 	Func(Type, String, Vec<Var>, Box<Node>, i32),								// Func(ctype, ident, is_extern, args, body, stacksize)
-	For(Box<Node>, Box<Node>, Box<Node>, Box<Node>, i32, i32),					// For(init, cond, inc, body, break_label, continue_label)
+	For(Box<Node>, Box<Node>, Box<Node>, Box<Node>),							// For(init, cond, inc, body)
 	VarDef(String, Var, Option<Box<Node>>),										// VarDef(name, var, init)
 	Deref(Type, Box<Node>),														// Deref(ctype, lhs)
 	Addr(Type, Box<Node>),														// Addr(ctype, lhs)
 	Equal(Box<Node>, Box<Node>),												// Equal(lhs, rhs)
 	Ne(Box<Node>, Box<Node>),													// Ne(lhs, rhs)
-	DoWhile(Box<Node>, Box<Node>, i32, i32),									// Dowhile(boyd, cond, break_label, continue_label)
+	DoWhile(Box<Node>, Box<Node>),												// Dowhile(boyd, cond)
 	Dot(Type, Box<Node>, String),												// Dot(ctype, expr, name)
 	Not(Box<Node>),																// Not(expr)
 	Ternary(Type, Box<Node>, Box<Node>, Box<Node>),								// Ternary(ctype, cond, then, els)
@@ -226,11 +224,11 @@ pub enum NodeType {
 	IncDec(Type, i32, Box<Node>),												// IncDec(ctype, selector, expr)
 	Decl(Type, String, Vec<Node>),												// Decl(ctype, ident, args)
 	VarRef(Var),																// VarRef(var),
-	Break(i32),																	// Break(jmp_point),
-	Continue(i32),																// Continue(jmp_point),
+	Break,																		// Break,
+	Continue,																	// Continue,
 	Cast(Type, Box<Node>),														// Cast(ctype, expr),
-	Switch(Box<Node>, Box<Node>, Vec<(Node, i32)>, i32),						// Switch(cond, body, cases, break_label),
-	Case(Box<Node>, Box<Node>, i32),											// Case(val, body, case_label),
+	Switch(Box<Node>, Box<Node>, Vec<Node>),									// Switch(cond, body, case_conds),
+	Case(Box<Node>, Box<Node>),													// Case(val, body),
 	NULL,																		// NULL,
 }
 
@@ -334,9 +332,9 @@ impl Node {
 			op: NodeType::Func(ctype, ident, args, Box::new(body), stacksize)
 		}
 	}
-	pub fn new_for(init: Node, cond: Node, inc: Node, body: Node, break_label: i32, continue_label: i32) -> Self {
+	pub fn new_for(init: Node, cond: Node, inc: Node, body: Node) -> Self {
 		Self {
-			op: NodeType::For(Box::new(init), Box::new(cond), Box::new(inc), Box::new(body), break_label, continue_label)
+			op: NodeType::For(Box::new(init), Box::new(cond), Box::new(inc), Box::new(body))
 		}
 	}
 	pub fn new_vardef(name: String, var: Var, rhs: Option<Node>) -> Self {
@@ -367,9 +365,9 @@ impl Node {
 			op: NodeType::Ne(Box::new(lhs), Box::new(rhs))
 		}
 	}
-	pub fn new_dowhile(body: Node, cond: Node, break_label: i32, continue_label: i32) -> Self {
+	pub fn new_dowhile(body: Node, cond: Node) -> Self {
 		Self {
-			op: NodeType::DoWhile(Box::new(body), Box::new(cond), break_label, continue_label)
+			op: NodeType::DoWhile(Box::new(body), Box::new(cond))
 		}
 	}
 	pub fn new_stmtexpr(ctype: Type, body: Node) -> Self {
@@ -412,14 +410,14 @@ impl Node {
 			op: NodeType::VarRef(var)
 		}
 	}
-	pub fn new_break(break_label: i32) -> Self {
+	pub fn new_break() -> Self {
 		Self {
-			op: NodeType::Break(break_label)
+			op: NodeType::Break
 		}
 	}
-	pub fn new_continue(continue_label: i32) -> Self {
+	pub fn new_continue() -> Self {
 		Self {
-			op: NodeType::Continue(continue_label)
+			op: NodeType::Continue
 		}
 	}
 	pub fn new_cast(ctype: Type, expr: Node) -> Self {
@@ -427,14 +425,14 @@ impl Node {
 			op: NodeType::Cast(ctype, Box::new(expr))
 		}
 	}
-	pub fn new_switch(cond: Node, body: Node, cases: Vec<(Node, i32)>, break_label: i32) -> Self {
+	pub fn new_switch(cond: Node, body: Node, case_conds: Vec<Node>) -> Self {
 		Self {
-			op: NodeType::Switch(Box::new(cond), Box::new(body), cases, break_label)
+			op: NodeType::Switch(Box::new(cond), Box::new(body), case_conds)
 		}
 	}
-	pub fn new_case(val: Node, body: Node, case_label: i32) -> Self {
+	pub fn new_case(val: Node, body: Node) -> Self {
 		Self {
-			op: NodeType::Case(Box::new(val), Box::new(body), case_label)
+			op: NodeType::Case(Box::new(val), Box::new(body))
 		}
 	}
 	pub fn new_null() -> Self {
@@ -655,57 +653,11 @@ fn function_call(tokenset: &mut TokenSet) -> Node {
 	return Node::new_call(var.ctype, name, args);
 }
 
-fn loop_inc() -> (i32, i32) {
-	*LABEL.lock().unwrap() += 2;
-	let x = *LABEL.lock().unwrap()-1;
-	let y = x+1;
-	BREAK_VEC.lock().unwrap().push(x);
-	CONTINUE_VEC.lock().unwrap().push(y);
-	return (x, y);
-}
-
-fn get_break_label() -> i32 {
-	if let Some(break_label) = BREAK_VEC.lock().unwrap().last() {
-		return *break_label;
-	} else {
-		eprintln!("cannot find jmp point of break.");
-		std::process::exit(0);
-	}
-}
-
-fn get_continue_label() -> i32 {
-	if let Some(continue_label) = CONTINUE_VEC.lock().unwrap().last() {
-		return *continue_label;
-	} else {
-		eprintln!("cannot find jmp point of break.");
-		std::process::exit(0);
-	}
-}
-
-fn loop_dec() {
-	if let None = BREAK_VEC.lock().unwrap().pop() {
-		eprintln!("cannot find jmp point of break.");
-		std::process::exit(0);
-	}
-	if let None = CONTINUE_VEC.lock().unwrap().pop() {
-		eprintln!("cannot find jmp point of continue.");
-		std::process::exit(0);
-	}
-}
-
-fn switch_loop_inc() -> i32 {
-	*LABEL.lock().unwrap() += 1;
-	let x = *LABEL.lock().unwrap();
-	BREAK_VEC.lock().unwrap().push(x);
+fn switch_loop_inc() {
 	SWITCHES.lock().unwrap().push(vec![]);
-	return x;
 }
 
-fn switch_loop_dec() -> Vec<(Node, i32)> {
-	if let None = BREAK_VEC.lock().unwrap().pop() {
-		eprintln!("cannot find jmp point of break.");
-		std::process::exit(0);
-	}
+fn switch_loop_dec() -> Vec<Node> {
 	if let Some(cases) = SWITCHES.lock().unwrap().pop() {
 		return cases;
 	} else {
@@ -714,12 +666,12 @@ fn switch_loop_dec() -> Vec<(Node, i32)> {
 	}
 }
 
-fn case_emit(val: Node, break_label: i32) {
+fn case_emit(val: Node) {
 	if let None = SWITCHES.lock().unwrap().last() {
 		eprintln!("cannot find jmp point of switch.");
 		std::process::exit(0);
 	}
-	SWITCHES.lock().unwrap().last_mut().unwrap().push((val, break_label));
+	SWITCHES.lock().unwrap().last_mut().unwrap().push(val);
 }
 
 pub fn new_label() -> i32 {
@@ -1174,7 +1126,6 @@ pub fn stmt(tokenset: &mut TokenSet) -> Node {
 			tokenset.pos += 1;
 			tokenset.assert_ty(TokenRightBrac);
 			Env::env_inc();
-			let (break_label, continue_label) = loop_inc();
 			let mut init = Node::new_null();
 			if tokenset.is_typename() {
 				tokenset.pos -= 1;
@@ -1194,49 +1145,43 @@ pub fn stmt(tokenset: &mut TokenSet) -> Node {
 			} 
 			let body = stmt(tokenset);
 			Env::env_dec();
-			loop_dec();
-			return Node::new_for(init, cond, inc, body, break_label, continue_label);
+			return Node::new_for(init, cond, inc, body);
 		}
 		TokenWhile => {
 			tokenset.pos += 1;
-			let (break_label, continue_label) = loop_inc();
 			tokenset.assert_ty(TokenRightBrac);
 			let cond = expr(tokenset);
 			tokenset.assert_ty(TokenLeftBrac);
 			let body = stmt(tokenset);
-			loop_dec();
-			return Node::new_for(Node::new_null(), cond, Node::new_null(), body, break_label, continue_label);
+			return Node::new_for(Node::new_null(), cond, Node::new_null(), body);
 		}
 		TokenDo => {
 			tokenset.pos += 1;
-			let (break_label, continue_label) = loop_inc();
 			let body = stmt(tokenset);
 			tokenset.assert_ty(TokenWhile);
 			tokenset.assert_ty(TokenRightBrac);
 			let cond = expr(tokenset);
 			tokenset.assert_ty(TokenLeftBrac);
 			tokenset.assert_ty(TokenSemi);
-			loop_dec();
-			return Node::new_dowhile(body, cond, break_label, continue_label);
+			return Node::new_dowhile(body, cond);
 		}
 		TokenSwitch => {
 			tokenset.pos += 1;
-			let break_label = switch_loop_inc();
+			switch_loop_inc();
 			tokenset.assert_ty(TokenRightBrac);
 			let cond = expr(tokenset);
 			tokenset.assert_ty(TokenLeftBrac);
 			let body = stmt(tokenset);
-			let cases = switch_loop_dec();
-			return Node::new_switch(cond, body, cases, break_label);
+			let case_conds = switch_loop_dec();
+			return Node::new_switch(cond, body, case_conds);
 		}
 		TokenCase => {
 			tokenset.pos += 1;
 			let val = const_expr(tokenset);
 			tokenset.assert_ty(TokenColon);
 			let body = stmt(tokenset);
-			let case_label = new_label();
-			case_emit(val.clone(), case_label);
-			return Node::new_case(val, body, case_label);
+			case_emit(val.clone());
+			return Node::new_case(val, body);
 		}
 		TokenRightCurlyBrace => {
 			return compound_stmt(tokenset, true);
@@ -1259,11 +1204,11 @@ pub fn stmt(tokenset: &mut TokenSet) -> Node {
 		}
 		TokenBreak => {
 			tokenset.pos += 1;
-			return Node::new_break(get_break_label());
+			return Node::new_break();
 		}
 		TokenContinue => {
 			tokenset.pos += 1;
-			return Node::new_continue(get_continue_label());
+			return Node::new_continue();
 		}
 		_ => {
 			if tokenset.consume_ty(TokenIdent) {

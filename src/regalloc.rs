@@ -50,7 +50,7 @@ fn alloc(reg_map: &mut [i32], used: &mut [bool], ir_reg: i32) -> i32 {
 pub fn visit(reg_map: &mut Vec<i32>, used: &mut Vec<bool>, ir: &mut Ir) {
 	let info = ir.get_irinfo();
 	match info.ty {
-		Reg | RegImm | RegLabel | LabelAddr => {
+		Reg | RegImm | RegLabel | LabelAddr | Br => {
 			ir.lhs = alloc(reg_map, used, ir.lhs);
 		},
 		RegReg | Mem => {
@@ -82,8 +82,10 @@ pub fn alloc_regs(program: &mut Program) {
 	for fun in &mut program.funs {
 		let mut reg_map: Vec<i32> = vec![-1; 8192];
 		let mut used: Vec<bool> = vec![false; 8];
-		for ir in &mut fun.irs {
-			visit(&mut reg_map, &mut used, ir);
+		for bb in &mut fun.bbs {
+			for ir in &mut bb.irs {
+				visit(&mut reg_map, &mut used, ir);
+			}
 		}
 	}
 }

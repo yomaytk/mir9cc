@@ -124,9 +124,10 @@ fn emit_ir(ir: &Ir, ret: &str) {
 				emit!("movzb {}, {}", REG64[lhs], REG8[rhs]);
 			}
 		}
-		IrUnless => {
+		IrBr => {
 			emit!("cmp {}, 0", REG64[lhs]);
-			emit!("je .L{}", rhs);
+			emit!("jne .L{}", ir.bb1_label);
+			emit!("jmp .L{}", ir.bb2_label);
 		}
 		IrLabel => {
 			println!(".L{}:", lhs);
@@ -163,10 +164,6 @@ fn emit_ir(ir: &Ir, ret: &str) {
 		}
 		IrNe => {
 			emit_cmp(ir, String::from("setne"));
-		}
-		IrIf => {
-			emit!("cmp {}, 0", REG64[lhs]);
-			emit!("jne .L{}", rhs);
 		}
 		IrLabelAddr(label) => {
 			emit!("lea {}, {}", REG64[lhs], label);
@@ -218,8 +215,11 @@ pub fn gen(fun: &Function, label: usize) {
 
 	let ret = format!(".Lend{}", label);
 
-	for ir in &fun.irs {
-		emit_ir(ir, &ret);
+	for bb in &fun.bbs {
+		println!(".L{}:", bb.label);
+		for ir in &bb.irs {
+			emit_ir(ir, &ret);
+		}
 	}
 	
 	println!("{}:", ret);

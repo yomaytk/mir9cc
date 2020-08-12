@@ -26,7 +26,7 @@ lazy_static! {
 		(IrOp::IrBpRel, IrInfo::new("BPREL", IrType::RegImm)),
 		(IrOp::IrMov, IrInfo::new("MOV", IrType::RegReg)),
 		(IrOp::IrLabel, IrInfo::new("", IrType::Label)),
-		(IrOp::IrUnless, IrInfo::new("UNLESS", IrType::RegLabel)),
+		(IrOp::IrBr, IrInfo::new("Branch", IrType::Br)),
 		(IrOp::IrRet, IrInfo::new("RET", IrType::Reg)),
 		(IrOp::IrLoad(0), IrInfo::new("LOAD", IrType::RegReg)),
 		(IrOp::IrStore(0), IrInfo::new("STORE", IrType::RegReg)),
@@ -36,7 +36,6 @@ lazy_static! {
 		(IrOp::IrLabelAddr(String::new()), IrInfo::new("LABELADDR", IrType::LabelAddr)),
 		(IrOp::IrEqual, IrInfo::new("Equal", IrType::RegReg)),
 		(IrOp::IrNe, IrInfo::new("Ne", IrType::RegReg)),
-		(IrOp::IrIf, IrInfo::new("IF", IrType::Reg)),
 		(IrOp::IrOr, IrInfo::new("OR", IrType::RegReg)),
 		(IrOp::IrXor, IrInfo::new("XOR", IrType::RegReg)),
 		(IrOp::IrAnd, IrInfo::new("AND", IrType::RegReg)),
@@ -66,8 +65,10 @@ impl IrInfo {
 		println!("{}: ", dump_option);
 		for fun in irv {
 			println!("{}():", fun.name);
-			for ir in &fun.irs {
-				println!("{}", ir.tostr());
+			for bb in &fun.bbs {
+				for ir in &bb.irs {
+					println!("{}", ir.tostr());
+				}
 			}
 		}
 	}

@@ -177,8 +177,8 @@ pub fn do_walk(node: &Node, decay: bool) -> Node {
 			}
 			return Node::new_call(ctype.clone(), name.clone(), v);
 		}
-		For(init, cond, inc, body, break_label, continue_label) => {
-			return Node::new_for(walk(init), walk(cond), walk(inc), walk(body), *break_label, *continue_label);
+		For(init, cond, inc, body) => {
+			return Node::new_for(walk(init), walk(cond), walk(inc), walk(body));
 		}
 		Deref(_, lhs) => {
 			let lhs2 = walk(lhs);
@@ -210,14 +210,14 @@ pub fn do_walk(node: &Node, decay: bool) -> Node {
 		Ne(lhs, rhs) => {
 			return Node::new_neq(walk(lhs), walk(rhs));
 		}
-		DoWhile(body, cond, break_label, continue_label) => {
-			return Node::new_dowhile(walk(body), walk(cond), *break_label, *continue_label);
+		DoWhile(body, cond) => {
+			return Node::new_dowhile(walk(body), walk(cond));
 		}
-		Switch(cond, body, cases, break_label) => {
-			return Node::new_switch(walk(cond), walk(body), cases.clone(), *break_label);
+		Switch(cond, body, case_conds) => {
+			return Node::new_switch(walk(cond), walk(body), case_conds.clone());
 		}
-		Case(val, body, case_label) => {
-			return Node::new_case(*val.clone(), walk(body), *case_label);
+		Case(val, body) => {
+			return Node::new_case(*val.clone(), walk(body));
 		}
 		Dot(_, expr, name) => {
 			let expr2 = walk(expr);
@@ -256,7 +256,7 @@ pub fn do_walk(node: &Node, decay: bool) -> Node {
 			lhs.checklval();
 			return Node::new_incdec(lhs.nodesctype(None), *selector, lhs);
 		}
-		Break(_) | Continue(_) => {
+		Break | Continue => {
 			return node.clone();
 		}
 		NULL => {
