@@ -129,9 +129,6 @@ fn emit_ir(ir: &Ir, ret: &str) {
 			emit!("jne .L{}", ir.bb1_label);
 			emit!("jmp .L{}", ir.bb2_label);
 		}
-		IrLabel => {
-			println!(".L{}:", lhs);
-		}
 		IrJmp => {
 			emit!("jmp .L{}", lhs);
 		}

@@ -41,7 +41,6 @@ pub enum IrOp {
 	IrExpr,
 	IrStore(i32),
 	IrLoad(i32),
-	IrLabel,
 	IrJmp,
 	IrCall { name: String, len: usize, args: Vec<i32> },
 	IrStoreArg(i32),
