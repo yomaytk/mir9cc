@@ -38,7 +38,7 @@ pub enum IrOp {
 	IrStore(i32),
 	IrLoad(i32),
 	IrJmp,
-	IrCall { name: String, len: usize, args: Vec<i32> },
+	IrCall { name: String, len: usize, args: Vec<Reg> },
 	IrStoreArg(i32),
 	IrLt,
 	IrEqual, 
@@ -58,17 +58,17 @@ pub enum IrOp {
 #[derive(Debug)]
 pub struct Ir {
 	pub op: IrOp,
-	pub r0: i32,
-	pub r2: i32,
+	pub r0: Reg,
+	pub r2: Reg,
 	pub bb1_label: i32,
 	pub bb2_label: i32,
 	pub imm: i32,
 	pub imm2: i32,
-	pub kills: Vec<i32>		// For liveness tracking
+	pub kills: Vec<Reg>		// For liveness tracking
 }
 
 impl Ir {
-	pub fn new(ty: IrOp, lhs: i32, rhs: i32, bb1_label: i32, bb2_label: i32, imm: i32, imm2: i32) -> Self {
+	pub fn new(ty: IrOp, lhs: Reg, rhs: Reg, bb1_label: i32, bb2_label: i32, imm: i32, imm2: i32) -> Self {
 		Self {
 			op: ty,
 			r0: lhs,
@@ -140,17 +140,17 @@ impl Ir {
 			IrBr => { return format!("Br r{}, .L{}, .L{}", self.r0, self.bb1_label, self.bb2_label); }
 		}
 	}
-	fn emit(op: IrOp, lhs: i32, rhs: i32, fun: &mut Function) {
+	fn emit(op: IrOp, lhs: Reg, rhs: Reg, fun: &mut Function) {
 		fun.bbs.last_mut().unwrap().irs.push(Ir::new(op, lhs, rhs, -1, -1, -1, -1));
 	}
-	fn bb_emit(op: IrOp, lhs: i32, rhs: i32, bb1_label: i32, bb2_label: i32, fun: &mut Function) {
+	fn bb_emit(op: IrOp, lhs: Reg, rhs: Reg, bb1_label: i32, bb2_label: i32, fun: &mut Function) {
 		fun.bbs.last_mut().unwrap().irs.push(Ir::new(op, lhs, rhs, bb1_label, bb2_label, -1, -1));
 	}
-	fn br(r: i32, then_label: i32, els_label: i32, fun: &mut Function) {
-		Ir::bb_emit(IrBr, r, -1, then_label, els_label, fun);
+	fn br(r: Reg, then_label: i32, els_label: i32, fun: &mut Function) {
+		Ir::bb_emit(IrBr, r, Reg::dummy(), then_label, els_label, fun);
 	}
-	fn imm_emit(op: IrOp, lhs: i32, imm: i32, imm2: i32, fun: &mut Function) {
-		fun.bbs.last_mut().unwrap().irs.push(Ir::new(op, lhs, -1, -1, -1, imm, imm2));
+	fn imm_emit(op: IrOp, lhs: Reg, imm: i32, imm2: i32, fun: &mut Function) {
+		fun.bbs.last_mut().unwrap().irs.push(Ir::new(op, lhs, Reg::dummy(), -1, -1, imm, imm2));
 	}
 }
 
@@ -173,7 +173,7 @@ impl Function {
 	}
 }
 
-fn kill(r: i32, fun: &mut Function) {
+fn kill(r: Reg, fun: &mut Function) {
 	if let Some(_) = fun.bbs.last() {
 		fun.bbs.last_mut().unwrap().irs.last_mut().unwrap().kills.push(r);
 	} else {
@@ -182,25 +182,25 @@ fn kill(r: i32, fun: &mut Function) {
 }
 
 fn jmp(x: i32, fun: &mut Function) {
-	Ir::bb_emit(IrJmp, -1, -1, x, -1, fun);
+	Ir::bb_emit(IrJmp, Reg::dummy(), Reg::dummy(), x, -1, fun);
 }
 
-fn load(ctype: &Type, dst: i32, src: i32, fun: &mut Function) {
+fn load(ctype: &Type, dst: Reg, src: Reg, fun: &mut Function) {
 	Ir::emit(IrOp::IrLoad(ctype.size), dst, src, fun);
 }
 
-fn store(ctype: &Type, dst: i32, src: i32, fun: &mut Function) {
+fn store(ctype: &Type, dst: Reg, src: Reg, fun: &mut Function) {
 	Ir::emit(IrOp::IrStore(ctype.size), dst, src, fun);
 }
 
 fn store_arg(ctype: &Type, offset: i32, id: i32, fun: &mut Function) {
-	Ir::imm_emit(IrOp::IrStoreArg(ctype.size), -1, offset, id, fun);
+	Ir::imm_emit(IrOp::IrStoreArg(ctype.size), Reg::dummy(), offset, id, fun);
 }
 
-fn gen_binop(irop: IrOp, lhs: &Node, rhs: &Node, fun: &mut Function) -> i32 {
+fn gen_binop(irop: IrOp, lhs: &Node, rhs: &Node, fun: &mut Function) -> Reg {
 	let r1 = gen_expr(lhs, fun);
 	let r2 = gen_expr(rhs, fun);
-	Ir::emit(irop, r1, r2, fun);
+	Ir::emit(irop, r1.clone(), r2.clone(), fun);
 	kill(r2, fun);
 	return r1;
 }
@@ -212,35 +212,30 @@ fn gen_inc_scale(ctype: &Type) -> i32 {
 	}
 }
 
-fn imm(op: IrOp, r: i32, imm: i32, imm2: i32, fun: &mut Function) {
+fn imm(op: IrOp, r: Reg, imm: i32, imm2: i32, fun: &mut Function) {
 	Ir::imm_emit(op, r, imm, imm2, fun);
 }
 
-fn gen_pre_inc(ctype: &Type, lhs: &Node, fun: &mut Function, num: i32) -> i32 {
+fn gen_pre_inc(ctype: &Type, lhs: &Node, fun: &mut Function, num: i32) -> Reg {
 	let r1 = gen_lval(lhs, fun);
-	let r2 = new_regno();
-	load(ctype, r2, r1, fun);
-	let r3 = new_regno();
-	imm(IrImm, r3, num * gen_inc_scale(ctype), -1, fun);
-	Ir::emit(IrAdd, r2, r3, fun);
+	let r2 = Reg::new();
+	load(ctype, r2.clone(), r1.clone(), fun);
+	let r3 = Reg::new();
+	imm(IrImm, r3.clone(), num * gen_inc_scale(ctype), -1, fun);
+	Ir::emit(IrAdd, r2.clone(), r3.clone(), fun);
 	kill(r3, fun);
-	store(ctype, r1, r2, fun);
+	store(ctype, r1.clone(), r2.clone(), fun);
 	kill(r1, fun);
 	return r2;
 }
 
-fn gen_post_inc(ctype: &Type, lhs: &Node, fun: &mut Function, num: i32) -> i32 {
+fn gen_post_inc(ctype: &Type, lhs: &Node, fun: &mut Function, num: i32) -> Reg {
 	let r = gen_pre_inc(ctype, lhs, fun, num);
-	let r2 = new_regno();
-	imm(IrImm, r2, num * gen_inc_scale(ctype), -1, fun);
-	Ir::emit(IrSub, r, r2, fun);
+	let r2 = Reg::new();
+	imm(IrImm, r2.clone(), num * gen_inc_scale(ctype), -1, fun);
+	Ir::emit(IrSub, r.clone(), r2.clone(), fun);
 	kill(r2, fun);
 	return r;
-}
-
-fn new_regno() -> i32 {
-	*REGNO.lock().unwrap() += 1;
-	return *REGNO.lock().unwrap();
 }
 
 fn get_break_label() -> i32 {
@@ -295,27 +290,27 @@ fn loop_dec() {
 //
 // This function evaluates a given node as an lvalue.
 
-fn gen_lval(node: &Node, fun: &mut Function) -> i32 {
+fn gen_lval(node: &Node, fun: &mut Function) -> Reg {
 	
 	match &node.op {
 		NodeType::Deref(_, expr) => {
 			return gen_expr(expr, fun);
 		}
 		NodeType::VarRef(var) => {
-			let r = new_regno();
+			let r = Reg::new();
 			if var.is_local {
-				imm(IrBpRel, r, var.offset, -1, fun);
+				imm(IrBpRel, r.clone(), var.offset, -1, fun);
 			} else {
-				Ir::emit(IrLabelAddr(var.labelname.clone().unwrap()), r, -1, fun);
+				Ir::emit(IrLabelAddr(var.labelname.clone().unwrap()), r.clone(), Reg::dummy(), fun);
 			}
 			return r;
 		}
 		NodeType::Dot(ctype, expr, _) => {
 			let r1 = gen_lval(expr, fun);
-			let r2 = new_regno();
-			imm(IrImm, r2, ctype.offset, -1, fun);
-			Ir::emit(IrAdd, r1, r2, fun);
-			kill(r2, fun);
+			let r2 = Reg::new();
+			imm(IrImm, r2.clone(), ctype.offset, -1, fun);
+			Ir::emit(IrAdd, r1.clone(), r2.clone(), fun);
+			kill(r2.clone(), fun);
 			return r1;
 		}
 		_ => { panic!("not an lvalue")}
@@ -323,12 +318,12 @@ fn gen_lval(node: &Node, fun: &mut Function) -> i32 {
 }
 
 // allocate of index for register to NodeNum
-fn gen_expr(node: &Node, fun: &mut Function) -> i32 {
+fn gen_expr(node: &Node, fun: &mut Function) -> Reg {
 
 	match &node.op {
 		NodeType::Num(val) => {
-			let r = new_regno();
-			imm(IrImm, r, *val, -1, fun);
+			let r = Reg::new();
+			imm(IrImm, r.clone(), *val, -1, fun);
 			return r;
 		},
 		NodeType::BinaryTree(_, ty, lhs, rhs) => {
@@ -340,17 +335,17 @@ fn gen_expr(node: &Node, fun: &mut Function) -> i32 {
 					let last = BB::new();
 
 					let r = gen_expr(lhs, fun);
-					Ir::br(r, bb1.label, last.label, fun);
+					Ir::br(r.clone(), bb1.label, last.label, fun);
 
 					fun.bb_push(bb1);
 					let r1 = gen_expr(rhs, fun);
-					Ir::emit(IrMov, r, r1, fun);
+					Ir::emit(IrMov, r.clone(), r1.clone(), fun);
 					kill(r1, fun);
-					Ir::br(r, bb2.label, last.label, fun);
+					Ir::br(r.clone(), bb2.label, last.label, fun);
 
 					fun.bb_push(bb2);
-					imm(IrImm, r, 1, -1, fun);
-					jmp(last.label, fun);
+					imm(IrImm, r.clone(), 1, -1, fun);
+					// jmp(last.label, fun);
 
 					fun.bb_push(last);
 
@@ -363,17 +358,17 @@ fn gen_expr(node: &Node, fun: &mut Function) -> i32 {
 					let last = BB::new();
 
 					let r = gen_expr(lhs, fun);
-					Ir::br(r, bb2.label, bb1.label, fun);
+					Ir::br(r.clone(), bb2.label, bb1.label, fun);
 
 					fun.bb_push(bb1);
 					let r1 = gen_expr(rhs, fun);
-					Ir::emit(IrMov, r, r1, fun);
+					Ir::emit(IrMov, r.clone(), r1.clone(), fun);
 					kill(r1, fun);
-					Ir::br(r, bb2.label, last.label, fun);
+					Ir::br(r.clone(), bb2.label, last.label, fun);
 
 					fun.bb_push(bb2);
-					imm(IrImm, r, 1, -1, fun);
-					jmp(last.label, fun);
+					imm(IrImm, r.clone(), 1, -1, fun);
+					// jmp(last.label, fun);
 
 					fun.bb_push(last);
 
@@ -388,20 +383,20 @@ fn gen_expr(node: &Node, fun: &mut Function) -> i32 {
 		// a
 		NodeType::VarRef(var) => {
 			let lhi = gen_lval(node, fun);
-			load(&var.ctype, lhi, lhi, fun);
+			load(&var.ctype, lhi.clone(), lhi.clone(), fun);
 			return lhi;
 		}
 		// a.b (struct member)
 		NodeType::Dot(ctype, ..) => {
 			let lhi = gen_lval(node, fun);
-			load(ctype, lhi, lhi, fun);
+			load(ctype, lhi.clone(), lhi.clone(), fun);
 			return lhi;
 		},
 		// a = b
 		NodeType::Assign(ctype, lhs, rhs) => {
 			let rhi = gen_expr(rhs, fun);
 			let lhi = gen_lval(lhs, fun);
-			store(ctype, lhi, rhi, fun);
+			store(ctype, lhi.clone(), rhi.clone(), fun);
 			kill(lhi, fun);
 			return rhi;
 		},
@@ -411,15 +406,15 @@ fn gen_expr(node: &Node, fun: &mut Function) -> i32 {
 			for arg in callarg {
 				args.push(gen_expr(arg, fun));
 			}
-			let r = new_regno();
+			let r = Reg::new();
 			Ir::emit(
 				IrCall{ 
 					name: (*ident).clone(), 
 					len: args.len(),
 					args: args.clone()
 				}, 
-				r, 
-				-1, 
+				r.clone(), 
+				Reg::dummy(), 
 				fun
 			);
 			for arg in args {
@@ -430,7 +425,7 @@ fn gen_expr(node: &Node, fun: &mut Function) -> i32 {
 		// *a
 		NodeType::Deref(_, lhs) => {
 			let r = gen_expr(lhs, fun);
-			load(lhs.nodesctype(None).ptr_to.unwrap().as_ref(), r, r, fun);
+			load(lhs.nodesctype(None).ptr_to.unwrap().as_ref(), r.clone(), r.clone(), fun);
 			return r;
 		}
 		// &a
@@ -448,9 +443,9 @@ fn gen_expr(node: &Node, fun: &mut Function) -> i32 {
 		// !a
 		NodeType::Not(expr) => {
 			let r1 = gen_expr(expr, fun);
-			let r2 = new_regno();
-			imm(IrImm, r2, 0, -1, fun);
-			Ir::emit(IrEqual, r1, r2, fun);
+			let r2 = Reg::new();
+			imm(IrImm, r2.clone(), 0, -1, fun);
+			Ir::emit(IrEqual, r1.clone(), r2.clone(), fun);
 			kill(r2, fun);
 			return r1;
 		}
@@ -461,19 +456,19 @@ fn gen_expr(node: &Node, fun: &mut Function) -> i32 {
 			let last = BB::new();
 
 			let r = gen_expr(cond, fun);
-			Ir::br(r, bb1.label, bb2.label, fun);
+			Ir::br(r.clone(), bb1.label, bb2.label, fun);
 
 			fun.bb_push(bb1);
 			let r1 = gen_expr(then, fun);
-			Ir::emit(IrMov, r, r1, fun);
+			Ir::emit(IrMov, r.clone(), r1.clone(), fun);
 			kill(r1, fun);
 			jmp(last.label, fun);
 
 			fun.bb_push(bb2);
 			let r2 = gen_expr(els, fun);
-			Ir::emit(IrMov, r, r2, fun);
+			Ir::emit(IrMov, r.clone(), r2.clone(), fun);
 			kill(r2, fun);
-			jmp(last.label, fun);
+			// jmp(last.label, fun);
 
 			fun.bb_push(last);
 
@@ -495,9 +490,9 @@ fn gen_expr(node: &Node, fun: &mut Function) -> i32 {
 			if ctype.ty != Ty::BOOL {
 				return r1;
 			}
-			let r2 = new_regno();
-			imm(IrImm, r2, 0, -1, fun);
-			Ir::emit(IrNe, r1, r2, fun);
+			let r2 = Reg::new();
+			imm(IrImm, r2.clone(), 0, -1, fun);
+			Ir::emit(IrNe, r1.clone(), r2.clone(), fun);
 			kill(r2, fun);
 			return r1;
 		}
@@ -513,8 +508,8 @@ fn gen_expr(node: &Node, fun: &mut Function) -> i32 {
 					}
 				}
 			}
-			let r = new_regno();
-			imm(IrImm, r, 0, -1, fun);
+			let r = Reg::new();
+			imm(IrImm, r.clone(), 0, -1, fun);
 			return r;
 		}
 		_ => { panic!("gen_expr NodeType error at {:?}", node.op); }
@@ -531,11 +526,11 @@ fn gen_stmt(node: &Node, fun: &mut Function) {
 		NodeType::Ret(lhs) => {
 			
 			let lhi = gen_expr(lhs.as_ref(), fun);
-			Ir::emit(IrRet, lhi, 0, fun);
+			Ir::emit(IrRet, lhi.clone(), Reg::dummy(), fun);
 			kill(lhi, fun);
 
 			let bb = BB::new();
-			jmp(bb.label, fun);
+			// jmp(bb.label, fun);
 			fun.bb_push(bb);
 
 			return;
@@ -550,7 +545,7 @@ fn gen_stmt(node: &Node, fun: &mut Function) {
 			let last = BB::new();
 
 			let r = gen_expr(cond, fun);
-			Ir::br(r, bb_then.label, bb_els.label, fun);
+			Ir::br(r.clone(), bb_then.label, bb_els.label, fun);
 			kill(r, fun);
 
 			fun.bb_push(bb_then);
@@ -561,7 +556,7 @@ fn gen_stmt(node: &Node, fun: &mut Function) {
 			if let Some(elsth) = els {
 				gen_stmt(elsth, fun);
 			}
-			jmp(last.label, fun);
+			// jmp(last.label, fun);
 
 			fun.bb_push(last);
 
@@ -589,7 +584,7 @@ fn gen_stmt(node: &Node, fun: &mut Function) {
 				NodeType::NULL => {}
 				_ => {
 					let r = gen_expr(cond, fun);
-					Ir::br(r, body_bb.label, break_bb.label, fun);
+					Ir::br(r.clone(), body_bb.label, break_bb.label, fun);
 					kill(r, fun);
 				}
 			}
@@ -617,7 +612,7 @@ fn gen_stmt(node: &Node, fun: &mut Function) {
 			loop_inc(continue_bb.label, break_bb.label);
 			let body_bb_label = body_bb.label;
 
-			jmp(body_bb.label, fun);
+			// jmp(body_bb.label, fun);
 
 			fun.bb_push(body_bb);
 			gen_stmt(body, fun);
@@ -625,7 +620,7 @@ fn gen_stmt(node: &Node, fun: &mut Function) {
 
 			fun.bb_push(continue_bb);
 			let r = gen_expr(cond, fun);
-			Ir::br(r, body_bb_label, break_bb.label, fun);
+			Ir::br(r.clone(), body_bb_label, break_bb.label, fun);
 			kill(r, fun);
 
 			fun.bb_push(break_bb);
@@ -648,8 +643,8 @@ fn gen_stmt(node: &Node, fun: &mut Function) {
 				let next_bb = BB::new();
 
 				let x = gen_expr(val, fun);
-				Ir::emit(IrEqual, x, r, fun);
-				Ir::br(x, case_bb.label, next_bb.label, fun);
+				Ir::emit(IrEqual, x.clone(), r.clone(), fun);
+				Ir::br(x.clone(), case_bb.label, next_bb.label, fun);
 				kill(x, fun);
 				
 				fun.bb_push(next_bb);
@@ -668,7 +663,7 @@ fn gen_stmt(node: &Node, fun: &mut Function) {
 		}
 		NodeType::Case(_, body) => {
 			if let Some(case_bb) = SWITCHES.lock().unwrap().last_mut().unwrap().pop() {
-				jmp(case_bb.label, fun);
+				// jmp(case_bb.label, fun);
 				fun.bb_push(case_bb);
 				gen_stmt(body, fun);
 			} else {

@@ -61,8 +61,8 @@ fn escape(strname: String, len: i32) -> String {
 }
 
 fn emit_cmp(ir: &Ir, insn: String) {
-	let r0 = ir.r0 as usize;
-	let r2 = ir.r2 as usize;
+	let r0 = ir.r0.rn as usize;
+	let r2 = ir.r2.rn as usize;
 	emit!("cmp {}, {}", REG64[r0], REG64[r2]);
 	emit!("{} {}", insn, REG8[r0]);
 	emit!("movzb {}, {}", REG64[r0], REG8[r0]);
@@ -82,8 +82,8 @@ fn argreg(size: i32, r: usize) -> &'static str {
 
 fn emit_ir(ir: &Ir, ret: &str) {
 	
-	let r0 = ir.r0 as usize;
-	let r2 = ir.r2 as usize;
+	let r0 = ir.r0.rn as usize;
+	let r2 = ir.r2.rn as usize;
 	match &ir.op {
 		IrImm => {
 			emit!("mov {}, {}", REG64[r0], ir.imm);
@@ -135,7 +135,7 @@ fn emit_ir(ir: &Ir, ret: &str) {
 		IrCall { name, len , args } => {
 
 			for i in 0..*len {
-				emit!("mov {}, {}", ARGREG64[i], REG64[args[i] as usize]);
+				emit!("mov {}, {}", ARGREG64[i], REG64[args[i].rn as usize]);
 			}
 			
 			emit!("push r10");

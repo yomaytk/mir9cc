@@ -48,21 +48,21 @@ fn alloc(reg_map: &mut [i32], used: &mut [bool], ir_reg: i32) -> i32 {
 
 // do allocating register to reg_map 
 pub fn visit(reg_map: &mut Vec<i32>, used: &mut Vec<bool>, ir: &mut Ir) {
-	if ir.r0 > 0 {
-		ir.r0 = alloc(reg_map, used, ir.r0);
+	if ir.r0.vn > 0 {
+		ir.r0.rn = alloc(reg_map, used, ir.r0.vn);
 	}
-	if ir.r2 > 0 {
-		ir.r2 = alloc(reg_map, used, ir.r2);
+	if ir.r2.vn > 0 {
+		ir.r2.rn = alloc(reg_map, used, ir.r2.vn);
 	}
 	if let IrCall{ name, len, args } = &mut ir.op {
 		let _name = name;
 		for i in 0..*len {
-			args[i] = alloc(reg_map, used, args[i]);
+			args[i].rn = alloc(reg_map, used, args[i].vn);
 		}
 	}
 	for r in &ir.kills {
-		let r0 = alloc(reg_map, used, *r);
-		kill(used, r0 as usize);
+		let r = alloc(reg_map, used, r.vn) as usize;
+		kill(used, r);
 	}
 }
 
