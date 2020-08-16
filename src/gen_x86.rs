@@ -61,11 +61,11 @@ fn escape(strname: String, len: i32) -> String {
 }
 
 fn emit_cmp(ir: &Ir, insn: String) {
-	let lhs = ir.lhs as usize;
-	let rhs = ir.rhs as usize;
-	emit!("cmp {}, {}", REG64[lhs], REG64[rhs]);
-	emit!("{} {}", insn, REG8[lhs]);
-	emit!("movzb {}, {}", REG64[lhs], REG8[lhs]);
+	let r0 = ir.r0 as usize;
+	let r2 = ir.r2 as usize;
+	emit!("cmp {}, {}", REG64[r0], REG64[r2]);
+	emit!("{} {}", insn, REG8[r0]);
+	emit!("movzb {}, {}", REG64[r0], REG8[r0]);
 }
 
 fn reg(size: i32, r: usize) -> &'static str {
@@ -82,50 +82,50 @@ fn argreg(size: i32, r: usize) -> &'static str {
 
 fn emit_ir(ir: &Ir, ret: &str) {
 	
-	let lhs = ir.lhs as usize;
-	let rhs = ir.rhs as usize;
+	let r0 = ir.r0 as usize;
+	let r2 = ir.r2 as usize;
 	match &ir.op {
 		IrImm => {
-			emit!("mov {}, {}", REG64[lhs], ir.imm);
+			emit!("mov {}, {}", REG64[r0], ir.imm);
 		}
 		IrMov => {
-			emit!("mov {}, {}", REG64[lhs], REG64[rhs]);
+			emit!("mov {}, {}", REG64[r0], REG64[r2]);
 		}
 		IrAdd => {
-			emit!("add {}, {}", REG64[lhs], REG64[rhs]);
+			emit!("add {}, {}", REG64[r0], REG64[r2]);
 		}
 		IrSub => {
-			emit!("sub {}, {}", REG64[lhs], REG64[rhs]);
+			emit!("sub {}, {}", REG64[r0], REG64[r2]);
 		}
 		IrBpRel => {
-			emit!("lea {}, [rbp-{}]", REG64[lhs], ir.imm);
+			emit!("lea {}, [rbp-{}]", REG64[r0], ir.imm);
 		}
 		IrMul => {
-			emit!("mov rax, {}", REG64[rhs]);
-			emit!("imul {}", REG64[lhs]);
-			emit!("mov {}, rax", REG64[lhs]);
+			emit!("mov rax, {}", REG64[r2]);
+			emit!("imul {}", REG64[r0]);
+			emit!("mov {}, rax", REG64[r0]);
 		}
 		IrDiv => {
-			emit!("mov rax, {}", REG64[lhs]);
+			emit!("mov rax, {}", REG64[r0]);
 			emit!("cqo");
-			emit!("idiv {}", REG64[rhs]);
-			emit!("mov {}, rax", REG64[lhs]);
+			emit!("idiv {}", REG64[r2]);
+			emit!("mov {}, rax", REG64[r0]);
 		}
 		IrRet => {
-			emit!("mov rax, {}", REG64[lhs]);
+			emit!("mov rax, {}", REG64[r0]);
 			emit!("jmp {}", ret);
 		}
 		IrStore(size) => {
-			emit!("mov [{}], {}", REG64[lhs], reg(*size, rhs));
+			emit!("mov [{}], {}", REG64[r0], reg(*size, r2));
 		}
 		IrLoad(size) => {
-			emit!("mov {}, [{}]", reg(*size, lhs), REG64[rhs]);
+			emit!("mov {}, [{}]", reg(*size, r0), REG64[r2]);
 			if *size == 1 {
-				emit!("movzb {}, {}", REG64[lhs], REG8[rhs]);
+				emit!("movzb {}, {}", REG64[r0], REG8[r2]);
 			}
 		}
 		IrBr => {
-			emit!("cmp {}, 0", REG64[lhs]);
+			emit!("cmp {}, 0", REG64[r0]);
 			emit!("jne .L{}", ir.bb1_label);
 			emit!("jmp .L{}", ir.bb2_label);
 		}
@@ -145,7 +145,7 @@ fn emit_ir(ir: &Ir, ret: &str) {
 			emit!("pop r11");
 			emit!("pop r10");
 			
-			emit!("mov {}, rax", REG64[lhs]);
+			emit!("mov {}, rax", REG64[r0]);
 		}
 		IrStoreArg(size) => {
 			emit!("mov [rbp-{}], {}", ir.imm, argreg(*size, ir.imm2 as usize));
@@ -163,33 +163,33 @@ fn emit_ir(ir: &Ir, ret: &str) {
 			emit_cmp(ir, String::from("setne"));
 		}
 		IrLabelAddr(label) => {
-			emit!("lea {}, {}", REG64[lhs], label);
+			emit!("lea {}, {}", REG64[r0], label);
 		}
 		IrOr => {
-			emit!("or {}, {}", REG64[lhs], REG64[rhs]);
+			emit!("or {}, {}", REG64[r0], REG64[r2]);
 		}
 		IrXor => {
-			emit!("xor {}, {}", REG64[lhs], REG64[rhs]);
+			emit!("xor {}, {}", REG64[r0], REG64[r2]);
 		}
 		IrAnd => {
-			emit!("and {}, {}", REG64[lhs], REG64[rhs]);
+			emit!("and {}, {}", REG64[r0], REG64[r2]);
 		}
 		IrShl => {
-			emit!("mov cl, {}", REG8[rhs]);
-			emit!("shl {}, cl", REG64[lhs]);
+			emit!("mov cl, {}", REG8[r2]);
+			emit!("shl {}, cl", REG64[r0]);
 		}
 		IrShr => {
-			emit!("mov cl, {}", REG8[rhs]);
-			emit!("shr {}, cl", REG64[lhs]);
+			emit!("mov cl, {}", REG8[r2]);
+			emit!("shr {}, cl", REG64[r0]);
 		}
 		IrMod => {
-			emit!("mov rax, {}", REG64[lhs]);
+			emit!("mov rax, {}", REG64[r0]);
 			emit!("cqo");
-			emit!("idiv {}", REG64[rhs]);
-			emit!("mov {}, rdx", REG64[lhs]);
+			emit!("idiv {}", REG64[r2]);
+			emit!("mov {}, rdx", REG64[r0]);
 		}
 		IrNeg => {
-			emit!("neg {}", REG64[lhs]);
+			emit!("neg {}", REG64[r0]);
 		}
 	}
 }

@@ -58,8 +58,8 @@ pub enum IrOp {
 #[derive(Debug)]
 pub struct Ir {
 	pub op: IrOp,
-	pub lhs: i32,
-	pub rhs: i32,
+	pub r0: i32,
+	pub r2: i32,
 	pub bb1_label: i32,
 	pub bb2_label: i32,
 	pub imm: i32,
@@ -71,8 +71,8 @@ impl Ir {
 	pub fn new(ty: IrOp, lhs: i32, rhs: i32, bb1_label: i32, bb2_label: i32, imm: i32, imm2: i32) -> Self {
 		Self {
 			op: ty,
-			lhs,
-			rhs,
+			r0: lhs,
+			r2: rhs,
 			bb1_label,
 			bb2_label,
 			imm, 
@@ -100,16 +100,16 @@ impl Ir {
 	}
 	pub fn tostr(&self) -> String {
 		match &self.op {
-			IrImm => { return format!("Imm r{}, {}", self.lhs, self.imm); }
-			IrMov => { return format!("Mov r{}, r{}", self.lhs, self.rhs); }
-			IrAdd => { return format!("Add r{}, r{}", self.lhs, self.rhs); }
-			IrBpRel => { return format!("Lea r{}, [rbp-{}]", self.lhs, self.imm); }
-			IrSub => { return format!("Sub r{}, r{}", self.lhs, self.rhs); }
-			IrMul => { return format!("Mul r{}, r{}", self.lhs, self.rhs); }
-			IrDiv => { return format!("Div r{}, r{}", self.lhs, self.rhs); }
-			IrRet => { return format!("Return {}", self.lhs); }
-			IrStore(ir_size) => { return format!("Store{} [r{}], r{}", ir_size, self.lhs, self.rhs); }
-			IrLoad(ir_size) => { return format!("Load{} r{}, [r{}]", ir_size, self.lhs, self.rhs); }
+			IrImm => { return format!("Imm r{}, {}", self.r0, self.imm); }
+			IrMov => { return format!("Mov r{}, r{}", self.r0, self.r2); }
+			IrAdd => { return format!("Add r{}, r{}", self.r0, self.r2); }
+			IrBpRel => { return format!("Lea r{}, [rbp-{}]", self.r0, self.imm); }
+			IrSub => { return format!("Sub r{}, r{}", self.r0, self.r2); }
+			IrMul => { return format!("Mul r{}, r{}", self.r0, self.r2); }
+			IrDiv => { return format!("Div r{}, r{}", self.r0, self.r2); }
+			IrRet => { return format!("Return {}", self.r0); }
+			IrStore(ir_size) => { return format!("Store{} [r{}], r{}", ir_size, self.r0, self.r2); }
+			IrLoad(ir_size) => { return format!("Load{} r{}, [r{}]", ir_size, self.r0, self.r2); }
 			IrJmp => { return format!("Jmp .L{}", self.imm); }
 			IrCall { name, len, args } => { 
 				let _len = len;
@@ -125,19 +125,19 @@ impl Ir {
 				return call_s; 
 			}
 			IrStoreArg(ir_size) => { return format!("STORE_ARG{}, {}, {}", ir_size, self.imm, self.imm2); }
-			IrLt => { return format!("Lt r{}, r{}", self.lhs, self.rhs); }
-			IrEqual => { return format!("Equal r{}, r{}", self.lhs, self.rhs); }
-			IrNe => { return format!("Ne r{}, r{}", self.lhs, self.rhs); }
-			IrLabelAddr(labelname) => { return format!("Label_Addr r{}, .L{}", self.lhs, labelname); }
-			IrOr => { return format!("Or r{}, r{}", self.lhs, self.rhs); }
-			IrXor => { return format!("Xor r{}, r{}", self.lhs, self.rhs); }
-			IrAnd => { return format!("And r{}, r{}", self.lhs, self.rhs); }
-			IrLe => { return format!("Le r{}, r{}", self.lhs, self.rhs); }
-			IrShl => { return format!("Shl r{}, r{}", self.lhs, self.rhs); }
-			IrShr => { return format!("Shr r{}, r{}", self.lhs, self.rhs); }
-			IrMod => { return format!("Mod r{}, r{}", self.lhs, self.rhs); }
-			IrNeg => { return format!("Neg r{}", self.lhs); }
-			IrBr => { return format!("Br r{}, .L{}, .L{}", self.lhs, self.bb1_label, self.bb2_label); }
+			IrLt => { return format!("Lt r{}, r{}", self.r0, self.r2); }
+			IrEqual => { return format!("Equal r{}, r{}", self.r0, self.r2); }
+			IrNe => { return format!("Ne r{}, r{}", self.r0, self.r2); }
+			IrLabelAddr(labelname) => { return format!("Label_Addr r{}, .L{}", self.r0, labelname); }
+			IrOr => { return format!("Or r{}, r{}", self.r0, self.r2); }
+			IrXor => { return format!("Xor r{}, r{}", self.r0, self.r2); }
+			IrAnd => { return format!("And r{}, r{}", self.r0, self.r2); }
+			IrLe => { return format!("Le r{}, r{}", self.r0, self.r2); }
+			IrShl => { return format!("Shl r{}, r{}", self.r0, self.r2); }
+			IrShr => { return format!("Shr r{}, r{}", self.r0, self.r2); }
+			IrMod => { return format!("Mod r{}, r{}", self.r0, self.r2); }
+			IrNeg => { return format!("Neg r{}", self.r0); }
+			IrBr => { return format!("Br r{}, .L{}, .L{}", self.r0, self.bb1_label, self.bb2_label); }
 		}
 	}
 	fn emit(op: IrOp, lhs: i32, rhs: i32, fun: &mut Function) {
