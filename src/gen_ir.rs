@@ -1,13 +1,10 @@
 use super::token::{*, TokenType::*};
 use IrOp::*;
-use IrType::*;
 use super::parse::*;
-use super::ir_dump::{IrInfo, IRINFO};
 // use super::lib::*;
 use super::mir::*;
 
 use std::sync::Mutex;
-use std::fmt;
 
 // mir9cc's code generation is two-pass. In the first pass, abstract
 // syntax trees are compiled to IR (intermediate representation).
@@ -38,7 +35,6 @@ pub enum IrOp {
 	IrMul,
 	IrDiv,
 	IrRet,
-	IrExpr,
 	IrStore(i32),
 	IrLoad(i32),
 	IrJmp,
@@ -57,8 +53,6 @@ pub enum IrOp {
 	IrMod,
 	IrNeg,
 	IrBr,
-	IrKill,
-	IrNop,
 }
 
 #[derive(Debug)]
@@ -68,17 +62,21 @@ pub struct Ir {
 	pub rhs: i32,
 	pub bb1_label: i32,
 	pub bb2_label: i32,
+	pub imm: i32,
+	pub imm2: i32,
 	pub kills: Vec<i32>		// For liveness tracking
 }
 
 impl Ir {
-	pub fn new(ty: IrOp, lhs: i32, rhs: i32, bb1_label: i32, bb2_label: i32) -> Self {
+	pub fn new(ty: IrOp, lhs: i32, rhs: i32, bb1_label: i32, bb2_label: i32, imm: i32, imm2: i32) -> Self {
 		Self {
 			op: ty,
 			lhs,
 			rhs,
 			bb1_label,
 			bb2_label,
+			imm, 
+			imm2,
 			kills: vec![],
 		}
 	}
@@ -100,109 +98,59 @@ impl Ir {
 			_ => { panic!("bittype error."); }
 		}
 	}
-	pub fn get_irinfo(&self) -> IrInfo {
-		match &self.op {
-			IrCall { name, len, args } => {
-				let _name = name;
-				let _len = len;
-				let _args = args;
-				return IRINFO.lock().unwrap().get(&IrOp::IrCall { name: format!(""), len: 0, args: vec![] }).unwrap().clone();
-			},
-			IrLabelAddr(_) => {
-				return IRINFO.lock().unwrap().get(&IrOp::IrLabelAddr(String::new())).unwrap().clone();
-			}
-			IrLoad(_) => {
-				return IRINFO.lock().unwrap().get(&IrOp::IrLoad(0)).unwrap().clone();
-			}
-			IrStore(_) => {
-				return IRINFO.lock().unwrap().get(&IrOp::IrStore(0)).unwrap().clone();
-			}
-			IrStoreArg(_) => {
-				return IRINFO.lock().unwrap().get(&IrOp::IrStoreArg(0)).unwrap().clone();
-			}
-			_ => {
-				return IRINFO.lock().unwrap().get(&self.op).unwrap().clone();
-			}
-		}
-	}
 	pub fn tostr(&self) -> String {
-		let irinfo = self.get_irinfo();
-		match irinfo.ty.clone() {
-			NoArg => { format!("Nop") },
-			Reg => { format!("{}, r{}", irinfo.ty, self.lhs) },
-			Label => { format!("{}", self.lhs) },
-			RegReg => { format!("{} r{}, r{}", irinfo.name, self.lhs, self.rhs) },
-			RegImm => { format!("{} r{}, {}", irinfo.name, self.lhs, self.rhs) },
-			RegLabel => { format!("{} r{}, .L{}", irinfo.name, self.lhs, self.rhs) },
-			Call => {
-				match &self.op {
-					IrCall{ name, len, args } => {
-						let _len = len;
-						let mut s = String::from(format!("{} {}(", irinfo.name, name));
-						for arg in args {
-							s += &format!(", {}", arg);
-						}
-						s += &format!("), {}, {})", self.lhs, self.rhs);
-						return s;
-					}
-					_ => { panic!("tostr call error {}"); }
+		match &self.op {
+			IrImm => { return format!("Imm r{}, {}", self.lhs, self.imm); }
+			IrMov => { return format!("Mov r{}, r{}", self.lhs, self.rhs); }
+			IrAdd => { return format!("Add r{}, r{}", self.lhs, self.rhs); }
+			IrBpRel => { return format!("Lea r{}, [rbp-{}]", self.lhs, self.imm); }
+			IrSub => { return format!("Sub r{}, r{}", self.lhs, self.rhs); }
+			IrMul => { return format!("Mul r{}, r{}", self.lhs, self.rhs); }
+			IrDiv => { return format!("Div r{}, r{}", self.lhs, self.rhs); }
+			IrRet => { return format!("Return {}", self.lhs); }
+			IrStore(ir_size) => { return format!("Store{} [r{}], r{}", ir_size, self.lhs, self.rhs); }
+			IrLoad(ir_size) => { return format!("Load{} r{}, [r{}]", ir_size, self.lhs, self.rhs); }
+			IrJmp => { return format!("Jmp .L{}", self.imm); }
+			IrCall { name, len, args } => { 
+				let _len = len;
+				let mut call_s = format!("Call {}(", name);
+				for arg in args {
+					call_s.push_str(&format!("r{}, ", arg));
 				}
+				if call_s.len() > 0 {
+					call_s.pop();
+					call_s.pop();
+				}
+				call_s.push_str(")");
+				return call_s; 
 			}
-			Imm => { format!("{} {}", irinfo.name, self.lhs) },
-			ImmImm => { format!("{} {} {}", irinfo.name, self.lhs, self.rhs) }
-			LabelAddr => { format!("{} r{} .L.str{}", irinfo.name, self.lhs, self.rhs) }
-			Mem => { 
-				match self.op {
-					IrLoad(size) | IrStore(size) | IrStoreArg(size) => { format!("{}{} r{} r{}", irinfo.name, size, self.lhs, self.rhs) }
-					_ => { panic!("tostr Mem error."); }
-				} 
-			}
-			Br => { format!("") }
+			IrStoreArg(ir_size) => { return format!("STORE_ARG{}, {}, {}", ir_size, self.imm, self.imm2); }
+			IrLt => { return format!("Lt r{}, r{}", self.lhs, self.rhs); }
+			IrEqual => { return format!("Equal r{}, r{}", self.lhs, self.rhs); }
+			IrNe => { return format!("Ne r{}, r{}", self.lhs, self.rhs); }
+			IrLabelAddr(labelname) => { return format!("Label_Addr r{}, .L{}", self.lhs, labelname); }
+			IrOr => { return format!("Or r{}, r{}", self.lhs, self.rhs); }
+			IrXor => { return format!("Xor r{}, r{}", self.lhs, self.rhs); }
+			IrAnd => { return format!("And r{}, r{}", self.lhs, self.rhs); }
+			IrLe => { return format!("Le r{}, r{}", self.lhs, self.rhs); }
+			IrShl => { return format!("Shl r{}, r{}", self.lhs, self.rhs); }
+			IrShr => { return format!("Shr r{}, r{}", self.lhs, self.rhs); }
+			IrMod => { return format!("Mod r{}, r{}", self.lhs, self.rhs); }
+			IrNeg => { return format!("Neg r{}", self.lhs); }
+			IrBr => { return format!("Br r{}, .L{}, .L{}", self.lhs, self.bb1_label, self.bb2_label); }
 		}
 	}
 	fn emit(op: IrOp, lhs: i32, rhs: i32, fun: &mut Function) {
-		fun.bbs.last_mut().unwrap().irs.push(Ir::new(op, lhs, rhs, -1, -1));
+		fun.bbs.last_mut().unwrap().irs.push(Ir::new(op, lhs, rhs, -1, -1, -1, -1));
 	}
 	fn bb_emit(op: IrOp, lhs: i32, rhs: i32, bb1_label: i32, bb2_label: i32, fun: &mut Function) {
-		fun.bbs.last_mut().unwrap().irs.push(Ir::new(op, lhs, rhs, bb1_label, bb2_label));
+		fun.bbs.last_mut().unwrap().irs.push(Ir::new(op, lhs, rhs, bb1_label, bb2_label, -1, -1));
 	}
-	fn br(cond: i32, then_label: i32, els_label: i32, fun: &mut Function) {
-		Ir::bb_emit(IrBr, cond, -1, then_label, els_label, fun);
+	fn br(r: i32, then_label: i32, els_label: i32, fun: &mut Function) {
+		Ir::bb_emit(IrBr, r, -1, then_label, els_label, fun);
 	}
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum IrType {
-	NoArg,
-	Reg,
-	Label,
-	RegReg,
-	RegImm,
-	RegLabel,
-	Call,
-	Imm,
-	ImmImm,
-	LabelAddr,
-	Mem,
-	Br,
-}
-
-impl fmt::Display for IrType {
-	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		match self {
-			NoArg => { write!(f, "NoArg") },
-			Reg => { write!(f, "Reg") },
-			Label => { write!(f, "Label") },
-			RegReg => { write!(f, "RegReg") },
-			RegImm => { write!(f, "RegImm") },
-			RegLabel => { write!(f, "RegLabel") },
-			Call => { write!(f, "Call") },
-			Imm => { write!(f, "Imm") },
-			ImmImm => { write!(f, "ImmImm") },
-			LabelAddr => { write!(f, "LabelAddr") },
-			Mem => { write!(f, "Mem") },
-			Br => { write!(f, "Branch")},
-		}
+	fn imm_emit(op: IrOp, lhs: i32, imm: i32, imm2: i32, fun: &mut Function) {
+		fun.bbs.last_mut().unwrap().irs.push(Ir::new(op, lhs, -1, -1, -1, imm, imm2));
 	}
 }
 
@@ -234,7 +182,7 @@ fn kill(r: i32, fun: &mut Function) {
 }
 
 fn jmp(x: i32, fun: &mut Function) {
-	Ir::emit(IrJmp, x, 0, fun);
+	Ir::bb_emit(IrJmp, -1, -1, x, -1, fun);
 }
 
 fn load(ctype: &Type, dst: i32, src: i32, fun: &mut Function) {
@@ -246,7 +194,7 @@ fn store(ctype: &Type, dst: i32, src: i32, fun: &mut Function) {
 }
 
 fn store_arg(ctype: &Type, offset: i32, id: i32, fun: &mut Function) {
-	Ir::emit(IrOp::IrStoreArg(ctype.size), offset, id, fun);
+	Ir::imm_emit(IrOp::IrStoreArg(ctype.size), -1, offset, id, fun);
 }
 
 fn gen_binop(irop: IrOp, lhs: &Node, rhs: &Node, fun: &mut Function) -> i32 {
@@ -264,18 +212,18 @@ fn gen_inc_scale(ctype: &Type) -> i32 {
 	}
 }
 
-fn gen_imm(op: IrOp, r1: i32, num: i32, fun: &mut Function) {
-	let r2 = new_regno();
-	Ir::emit(IrImm, r2, num, fun);
-	Ir::emit(op, r1, r2, fun);
-	kill(r2, fun);
+fn imm(op: IrOp, r: i32, imm: i32, imm2: i32, fun: &mut Function) {
+	Ir::imm_emit(op, r, imm, imm2, fun);
 }
 
 fn gen_pre_inc(ctype: &Type, lhs: &Node, fun: &mut Function, num: i32) -> i32 {
 	let r1 = gen_lval(lhs, fun);
 	let r2 = new_regno();
 	load(ctype, r2, r1, fun);
-	gen_imm(IrAdd, r2, num * gen_inc_scale(ctype), fun);
+	let r3 = new_regno();
+	imm(IrImm, r3, num * gen_inc_scale(ctype), -1, fun);
+	Ir::emit(IrAdd, r2, r3, fun);
+	kill(r3, fun);
 	store(ctype, r1, r2, fun);
 	kill(r1, fun);
 	return r2;
@@ -283,7 +231,10 @@ fn gen_pre_inc(ctype: &Type, lhs: &Node, fun: &mut Function, num: i32) -> i32 {
 
 fn gen_post_inc(ctype: &Type, lhs: &Node, fun: &mut Function, num: i32) -> i32 {
 	let r = gen_pre_inc(ctype, lhs, fun, num);
-	gen_imm(IrSub, r, num * gen_inc_scale(ctype), fun);
+	let r2 = new_regno();
+	imm(IrImm, r2, num * gen_inc_scale(ctype), -1, fun);
+	Ir::emit(IrSub, r, r2, fun);
+	kill(r2, fun);
 	return r;
 }
 
@@ -353,15 +304,18 @@ fn gen_lval(node: &Node, fun: &mut Function) -> i32 {
 		NodeType::VarRef(var) => {
 			let r = new_regno();
 			if var.is_local {
-				Ir::emit(IrBpRel, r, var.offset, fun);
+				imm(IrBpRel, r, var.offset, -1, fun);
 			} else {
-				Ir::emit(IrLabelAddr(var.labelname.clone().unwrap()), r, 0, fun);
+				Ir::emit(IrLabelAddr(var.labelname.clone().unwrap()), r, -1, fun);
 			}
 			return r;
 		}
 		NodeType::Dot(ctype, expr, _) => {
 			let r1 = gen_lval(expr, fun);
-			gen_imm(IrAdd, r1, ctype.offset, fun);
+			let r2 = new_regno();
+			imm(IrImm, r2, ctype.offset, -1, fun);
+			Ir::emit(IrAdd, r1, r2, fun);
+			kill(r2, fun);
 			return r1;
 		}
 		_ => { panic!("not an lvalue")}
@@ -374,7 +328,7 @@ fn gen_expr(node: &Node, fun: &mut Function) -> i32 {
 	match &node.op {
 		NodeType::Num(val) => {
 			let r = new_regno();
-			Ir::emit(IrImm, r, *val, fun);
+			imm(IrImm, r, *val, -1, fun);
 			return r;
 		},
 		NodeType::BinaryTree(_, ty, lhs, rhs) => {
@@ -395,7 +349,7 @@ fn gen_expr(node: &Node, fun: &mut Function) -> i32 {
 					Ir::br(r, bb2.label, last.label, fun);
 
 					fun.bb_push(bb2);
-					Ir::emit(IrImm, r, 1, fun);
+					imm(IrImm, r, 1, -1, fun);
 					jmp(last.label, fun);
 
 					fun.bb_push(last);
@@ -418,7 +372,7 @@ fn gen_expr(node: &Node, fun: &mut Function) -> i32 {
 					Ir::br(r, bb2.label, last.label, fun);
 
 					fun.bb_push(bb2);
-					Ir::emit(IrImm, r, 1, fun);
+					imm(IrImm, r, 1, -1, fun);
 					jmp(last.label, fun);
 
 					fun.bb_push(last);
@@ -465,7 +419,7 @@ fn gen_expr(node: &Node, fun: &mut Function) -> i32 {
 					args: args.clone()
 				}, 
 				r, 
-				0, 
+				-1, 
 				fun
 			);
 			for arg in args {
@@ -495,7 +449,7 @@ fn gen_expr(node: &Node, fun: &mut Function) -> i32 {
 		NodeType::Not(expr) => {
 			let r1 = gen_expr(expr, fun);
 			let r2 = new_regno();
-			Ir::emit(IrImm, r2, 0, fun);
+			imm(IrImm, r2, 0, -1, fun);
 			Ir::emit(IrEqual, r1, r2, fun);
 			kill(r2, fun);
 			return r1;
@@ -542,7 +496,7 @@ fn gen_expr(node: &Node, fun: &mut Function) -> i32 {
 				return r1;
 			}
 			let r2 = new_regno();
-			Ir::emit(IrImm, r2, 0, fun);
+			imm(IrImm, r2, 0, -1, fun);
 			Ir::emit(IrNe, r1, r2, fun);
 			kill(r2, fun);
 			return r1;
@@ -560,7 +514,7 @@ fn gen_expr(node: &Node, fun: &mut Function) -> i32 {
 				}
 			}
 			let r = new_regno();
-			Ir::emit(IrImm, r, 0, fun);
+			imm(IrImm, r, 0, -1, fun);
 			return r;
 		}
 		_ => { panic!("gen_expr NodeType error at {:?}", node.op); }
@@ -659,6 +613,7 @@ fn gen_stmt(node: &Node, fun: &mut Function) {
 			let body_bb = BB::new();
 			let continue_bb = BB::new();
 			let break_bb = BB::new();
+			
 			loop_inc(continue_bb.label, break_bb.label);
 			let body_bb_label = body_bb.label;
 

@@ -1,3 +1,4 @@
 int main() {
-	int x=0; switch(3) { case 2: x=5; break; case 3: x=6; break; case 4: x=7; break; } return x;
+	// struct { int a; } x; x.a=3; return x.a;
+	struct tag { char a; int b; } x; struct tag *p = &x; x.a=3; x.b=5; return p->a+p->b;
 }

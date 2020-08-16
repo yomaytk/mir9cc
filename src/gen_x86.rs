@@ -86,7 +86,7 @@ fn emit_ir(ir: &Ir, ret: &str) {
 	let rhs = ir.rhs as usize;
 	match &ir.op {
 		IrImm => {
-			emit!("mov {}, {}", REG64[lhs], rhs);
+			emit!("mov {}, {}", REG64[lhs], ir.imm);
 		}
 		IrMov => {
 			emit!("mov {}, {}", REG64[lhs], REG64[rhs]);
@@ -98,7 +98,7 @@ fn emit_ir(ir: &Ir, ret: &str) {
 			emit!("sub {}, {}", REG64[lhs], REG64[rhs]);
 		}
 		IrBpRel => {
-			emit!("lea {}, [rbp-{}]", REG64[lhs], rhs);
+			emit!("lea {}, [rbp-{}]", REG64[lhs], ir.imm);
 		}
 		IrMul => {
 			emit!("mov rax, {}", REG64[rhs]);
@@ -130,7 +130,7 @@ fn emit_ir(ir: &Ir, ret: &str) {
 			emit!("jmp .L{}", ir.bb2_label);
 		}
 		IrJmp => {
-			emit!("jmp .L{}", lhs);
+			emit!("jmp .L{}", ir.bb1_label);
 		}
 		IrCall { name, len , args } => {
 
@@ -148,7 +148,7 @@ fn emit_ir(ir: &Ir, ret: &str) {
 			emit!("mov {}, rax", REG64[lhs]);
 		}
 		IrStoreArg(size) => {
-			emit!("mov [rbp-{}], {}", lhs, argreg(*size, rhs));
+			emit!("mov [rbp-{}], {}", ir.imm, argreg(*size, ir.imm2 as usize));
 		}
 		IrLt => {
 			emit_cmp(ir, String::from("setl"));
@@ -191,8 +191,6 @@ fn emit_ir(ir: &Ir, ret: &str) {
 		IrNeg => {
 			emit!("neg {}", REG64[lhs]);
 		}
-		IrNop => {},
-		_ => { panic!("unexpected IrOp in gen_x86"); }
 	}
 }
 

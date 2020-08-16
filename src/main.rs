@@ -71,16 +71,18 @@ fn main() {
 	// alloc index for register
 	gen_ir(&mut program);
 	if dump_ir1 {
-		IrInfo::dump_ir(&program.funs, "-dump-ir1");
+		dump_ir(&program.funs, "-dump-ir1");
 	}
 	// for func in &program.funs {
-	// 	for ir in &func.irs{
-	// 		println!("{:?}", ir);
+	// 	for bb in &func.bbs {
+	// 		for ir in &bb.irs {
+	// 			println!("{:?}", ir);
+	// 		}
 	// 	}
 	// }
 	alloc_regs(&mut program);
 	if dump_ir2 {
-		IrInfo::dump_ir(&program.funs, "-dump-ir2");
+		dump_ir(&program.funs, "-dump-ir2");
 	}
 	// for func in &program.funs {
 	// 	for ir in &func.irs{

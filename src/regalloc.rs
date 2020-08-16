@@ -1,4 +1,4 @@
-use super::gen_ir::{*, IrOp::*, IrType::*};
+use super::gen_ir::{*, IrOp::*};
 use super::mir::*;
 
 // Register allocator.
@@ -48,28 +48,17 @@ fn alloc(reg_map: &mut [i32], used: &mut [bool], ir_reg: i32) -> i32 {
 
 // do allocating register to reg_map 
 pub fn visit(reg_map: &mut Vec<i32>, used: &mut Vec<bool>, ir: &mut Ir) {
-	let info = ir.get_irinfo();
-	match info.ty {
-		Reg | RegImm | RegLabel | LabelAddr | Br => {
-			ir.lhs = alloc(reg_map, used, ir.lhs);
-		},
-		RegReg | Mem => {
-			ir.lhs = alloc(reg_map, used, ir.lhs);
-			ir.rhs = alloc(reg_map, used, ir.rhs);
-		},
-		Call => {
-			match &mut ir.op {
-				IrCall { name, len, args } => {
-					let _name = name;
-					ir.lhs = alloc(reg_map, used, ir.lhs);
-					for i in 0..*len {
-						args[i] = alloc(reg_map, used, args[i]);
-					}
-				},
-				_ => { panic!("alloc_regs call error"); }
-			}
+	if ir.lhs > 0 {
+		ir.lhs = alloc(reg_map, used, ir.lhs);
+	}
+	if ir.rhs > 0 {
+		ir.rhs = alloc(reg_map, used, ir.rhs);
+	}
+	if let IrCall{ name, len, args } = &mut ir.op {
+		let _name = name;
+		for i in 0..*len {
+			args[i] = alloc(reg_map, used, args[i]);
 		}
-		Label | NoArg | Imm | ImmImm => {}
 	}
 	for r in &ir.kills {
 		let lhs = alloc(reg_map, used, *r);
