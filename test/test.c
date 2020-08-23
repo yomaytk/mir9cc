@@ -8,9 +8,9 @@ extern void *stderr;
 		fprintf(stderr, "%s => %d\n", #expr, e2);                 \
 	} else {                                                    \
 		fprintf(stderr, "%d: %s: %d expected, but got %d\n",      \
-				__LINE__, #expr, e1, e2);                         \
+				__LINE__, #expr, e1, e2);                       \
 		exit(1);                                                  \
-	}                                                           \
+	}                                                          \
 } while (0)
 
 int printf();

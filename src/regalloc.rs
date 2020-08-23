@@ -1,5 +1,7 @@
 use super::gen_ir::{*, IrOp::*};
 use super::mir::*;
+use std::rc::Rc;
+use std::cell:: RefCell;
 
 // Register allocator.
 //
@@ -16,21 +18,54 @@ use super::mir::*;
 static REG_SIZE: usize = 7;
 static REGMAP_SZ: i32 = 8192;
 
-fn kill(used: &mut Vec<bool>, r: usize) {
-	assert!(used[r]);
-	used[r] = false;
+fn kill(reg_map: &mut [i32], used: &mut Vec<bool>, r: &mut Reg) {
+	if r.rn < 0 { return; }
+	let vn = r.vn as usize;
+	let rn = r.rn as usize;
+	assert!(used[rn]);
+	reg_map[vn] = -2;
+	used[rn] = false;
+}
+
+// in IR, A = B op C  ---> A = B; A = A op C;
+fn three_two(bb: &Rc<RefCell<BB>>) {
+	let irs = std::mem::replace(&mut bb.borrow_mut().irs, vec![]);
+	let mut n_irs = vec![];
+	for mut ir in irs {
+		if ir.r0.vn < 0 || ir.r1.vn < 0 {
+			n_irs.push(ir);
+			continue;
+		}
+		assert!(ir.r0.vn != ir.r1.vn);
+		// A = B;
+		let mut ir1 = Ir::new(IrOp::IrMov, ir.r0.clone(), Reg::dummy(), ir.r1.clone(), Reg::dummy(), None, None, -1, -1);
+		ir1.kills.push(ir.r1.clone());
+		n_irs.push(ir1);
+		// A = A op C;
+		ir.r1 = ir.r0.clone();
+		n_irs.push(ir);
+	}
+	// println!("{:#?}", &n_irs);
+	bb.borrow_mut().irs = n_irs;
 }
 
 // allocate the register can be used
-fn alloc(reg_map: &mut [i32], used: &mut [bool], ir_reg: i32) -> i32 {
+fn alloc(reg_map: &mut [i32], used: &mut [bool], r: &mut Reg) {
 	
-	if REGMAP_SZ < ir_reg {
+	let vn = r.vn as usize;
+
+	if REGMAP_SZ < r.vn {
 		eprintln!("program too big.");
 		std::process::exit(0);
 	}
-	if reg_map[ir_reg as usize] != -1 {
-		if !used[reg_map[ir_reg as usize] as usize] { panic!("the register allocated is not used. at reg_map[{}]", ir_reg); }
-		return reg_map[ir_reg as usize];
+
+	if r.vn < 0 { return; }
+	
+	if reg_map[vn] != -1 {
+		if reg_map[vn] == -2 { return; }			// already killed
+		if !used[reg_map[vn] as usize] { panic!("the register allocated is not used."); }
+		r.rn = reg_map[vn];
+		return;
 	}
 
 	let mut i: usize = 0;
@@ -39,30 +74,32 @@ fn alloc(reg_map: &mut [i32], used: &mut [bool], ir_reg: i32) -> i32 {
 			i += 1;
 			continue;
 		}
-		reg_map[ir_reg as usize] = i as i32;
+		reg_map[vn] = i as i32;
 		used[i] = true;
-		return i as i32;
+		r.rn = i as i32;
+		return;
 	}
+	
 	panic!("register exhausted.");
 }
 
 // do allocating register to reg_map 
-pub fn visit(reg_map: &mut Vec<i32>, used: &mut Vec<bool>, ir: &mut Ir) {
-	if ir.r0.vn > 0 {
-		ir.r0.rn = alloc(reg_map, used, ir.r0.vn);
-	}
-	if ir.r2.vn > 0 {
-		ir.r2.rn = alloc(reg_map, used, ir.r2.vn);
-	}
+fn visit(reg_map: &mut Vec<i32>, used: &mut Vec<bool>, ir: &mut Ir) {
+	
+	alloc(reg_map, used, &mut ir.r0);
+	alloc(reg_map, used, &mut ir.r1);
+	alloc(reg_map, used, &mut ir.r2);
+	alloc(reg_map, used, &mut ir.bbarg);
 	if let IrCall{ name, len, args } = &mut ir.op {
 		let _name = name;
 		for i in 0..*len {
-			args[i].rn = alloc(reg_map, used, args[i].vn);
+			alloc(reg_map, used, &mut args[i]);
 		}
 	}
-	for r in &ir.kills {
-		let r = alloc(reg_map, used, r.vn) as usize;
-		kill(used, r);
+
+	for r in &mut ir.kills {
+		alloc(reg_map, used, r);
+		kill(reg_map, used, r);
 	}
 }
 
@@ -72,7 +109,12 @@ pub fn alloc_regs(program: &mut Program) {
 		let mut reg_map: Vec<i32> = vec![-1; 8192];
 		let mut used: Vec<bool> = vec![false; 8];
 		for bb in &mut fun.bbs {
-			for ir in &mut bb.irs {
+			three_two(&bb);
+			let vn = bb.borrow().param.vn;
+			if vn > 0 {
+				alloc(&mut reg_map, &mut used, &mut bb.borrow_mut().param);
+			}
+			for ir in &mut bb.borrow_mut().irs {
 				visit(&mut reg_map, &mut used, ir);
 			}
 		}

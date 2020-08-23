@@ -5,6 +5,8 @@ use super::parse::*;
 use super::mir::*;
 
 use std::sync::Mutex;
+use std::rc::Rc;
+use std::cell:: RefCell;
 
 // mir9cc's code generation is two-pass. In the first pass, abstract
 // syntax trees are compiled to IR (intermediate representation).
@@ -19,10 +21,11 @@ use std::sync::Mutex;
 
 lazy_static! {
 	pub static ref REGNO: Mutex<i32> = Mutex::new(1);
-	pub static ref CONTINUE_VEC: Mutex<Vec<i32>> = Mutex::new(vec![]);
-	pub static ref BREAK_VEC: Mutex<Vec<i32>> = Mutex::new(vec![]);
-	pub static ref SWITCHES: Mutex<Vec<Vec<BB>>> = Mutex::new(vec![]);
 }
+
+thread_local!(pub static SWITCHES: Rc<RefCell<Vec<Vec<Rc<RefCell<BB>>>>>> = Rc::new(RefCell::new(vec![])));
+thread_local!(pub static CONTINUE_VEC: Rc<RefCell<Vec<Rc<RefCell<BB>>>>> = Rc::new(RefCell::new(vec![])));
+thread_local!(pub static BREAK_VEC: Rc<RefCell<Vec<Rc<RefCell<BB>>>>> = Rc::new(RefCell::new(vec![])));
 
 #[allow(dead_code)]
 #[derive(Debug, PartialEq, std::cmp::Eq, std::hash::Hash)]
@@ -59,22 +62,26 @@ pub enum IrOp {
 pub struct Ir {
 	pub op: IrOp,
 	pub r0: Reg,
+	pub r1: Reg,
 	pub r2: Reg,
-	pub bb1_label: i32,
-	pub bb2_label: i32,
+	pub bbarg: Reg,
+	pub bb1: Option<Rc<RefCell<BB>>>,
+	pub bb2: Option<Rc<RefCell<BB>>>,
 	pub imm: i32,
 	pub imm2: i32,
 	pub kills: Vec<Reg>		// For liveness tracking
 }
 
 impl Ir {
-	pub fn new(ty: IrOp, lhs: Reg, rhs: Reg, bb1_label: i32, bb2_label: i32, imm: i32, imm2: i32) -> Self {
+	pub fn new(op: IrOp, r0: Reg, r1: Reg, r2: Reg, bbarg: Reg, bb1: Option<Rc<RefCell<BB>>>, bb2: Option<Rc<RefCell<BB>>>, imm: i32, imm2: i32) -> Self {
 		Self {
-			op: ty,
-			r0: lhs,
-			r2: rhs,
-			bb1_label,
-			bb2_label,
+			op,
+			r0,
+			r1,
+			r2,
+			bbarg,
+			bb1,
+			bb2,
 			imm, 
 			imm2,
 			kills: vec![],
@@ -137,60 +144,72 @@ impl Ir {
 			IrShr => { return format!("Shr r{}, r{}", self.r0, self.r2); }
 			IrMod => { return format!("Mod r{}, r{}", self.r0, self.r2); }
 			IrNeg => { return format!("Neg r{}", self.r0); }
-			IrBr => { return format!("Br r{}, .L{}, .L{}", self.r0, self.bb1_label, self.bb2_label); }
+			IrBr => { return format!("Br r{}, .L{}, .L{}", self.r0, self.bb1.clone().unwrap().borrow().label, self.bb2.clone().unwrap().borrow().label); }
 		}
 	}
-	fn emit(op: IrOp, lhs: Reg, rhs: Reg, fun: &mut Function) {
-		fun.bbs.last_mut().unwrap().irs.push(Ir::new(op, lhs, rhs, -1, -1, -1, -1));
+	fn emit(op: IrOp, r0: Reg, r1: Reg, r2: Reg, fun: &mut Function) {
+		fun.bbs.last_mut().unwrap().borrow_mut().irs.push(Ir::new(op, r0, r1, r2, Reg::dummy(), None, None, -1, -1));
 	}
-	fn bb_emit(op: IrOp, lhs: Reg, rhs: Reg, bb1_label: i32, bb2_label: i32, fun: &mut Function) {
-		fun.bbs.last_mut().unwrap().irs.push(Ir::new(op, lhs, rhs, bb1_label, bb2_label, -1, -1));
+	fn bb_emit(op: IrOp, r0: Reg, r2: Reg, bbarg: Reg, bb1: Option<Rc<RefCell<BB>>>, bb2: Option<Rc<RefCell<BB>>>, fun: &mut Function) {
+		fun.bbs.last_mut().unwrap().borrow_mut().irs.push(Ir::new(op, r0, Reg::dummy(), r2, bbarg, bb1, bb2, -1, -1));
 	}
-	fn br(r: Reg, then_label: i32, els_label: i32, fun: &mut Function) {
-		Ir::bb_emit(IrBr, r, Reg::dummy(), then_label, els_label, fun);
+	fn br(r: Reg, then: Option<Rc<RefCell<BB>>>, els: Option<Rc<RefCell<BB>>>, fun: &mut Function) {
+		Ir::bb_emit(IrBr, Reg::dummy(), r, Reg::dummy(), then, els, fun);
 	}
-	fn imm_emit(op: IrOp, lhs: Reg, imm: i32, imm2: i32, fun: &mut Function) {
-		fun.bbs.last_mut().unwrap().irs.push(Ir::new(op, lhs, Reg::dummy(), -1, -1, imm, imm2));
+	fn imm_emit(op: IrOp, r0: Reg, imm: i32, imm2: i32, fun: &mut Function) {
+		fun.bbs.last_mut().unwrap().borrow_mut().irs.push(Ir::new(op, r0, Reg::dummy(), Reg::dummy(), Reg::dummy(), None, None, imm, imm2));
 	}
 }
 
 pub struct Function {
 	pub name: String,
-	pub bbs: Vec<BB>,
+	pub bbs: Vec<Rc<RefCell<BB>>>,
 	pub stacksize: i32,
 }
 
 impl Function {
-	pub fn new(name: String, bbs: Vec<BB>, stacksize: i32) -> Self {
+	pub fn new(name: String, bbs: Vec<Rc<RefCell<BB>>>, stacksize: i32) -> Self {
 		Self {
 			name,
 			bbs,
 			stacksize,
 		}
 	}
-	pub fn bb_push(&mut self, bb: BB) {
+	pub fn bb_push(&mut self, bb: Rc<RefCell<BB>>) {
 		self.bbs.push(bb);
 	}
 }
 
+fn get_switches_rc_mut() -> Rc<RefCell<Vec<Vec<Rc<RefCell<BB>>>>>> {
+	SWITCHES.with(|rc| rc.clone())
+}
+
+fn get_continue_vec_rc_mut() -> Rc<RefCell<Vec<Rc<RefCell<BB>>>>> {
+	CONTINUE_VEC.with(|rc| rc.clone())
+}
+
+fn get_break_vec_rc_mut() -> Rc<RefCell<Vec<Rc<RefCell<BB>>>>> {
+	BREAK_VEC.with(|rc| rc.clone())
+}
+
 fn kill(r: Reg, fun: &mut Function) {
 	if let Some(_) = fun.bbs.last() {
-		fun.bbs.last_mut().unwrap().irs.last_mut().unwrap().kills.push(r);
+		fun.bbs.last_mut().unwrap().borrow_mut().irs.last_mut().unwrap().kills.push(r);
 	} else {
 		panic!("kill fun error.");
 	}
 }
 
-fn jmp(x: i32, fun: &mut Function) {
-	Ir::bb_emit(IrJmp, Reg::dummy(), Reg::dummy(), x, -1, fun);
+fn jmp(x_bb: Option<Rc<RefCell<BB>>>, bbarg: Reg, fun: &mut Function) {
+	Ir::bb_emit(IrJmp, Reg::dummy(), Reg::dummy(), bbarg, x_bb, None, fun);
 }
 
 fn load(ctype: &Type, dst: Reg, src: Reg, fun: &mut Function) {
-	Ir::emit(IrOp::IrLoad(ctype.size), dst, src, fun);
+	Ir::emit(IrOp::IrLoad(ctype.size), dst, Reg::dummy(), src, fun);
 }
 
 fn store(ctype: &Type, dst: Reg, src: Reg, fun: &mut Function) {
-	Ir::emit(IrOp::IrStore(ctype.size), dst, src, fun);
+	Ir::emit(IrOp::IrStore(ctype.size), Reg::dummy(), dst, src, fun);
 }
 
 fn store_arg(ctype: &Type, offset: i32, id: i32, fun: &mut Function) {
@@ -198,11 +217,14 @@ fn store_arg(ctype: &Type, offset: i32, id: i32, fun: &mut Function) {
 }
 
 fn gen_binop(irop: IrOp, lhs: &Node, rhs: &Node, fun: &mut Function) -> Reg {
+	let r0 = Reg::new();
 	let r1 = gen_expr(lhs, fun);
 	let r2 = gen_expr(rhs, fun);
-	Ir::emit(irop, r1.clone(), r2.clone(), fun);
+	
+	Ir::emit(irop, r0.clone(), r1.clone(), r2.clone(), fun);
+	kill(r1, fun);
 	kill(r2, fun);
-	return r1;
+	return r0;
 }
 
 fn gen_inc_scale(ctype: &Type) -> i32 {
@@ -212,64 +234,85 @@ fn gen_inc_scale(ctype: &Type) -> i32 {
 	}
 }
 
-fn imm(op: IrOp, r: Reg, imm: i32, imm2: i32, fun: &mut Function) {
-	Ir::imm_emit(op, r, imm, imm2, fun);
+fn imm(op: IrOp, imm: i32, imm2: i32, fun: &mut Function) -> Reg {
+	let r = Reg::new();
+	Ir::imm_emit(op, r.clone(), imm, imm2, fun);
+	return r;
 }
 
 fn gen_pre_inc(ctype: &Type, lhs: &Node, fun: &mut Function, num: i32) -> Reg {
 	let r1 = gen_lval(lhs, fun);
 	let r2 = Reg::new();
 	load(ctype, r2.clone(), r1.clone(), fun);
-	let r3 = Reg::new();
-	imm(IrImm, r3.clone(), num * gen_inc_scale(ctype), -1, fun);
-	Ir::emit(IrAdd, r2.clone(), r3.clone(), fun);
+	let r3 = imm(IrImm, num * gen_inc_scale(ctype), -1, fun);
+	let r4 = Reg::new();
+	Ir::emit(IrAdd, r4.clone(), r2.clone(), r3.clone(), fun);
+	kill(r2, fun);
 	kill(r3, fun);
-	store(ctype, r1.clone(), r2.clone(), fun);
+	store(ctype, r1.clone(), r4.clone(), fun);
 	kill(r1, fun);
-	return r2;
+	return r4;
 }
 
 fn gen_post_inc(ctype: &Type, lhs: &Node, fun: &mut Function, num: i32) -> Reg {
-	let r = gen_pre_inc(ctype, lhs, fun, num);
-	let r2 = Reg::new();
-	imm(IrImm, r2.clone(), num * gen_inc_scale(ctype), -1, fun);
-	Ir::emit(IrSub, r.clone(), r2.clone(), fun);
+	let r1 = gen_pre_inc(ctype, lhs, fun, num);
+	let r2 = imm(IrImm, num * gen_inc_scale(ctype), -1, fun);
+	let r3 = Reg::new();
+	Ir::emit(IrSub, r3.clone(), r1.clone(), r2.clone(), fun);
+	kill(r1, fun);
 	kill(r2, fun);
-	return r;
+	return r3;
 }
 
-fn get_break_label() -> i32 {
-	if let Some(break_label) = BREAK_VEC.lock().unwrap().last() {
-		return *break_label;
+// fn gget_bb_break() {
+// 	let break_vec = get_break_vec_rc_mut();
+// 	if let Some(bb_break) = break_vec.borrow().last() {
+// 		// return bb_break.clone();
+// 	} else {
+// 		eprintln!("cannot find jmp point of break.");
+// 		std::process::exit(0);
+// 	}
+// }
+
+fn get_bb_break() -> Rc<RefCell<BB>> {
+	let break_vec = get_break_vec_rc_mut();
+	if let Some(bb_break) = break_vec.borrow().last() {
+		return bb_break.clone();
 	} else {
 		eprintln!("cannot find jmp point of break.");
-		std::process::exit(0);
 	}
+	std::process::exit(0);
 }
 
-fn get_continue_label() -> i32 {
-	if let Some(continue_label) = CONTINUE_VEC.lock().unwrap().last() {
-		return *continue_label;
+fn get_bb_continue() -> Rc<RefCell<BB>> {
+	let continue_vec = get_continue_vec_rc_mut();
+	if let Some(bb_continue) = continue_vec.borrow().last() {
+		return bb_continue.clone();
 	} else {
 		eprintln!("cannot find jmp point of break.");
-		std::process::exit(0);
 	}
+	std::process::exit(0);
 }
 
-fn loop_inc(continue_label: i32, break_label: i32) {
-	CONTINUE_VEC.lock().unwrap().push(continue_label);
-	BREAK_VEC.lock().unwrap().push(break_label);
+fn loop_inc(bb_continue: Rc<RefCell<BB>>, bb_break: Rc<RefCell<BB>>) {
+	let continue_vec = get_continue_vec_rc_mut();
+	let break_vec = get_break_vec_rc_mut();
+	continue_vec.borrow_mut().push(bb_continue);
+	break_vec.borrow_mut().push(bb_break);
 }
 
 fn loop_dec() {
-	if let None = BREAK_VEC.lock().unwrap().pop() {
+	let break_vec = get_break_vec_rc_mut();
+	let continue_vec = get_continue_vec_rc_mut();
+	if let None = break_vec.borrow_mut().pop() {
 		eprintln!("cannot find jmp point of break.");
 		std::process::exit(0);
 	}
-	if let None = CONTINUE_VEC.lock().unwrap().pop() {
+	if let None = continue_vec.borrow_mut().pop() {
 		eprintln!("cannot find jmp point of continue.");
 		std::process::exit(0);
 	}
+	return;
 }
 
 // In C, all expressions that can be written on the left-hand side of
@@ -297,21 +340,23 @@ fn gen_lval(node: &Node, fun: &mut Function) -> Reg {
 			return gen_expr(expr, fun);
 		}
 		NodeType::VarRef(var) => {
-			let r = Reg::new();
 			if var.is_local {
-				imm(IrBpRel, r.clone(), var.offset, -1, fun);
+				let r = imm(IrBpRel, var.offset, -1, fun);
+				return r;
 			} else {
-				Ir::emit(IrLabelAddr(var.labelname.clone().unwrap()), r.clone(), Reg::dummy(), fun);
+				let r = Reg::new();
+				Ir::emit(IrLabelAddr(var.labelname.clone().unwrap()), r.clone(), Reg::dummy(), Reg::dummy(), fun);
+				return r;
 			}
-			return r;
 		}
 		NodeType::Dot(ctype, expr, _) => {
 			let r1 = gen_lval(expr, fun);
-			let r2 = Reg::new();
-			imm(IrImm, r2.clone(), ctype.offset, -1, fun);
-			Ir::emit(IrAdd, r1.clone(), r2.clone(), fun);
-			kill(r2.clone(), fun);
-			return r1;
+			let r2 = imm(IrImm, ctype.offset, -1, fun);
+			let r3 = Reg::new();
+			Ir::emit(IrAdd, r3.clone(), r1.clone(), r2.clone(), fun);
+			kill(r1, fun);
+			kill(r2, fun);
+			return r3;
 		}
 		_ => { panic!("not an lvalue")}
 	}
@@ -322,57 +367,72 @@ fn gen_expr(node: &Node, fun: &mut Function) -> Reg {
 
 	match &node.op {
 		NodeType::Num(val) => {
-			let r = Reg::new();
-			imm(IrImm, r.clone(), *val, -1, fun);
+			let r = imm(IrImm, *val, -1, fun);
 			return r;
 		},
 		NodeType::BinaryTree(_, ty, lhs, rhs) => {
 			match ty {
 				// a && b
 				TokenLogAnd => {
-					let bb1 = BB::new();
-					let bb2 = BB::new();
-					let last = BB::new();
+					let bb = BB::new_rc();
+					let set0 = BB::new_rc();
+					let set1 = BB::new_rc();
+					let last = BB::new_param_rc();
+					let ret = last.borrow().param.clone();
 
 					let r = gen_expr(lhs, fun);
-					Ir::br(r.clone(), bb1.label, last.label, fun);
+					Ir::br(r.clone(), Some(Rc::clone(&bb)), Some(Rc::clone(&set0)), fun);
+					kill(r, fun);
 
-					fun.bb_push(bb1);
+					fun.bb_push(bb);
 					let r1 = gen_expr(rhs, fun);
-					Ir::emit(IrMov, r.clone(), r1.clone(), fun);
+					Ir::br(r1.clone(), Some(Rc::clone(&set1)), Some(Rc::clone(&set0)), fun);
 					kill(r1, fun);
-					Ir::br(r.clone(), bb2.label, last.label, fun);
 
-					fun.bb_push(bb2);
-					imm(IrImm, r.clone(), 1, -1, fun);
-					// jmp(last.label, fun);
+					fun.bb_push(set0);
+					let r2 = imm(IrImm, 0, -1, fun);
+					jmp(Some(Rc::clone(&last)), r2.clone(), fun);
+					kill(r2, fun);
+
+					fun.bb_push(set1);
+					let r3 = imm(IrImm, 1, -1, fun);
+					jmp(Some(Rc::clone(&last)), r3.clone(), fun);
+					kill(r3, fun);
 
 					fun.bb_push(last);
 
-					return r;
+					return ret;
 				}
 				// a || b
 				TokenLogOr => {
-					let bb1 = BB::new();
-					let bb2 = BB::new();
-					let last = BB::new();
+					let bb = BB::new_rc();
+					let set0 = BB::new_rc();
+					let set1 = BB::new_rc();
+					let last = BB::new_param_rc();
+					let ret = last.borrow().param.clone();
 
 					let r = gen_expr(lhs, fun);
-					Ir::br(r.clone(), bb2.label, bb1.label, fun);
+					Ir::br(r.clone(), Some(Rc::clone(&set1)), Some(Rc::clone(&bb)), fun);
+					kill(r, fun);
 
-					fun.bb_push(bb1);
+					fun.bb_push(bb);
 					let r1 = gen_expr(rhs, fun);
-					Ir::emit(IrMov, r.clone(), r1.clone(), fun);
+					Ir::br(r1.clone(), Some(Rc::clone(&set1)), Some(Rc::clone(&last)), fun);
 					kill(r1, fun);
-					Ir::br(r.clone(), bb2.label, last.label, fun);
 
-					fun.bb_push(bb2);
-					imm(IrImm, r.clone(), 1, -1, fun);
-					// jmp(last.label, fun);
+					fun.bb_push(set0);
+					let r2 = imm(IrImm, 0, -1, fun);
+					jmp(Some(Rc::clone(&last)), r2.clone(), fun);
+					kill(r2, fun);
+
+					fun.bb_push(set1);
+					let r3 = imm(IrImm, 1, -1, fun);
+					jmp(Some(Rc::clone(&last)), r3.clone(), fun);
+					kill(r3, fun);
 
 					fun.bb_push(last);
 
-					return r;
+					return ret;
 				}
 				_ => {
 				// a R b (R != &&, ||)
@@ -382,23 +442,27 @@ fn gen_expr(node: &Node, fun: &mut Function) -> Reg {
 		},
 		// a
 		NodeType::VarRef(var) => {
-			let lhi = gen_lval(node, fun);
-			load(&var.ctype, lhi.clone(), lhi.clone(), fun);
-			return lhi;
+			let r0 = Reg::new();
+			let r2 = gen_lval(node, fun);
+			load(&var.ctype, r0.clone(), r2.clone(), fun);
+			kill(r2, fun);
+			return r0;
 		}
 		// a.b (struct member)
 		NodeType::Dot(ctype, ..) => {
-			let lhi = gen_lval(node, fun);
-			load(ctype, lhi.clone(), lhi.clone(), fun);
-			return lhi;
+			let r0 = Reg::new();
+			let r2 = gen_lval(node, fun);
+			load(ctype, r0.clone(), r2.clone(), fun);
+			kill(r2, fun);
+			return r0;
 		},
 		// a = b
 		NodeType::Assign(ctype, lhs, rhs) => {
-			let rhi = gen_expr(rhs, fun);
-			let lhi = gen_lval(lhs, fun);
-			store(ctype, lhi.clone(), rhi.clone(), fun);
-			kill(lhi, fun);
-			return rhi;
+			let r2 = gen_expr(rhs, fun);
+			let r0 = gen_lval(lhs, fun);
+			store(ctype, r0.clone(), r2.clone(), fun);
+			kill(r0, fun);
+			return r2;
 		},
 		// fun(...)
 		NodeType::Call(_, ident, callarg) => {
@@ -414,8 +478,9 @@ fn gen_expr(node: &Node, fun: &mut Function) -> Reg {
 					args: args.clone()
 				}, 
 				r.clone(), 
+				Reg::dummy(),
 				Reg::dummy(), 
-				fun
+				fun,
 			);
 			for arg in args {
 				kill(arg, fun);
@@ -424,9 +489,11 @@ fn gen_expr(node: &Node, fun: &mut Function) -> Reg {
 		}
 		// *a
 		NodeType::Deref(_, lhs) => {
-			let r = gen_expr(lhs, fun);
-			load(lhs.nodesctype(None).ptr_to.unwrap().as_ref(), r.clone(), r.clone(), fun);
-			return r;
+			let r0 = Reg::new();
+			let r2 = gen_expr(lhs, fun);
+			load(lhs.nodesctype(None).ptr_to.unwrap().as_ref(), r0.clone(), r2.clone(), fun);
+			kill(r2, fun);
+			return r0;
 		}
 		// &a
 		NodeType::Addr(_, lhs) => {
@@ -442,37 +509,38 @@ fn gen_expr(node: &Node, fun: &mut Function) -> Reg {
 		}
 		// !a
 		NodeType::Not(expr) => {
+			let r0 = Reg::new();
 			let r1 = gen_expr(expr, fun);
-			let r2 = Reg::new();
-			imm(IrImm, r2.clone(), 0, -1, fun);
-			Ir::emit(IrEqual, r1.clone(), r2.clone(), fun);
+			let r2 = imm(IrImm, 0, -1, fun);
+			Ir::emit(IrEqual, r0.clone(), r1.clone(), r2.clone(), fun);
+			kill(r1, fun);
 			kill(r2, fun);
-			return r1;
+			return r0;
 		}
 		// a ? b : c
 		NodeType::Ternary(_, cond, then, els) => {
-			let bb1 = BB::new();
-			let bb2 = BB::new();
-			let last = BB::new();
+			let bb1 = BB::new_rc();
+			let bb2 = BB::new_rc();
+			let last = BB::new_param_rc();
+			let ret = last.borrow().param.clone();
 
 			let r = gen_expr(cond, fun);
-			Ir::br(r.clone(), bb1.label, bb2.label, fun);
+			Ir::br(r.clone(), Some(Rc::clone(&bb1)), Some(Rc::clone(&bb2)), fun);
+			kill(r, fun);
 
 			fun.bb_push(bb1);
 			let r1 = gen_expr(then, fun);
-			Ir::emit(IrMov, r.clone(), r1.clone(), fun);
+			jmp(Some(Rc::clone(&last)), r1.clone(), fun);
 			kill(r1, fun);
-			jmp(last.label, fun);
 
 			fun.bb_push(bb2);
 			let r2 = gen_expr(els, fun);
-			Ir::emit(IrMov, r.clone(), r2.clone(), fun);
+			jmp(Some(Rc::clone(&last)), r2.clone(), fun);
 			kill(r2, fun);
-			// jmp(last.label, fun);
 
 			fun.bb_push(last);
 
-			return r;
+			return ret;
 		}
 		// (a, b)
 		NodeType::TupleExpr(_, lhs, rhs) => {
@@ -490,11 +558,12 @@ fn gen_expr(node: &Node, fun: &mut Function) -> Reg {
 			if ctype.ty != Ty::BOOL {
 				return r1;
 			}
-			let r2 = Reg::new();
-			imm(IrImm, r2.clone(), 0, -1, fun);
-			Ir::emit(IrNe, r1.clone(), r2.clone(), fun);
+			let r2 = imm(IrImm, 0, -1, fun);
+			let r0 = Reg::new();
+			Ir::emit(IrNe, r0.clone(), r1.clone(), r2.clone(), fun);
+			kill(r1, fun);
 			kill(r2, fun);
-			return r1;
+			return r0;
 		}
 		NodeType::StmtExpr(_, body) => {
 			if let NodeType::CompStmt(stmts) = &body.op {
@@ -508,9 +577,8 @@ fn gen_expr(node: &Node, fun: &mut Function) -> Reg {
 					}
 				}
 			}
-			let r = Reg::new();
-			imm(IrImm, r.clone(), 0, -1, fun);
-			return r;
+			let r0 = imm(IrImm, 0, -1, fun);
+			return r0;
 		}
 		_ => { panic!("gen_expr NodeType error at {:?}", node.op); }
 	}
@@ -525,12 +593,11 @@ fn gen_stmt(node: &Node, fun: &mut Function) {
 		}
 		NodeType::Ret(lhs) => {
 			
-			let lhi = gen_expr(lhs.as_ref(), fun);
-			Ir::emit(IrRet, lhi.clone(), Reg::dummy(), fun);
-			kill(lhi, fun);
+			let r0 = gen_expr(lhs.as_ref(), fun);
+			Ir::emit(IrRet, r0.clone(), Reg::dummy(), Reg::dummy(), fun);
+			kill(r0, fun);
 
-			let bb = BB::new();
-			// jmp(bb.label, fun);
+			let bb = BB::new_rc();
 			fun.bb_push(bb);
 
 			return;
@@ -540,23 +607,23 @@ fn gen_stmt(node: &Node, fun: &mut Function) {
 			return;
 		}
 		NodeType::IfThen(cond, then, els) => {
-			let bb_then = BB::new();
-			let bb_els = BB::new();
-			let last = BB::new();
+			let bbt = BB::new_rc();
+			let bbe = BB::new_rc();
+			let last = BB::new_rc();
 
 			let r = gen_expr(cond, fun);
-			Ir::br(r.clone(), bb_then.label, bb_els.label, fun);
+			Ir::br(r.clone(), Some(Rc::clone(&bbt)), Some(Rc::clone(&bbe)), fun);
 			kill(r, fun);
 
-			fun.bb_push(bb_then);
+			fun.bb_push(bbt);
 			gen_stmt(then, fun);
-			jmp(last.label, fun);
+			jmp(Some(Rc::clone(&last)), Reg::dummy(), fun);
 
-			fun.bb_push(bb_els);
+			fun.bb_push(bbe);
 			if let Some(elsth) = els {
 				gen_stmt(elsth, fun);
 			}
-			// jmp(last.label, fun);
+			jmp(Some(Rc::clone(&last)), Reg::dummy(), fun);
 
 			fun.bb_push(last);
 
@@ -569,61 +636,58 @@ fn gen_stmt(node: &Node, fun: &mut Function) {
 			return;
 		}
 		NodeType::For(init, cond, inc, body) => {
-			let cond_bb = BB::new();
-			let body_bb = BB::new();
-			let continue_bb = BB::new();
-			let break_bb = BB::new();
-			loop_inc(continue_bb.label, break_bb.label);
+			let bb_cond = BB::new_rc();
+			let bb_body = BB::new_rc();
+			let bb_continue = BB::new_rc();
+			let bb_break = BB::new_rc();
+			let bb_cond_rc = Rc::clone(&bb_cond);
 			
-			let cond_bb_label = cond_bb.label;
-			
+			loop_inc(bb_continue.clone(), bb_break.clone());
 			gen_stmt(init, fun);
 			
-			fun.bb_push(cond_bb);
+			fun.bb_push(bb_cond);
 			match cond.op {
 				NodeType::NULL => {}
 				_ => {
 					let r = gen_expr(cond, fun);
-					Ir::br(r.clone(), body_bb.label, break_bb.label, fun);
+					Ir::br(r.clone(), Some(Rc::clone(&bb_body)), Some(Rc::clone(&bb_break)), fun);
 					kill(r, fun);
 				}
 			}
-			jmp(body_bb.label, fun);
+			jmp(Some(Rc::clone(&bb_body)), Reg::dummy(), fun);
 
-			fun.bb_push(body_bb);
+			fun.bb_push(bb_body);
 			gen_stmt(body, fun);
-			jmp(continue_bb.label, fun);
+			jmp(Some(Rc::clone(&bb_continue)), Reg::dummy(), fun);
 
-			fun.bb_push(continue_bb);
+			fun.bb_push(bb_continue);
 			gen_stmt(inc, fun);
-			jmp(cond_bb_label, fun);
+			jmp(Some(bb_cond_rc), Reg::dummy(), fun);
 
-			fun.bb_push(break_bb);
+			fun.bb_push(bb_break);
 
 			loop_dec();
 
 			return;
 		}
 		NodeType::DoWhile(body, cond) => {
-			let body_bb = BB::new();
-			let continue_bb = BB::new();
-			let break_bb = BB::new();
-			
-			loop_inc(continue_bb.label, break_bb.label);
-			let body_bb_label = body_bb.label;
+			let bb_body = BB::new_rc();
+			let bb_continue = BB::new_rc();
+			let bb_break = BB::new_rc();
+			let bb_body_rc = Rc::clone(&bb_body);
 
-			// jmp(body_bb.label, fun);
+			loop_inc(bb_continue.clone(), bb_break.clone());
 
-			fun.bb_push(body_bb);
+			fun.bb_push(bb_body);
 			gen_stmt(body, fun);
-			jmp(continue_bb.label, fun);
+			jmp(Some(Rc::clone(&bb_continue)), Reg::dummy(), fun);
 
-			fun.bb_push(continue_bb);
+			fun.bb_push(bb_continue);
 			let r = gen_expr(cond, fun);
-			Ir::br(r.clone(), body_bb_label, break_bb.label, fun);
+			Ir::br(r.clone(), Some(bb_body_rc), Some(Rc::clone(&bb_break)), fun);
 			kill(r, fun);
 
-			fun.bb_push(break_bb);
+			fun.bb_push(bb_break);
 
 			loop_dec();
 
@@ -631,50 +695,52 @@ fn gen_stmt(node: &Node, fun: &mut Function) {
 
 		}
 		NodeType::Switch(cond, body, case_conds) => {
-			let continue_bb = BB::new();
-			let break_bb = BB::new();
-			loop_inc(continue_bb.label, break_bb.label);
-			SWITCHES.lock().unwrap().push(vec![]);
+			let bb_continue = BB::new_rc();
+			let bb_break = BB::new_rc();
+			loop_inc(bb_continue.clone(), bb_break.clone());
+			let switches = get_switches_rc_mut();
+			switches.borrow_mut().push(vec![]);
 
 			let r = gen_expr(cond, fun);
 			
 			for val in case_conds {
-				let case_bb = BB::new();
-				let next_bb = BB::new();
+				let bbc = BB::new_rc();
+				let bbn = BB::new_rc();
 
 				let x = gen_expr(val, fun);
-				Ir::emit(IrEqual, x.clone(), r.clone(), fun);
-				Ir::br(x.clone(), case_bb.label, next_bb.label, fun);
+				let r0 = Reg::new();
+				Ir::emit(IrEqual, r0.clone(), x.clone(), r.clone(), fun);
 				kill(x, fun);
+				Ir::br(r0.clone(), Some(Rc::clone(&bbc)), Some(Rc::clone(&bbn)), fun);
+				kill(r0, fun);
 				
-				fun.bb_push(next_bb);
-				SWITCHES.lock().unwrap().last_mut().unwrap().push(case_bb);
+				fun.bb_push(bbn);
+				switches.borrow_mut().last_mut().unwrap().push(bbc);
 			}
-			SWITCHES.lock().unwrap().last_mut().unwrap().reverse();
-			jmp(break_bb.label, fun);
+			switches.borrow_mut().last_mut().unwrap().reverse();
+			jmp(Some(Rc::clone(&bb_break)), Reg::dummy(), fun);
 			kill(r, fun);
 			gen_stmt(body, fun);
 			
-			fun.bb_push(break_bb);
+			fun.bb_push(bb_break);
 
 			loop_dec();
 
 			return;
 		}
 		NodeType::Case(_, body) => {
-			if let Some(case_bb) = SWITCHES.lock().unwrap().last_mut().unwrap().pop() {
-				// jmp(case_bb.label, fun);
-				fun.bb_push(case_bb);
+			if let Some(bb_case) = get_switches_rc_mut().borrow_mut().last_mut().unwrap().pop() {
+				fun.bb_push(bb_case);
 				gen_stmt(body, fun);
 			} else {
 				panic!("gen_ir Case error.");
 			}
 		}
 		NodeType::Break => {
-			jmp(get_break_label(), fun);
+			jmp(Some(Rc::clone(&get_bb_break())), Reg::dummy(), fun);
 		}
 		NodeType::Continue => {
-			jmp(get_continue_label(), fun);
+			jmp(Some(Rc::clone(&get_bb_continue())), Reg::dummy(), fun);
 		}
 		enode => { panic!("unexpeceted node {:?}", enode); }
 	}
@@ -689,7 +755,7 @@ pub fn gen_ir(program: &mut Program) {
 		
 		match &funode.op {
 			NodeType::Func(_, name, args, body, stacksize) => {
-				let mut fun = Function::new(name.clone(), vec![BB::new()], *stacksize);
+				let mut fun = Function::new(name.clone(), vec![BB::new_rc()], *stacksize);
 				for i in 0..args.len() {
 					store_arg(&args[i].ctype, args[i].offset, i as i32, &mut fun);
 				}

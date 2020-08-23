@@ -1,5 +1,7 @@
 use super::parse::*;
 use super::gen_ir::*;
+use std::rc::Rc;
+use std::cell:: RefCell;
 
 fn new_regno() -> i32 {
 	*REGNO.lock().unwrap() += 1;
@@ -22,17 +24,33 @@ impl Program {
 	}
 }
 
+#[derive(Debug)]
 pub struct BB {
 	pub label: i32,
 	pub irs: Vec<Ir>,
+	pub param: Reg,
 }
 
 impl BB {
-	pub fn new() -> Self {
+	fn new() -> Self {
 		Self {
 			label: new_label(),
 			irs: vec![],
+			param: Reg::dummy(),
 		}
+	}
+	fn new_param() -> Self {
+		Self {
+			label: new_label(),
+			irs: vec![],
+			param: Reg::new(),
+		}
+	}
+	pub fn new_rc() -> Rc<RefCell<BB>> {
+		Rc::new(RefCell::new(BB::new()))
+	}
+	pub fn new_param_rc() -> Rc<RefCell<BB>> {
+		Rc::new(RefCell::new(BB::new_param()))
 	}
 }
 

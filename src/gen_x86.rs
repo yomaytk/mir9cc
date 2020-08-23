@@ -62,8 +62,9 @@ fn escape(strname: String, len: i32) -> String {
 
 fn emit_cmp(ir: &Ir, insn: String) {
 	let r0 = ir.r0.rn as usize;
+	let r1 = ir.r1.rn as usize;
 	let r2 = ir.r2.rn as usize;
-	emit!("cmp {}, {}", REG64[r0], REG64[r2]);
+	emit!("cmp {}, {}", REG64[r1], REG64[r2]);
 	emit!("{} {}", insn, REG8[r0]);
 	emit!("movzb {}, {}", REG64[r0], REG8[r0]);
 }
@@ -83,7 +84,9 @@ fn argreg(size: i32, r: usize) -> &'static str {
 fn emit_ir(ir: &Ir, ret: &str) {
 	
 	let r0 = ir.r0.rn as usize;
+	let r1 = ir.r1.rn as usize;
 	let r2 = ir.r2.rn as usize;
+
 	match &ir.op {
 		IrImm => {
 			emit!("mov {}, {}", REG64[r0], ir.imm);
@@ -116,21 +119,24 @@ fn emit_ir(ir: &Ir, ret: &str) {
 			emit!("jmp {}", ret);
 		}
 		IrStore(size) => {
-			emit!("mov [{}], {}", REG64[r0], reg(*size, r2));
+			emit!("mov [{}], {}", REG64[r1], reg(*size, r2));
 		}
 		IrLoad(size) => {
 			emit!("mov {}, [{}]", reg(*size, r0), REG64[r2]);
 			if *size == 1 {
-				emit!("movzb {}, {}", REG64[r0], REG8[r2]);
+				emit!("movzb {}, {}", REG64[r0], REG8[r0]);
 			}
 		}
 		IrBr => {
-			emit!("cmp {}, 0", REG64[r0]);
-			emit!("jne .L{}", ir.bb1_label);
-			emit!("jmp .L{}", ir.bb2_label);
+			emit!("cmp {}, 0", REG64[r2]);
+			emit!("jne .L{}", ir.bb1.clone().unwrap().borrow().label);
+			emit!("jmp .L{}", ir.bb2.clone().unwrap().borrow().label);
 		}
 		IrJmp => {
-			emit!("jmp .L{}", ir.bb1_label);
+			if ir.bbarg.rn > 0 {
+				emit!("mov {}, {}", ir.bb1.clone().unwrap().borrow().param.rn, ir.bbarg.rn);
+			}
+			emit!("jmp .L{}", ir.bb1.clone().unwrap().borrow().label);
 		}
 		IrCall { name, len , args } => {
 
@@ -194,7 +200,7 @@ fn emit_ir(ir: &Ir, ret: &str) {
 	}
 }
 
-pub fn gen(fun: &Function, label: usize) {
+fn gen(fun: &Function, label: usize) {
 
 	// program
 	println!(".text");
@@ -211,8 +217,8 @@ pub fn gen(fun: &Function, label: usize) {
 	let ret = format!(".Lend{}", label);
 
 	for bb in &fun.bbs {
-		println!(".L{}:", bb.label);
-		for ir in &bb.irs {
+		println!(".L{}:", bb.borrow().label);
+		for ir in &bb.borrow().irs {
 			emit_ir(ir, &ret);
 		}
 	}

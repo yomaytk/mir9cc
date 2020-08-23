@@ -75,8 +75,8 @@ fn main() {
 	}
 	// for func in &program.funs {
 	// 	for bb in &func.bbs {
-	// 		for ir in &bb.irs {
-	// 			println!("{:?}", ir);
+	// 		for ir in &bb.borrow().irs {
+	// 			println!("{:#?\n\n}", ir);
 	// 		}
 	// 	}
 	// }
@@ -85,8 +85,10 @@ fn main() {
 		dump_ir(&program.funs, "-dump-ir2");
 	}
 	// for func in &program.funs {
-	// 	for ir in &func.irs{
-	// 		println!("{:?}", ir);
+	// 	for bb in &func.bbs{
+	// 		for ir in &bb.borrow().irs {
+	// 			println!("{:#?}\n\n", ir);
+	// 		}
 	// 	}
 	// }
 	
