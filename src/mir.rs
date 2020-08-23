@@ -57,20 +57,23 @@ impl BB {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Reg {
 	pub vn: i32,
-	pub rn: i32
+	pub rn: i32,
+	pub marked: bool,
 }
 
 impl Reg {
 	pub fn new() -> Self {
 		Self {
 			vn: new_regno(),
-			rn: -1
+			rn: -1,
+			marked: false,
 		}
 	}
 	pub fn dummy() -> Self {
 		Self {
 			vn: -1,
 			rn: -1,
+			marked: false,
 		}
 	}
 }

@@ -18,13 +18,46 @@ use std::cell:: RefCell;
 static REG_SIZE: usize = 7;
 static REGMAP_SZ: i32 = 8192;
 
-fn kill(reg_map: &mut [i32], used: &mut Vec<bool>, r: &mut Reg) {
-	if r.rn < 0 { return; }
-	let vn = r.vn as usize;
-	let rn = r.rn as usize;
-	assert!(used[rn]);
-	reg_map[vn] = -2;
-	used[rn] = false;
+fn reg_selector<'a>(ir: &'a Ir, regstr: &str) -> &'a Reg {
+	if regstr == "r0" { return &ir.r0; }
+	else if regstr == "r1" { return &ir.r1; }
+	else if regstr == "r2" { return &ir.r2; }
+	else if regstr == "bbarg" { return &ir.bbarg;}
+	else {
+		let i: usize = regstr.parse().unwrap();
+		if let IrCall(_, args) = &ir.op {
+			return &args[i];
+		} else {
+			panic!("reg_selector error.");
+		}
+	}
+}
+
+fn mark(ir: &mut Ir, regstr: &str, marked_map: &mut Vec<bool>) {
+	let vn;
+	let rr;
+	{
+		let r = reg_selector(&ir, regstr);
+		rr = r.clone();
+		vn = r.vn as usize;
+		if r.vn < 0 || marked_map[vn] == true {
+			return;
+		}
+	}
+	marked_map[vn] = true;
+	ir.kills.push(rr.clone());
+}
+
+fn mark_last_use(ir: &mut Ir, marked_map: &mut Vec<bool>) {
+	mark(ir, "r0", marked_map);
+	mark(ir, "r1", marked_map);
+	mark(ir, "r2", marked_map);
+	mark(ir, "bbarg", marked_map);
+	if let IrCall(_, args) = &ir.op {
+		for i in 0..args.len() {
+			mark(ir, &i.to_string(), marked_map);
+		}
+	}
 }
 
 // in IR, A = B op C  ---> A = B; A = A op C;
@@ -62,7 +95,6 @@ fn alloc(reg_map: &mut [i32], used: &mut [bool], r: &mut Reg) {
 	if r.vn < 0 { return; }
 	
 	if reg_map[vn] != -1 {
-		if reg_map[vn] == -2 { return; }			// already killed
 		if !used[reg_map[vn] as usize] { panic!("the register allocated is not used."); }
 		r.rn = reg_map[vn];
 		return;
@@ -84,38 +116,57 @@ fn alloc(reg_map: &mut [i32], used: &mut [bool], r: &mut Reg) {
 }
 
 // do allocating register to reg_map 
-fn visit(reg_map: &mut Vec<i32>, used: &mut Vec<bool>, ir: &mut Ir) {
+fn regalloc(reg_map: &mut Vec<i32>, used: &mut Vec<bool>, ir: &mut Ir) {
 	
 	alloc(reg_map, used, &mut ir.r0);
 	alloc(reg_map, used, &mut ir.r1);
 	alloc(reg_map, used, &mut ir.r2);
 	alloc(reg_map, used, &mut ir.bbarg);
-	if let IrCall{ name, len, args } = &mut ir.op {
-		let _name = name;
-		for i in 0..*len {
+	if let IrCall(_, args) = &mut ir.op {
+		for i in 0..args.len() {
 			alloc(reg_map, used, &mut args[i]);
 		}
 	}
 
-	for r in &mut ir.kills {
-		alloc(reg_map, used, r);
-		kill(reg_map, used, r);
+	for r in &ir.kills {
+		let rn = reg_map[r.vn as usize] as usize;
+		assert!(rn < 8);
+		used[rn] = false;
 	}
 }
 
 pub fn alloc_regs(program: &mut Program) {
 
+	// make three address form
+	for fun in &mut program.funs {
+		for bb in &mut fun.bbs {
+			three_two(bb);
+		}
+	}
+
+	let mut marked_map: Vec<bool> = vec![false; 8192];
+
+	// mark kill
+	for i in (0..program.funs.len()).rev() {
+		let fun = &mut program.funs[i];
+		for j in (0..fun.bbs.len()).rev() {
+			let bb = &mut fun.bbs[j];
+			let irs_len = bb.borrow().irs.len();
+			for k in (0..irs_len).rev() {
+				let ir = &mut bb.borrow_mut().irs[k];
+				mark_last_use(ir, &mut marked_map);
+			}
+		}
+	}
+
+	// register allocate
 	for fun in &mut program.funs {
 		let mut reg_map: Vec<i32> = vec![-1; 8192];
 		let mut used: Vec<bool> = vec![false; 8];
 		for bb in &mut fun.bbs {
-			three_two(&bb);
-			let vn = bb.borrow().param.vn;
-			if vn > 0 {
-				alloc(&mut reg_map, &mut used, &mut bb.borrow_mut().param);
-			}
+			alloc(&mut reg_map, &mut used, &mut bb.borrow_mut().param);
 			for ir in &mut bb.borrow_mut().irs {
-				visit(&mut reg_map, &mut used, ir);
+				regalloc(&mut reg_map, &mut used, ir);
 			}
 		}
 	}

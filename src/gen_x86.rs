@@ -138,9 +138,9 @@ fn emit_ir(ir: &Ir, ret: &str) {
 			}
 			emit!("jmp .L{}", ir.bb1.clone().unwrap().borrow().label);
 		}
-		IrCall { name, len , args } => {
+		IrCall (name, args) => {
 
-			for i in 0..*len {
+			for i in 0..args.len() {
 				emit!("mov {}, {}", ARGREG64[i], REG64[args[i].rn as usize]);
 			}
 			
