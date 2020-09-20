@@ -200,7 +200,20 @@ fn emit_ir(ir: &Ir, ret: &str) {
 	}
 }
 
-fn gen(fun: &Function, label: usize) {
+fn gen(fun: &mut Function, label: usize) {
+
+	// calculate stack location of lvars
+	// let mut stacksize = 0;
+	// for (_, arg) in fun.args.iter_mut() {
+	// 	stacksize = roundup(stacksize, arg.ctype.align);
+	// 	stacksize += arg.ctype.size;
+	// 	arg.offset = stacksize;
+	// }
+	// for (_, lvar) in fun.lvars.iter_mut() {
+	// 	stacksize = roundup(stacksize, lvar.ctype.align);
+	// 	stacksize += lvar.ctype.size;
+	// 	lvar.offset = stacksize;
+	// }
 
 	// program
 	println!(".text");
@@ -233,7 +246,7 @@ fn gen(fun: &Function, label: usize) {
 	emit!("ret");
 }
 
-pub fn gen_x86(program: Program) {
+pub fn gen_x86(mut program: Program) {
 	
 	println!(".intel_syntax noprefix");
 	
@@ -249,8 +262,7 @@ pub fn gen_x86(program: Program) {
 			emit!(".zero {}", gvar.ctype.size);
 		}
 	}
-
 	for i in 0..program.funs.len() {
-		gen(&program.funs[i], i);
+		gen(&mut program.funs[i], i);
 	}
 }

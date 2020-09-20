@@ -160,7 +160,7 @@ impl Env {
 		return;
 	}
 	fn apply_funclike(&mut self, m: Macro, name: String) {
-		let mut args;
+		let args;
 		// self.input[self.pos-1] = define identifier
 		let line = self.input[self.pos-1].line;
 		let program_id = self.input[self.pos-1].program_id;
@@ -270,7 +270,7 @@ impl Macro {
 			if let TokenIdent = token.ty {
 				let name = String::from(&PROGRAMS.lock().unwrap()[token.program_id][token.pos..token.pos+token.val as usize]);
 				if let Some(parami) = map_params.get(&name) {
-					std::mem::replace(token, Macro::new_param(*parami as i32, false, token.program_id, token.pos, token.end, token.line));
+					*token = Macro::new_param(*parami as i32, false, token.program_id, token.pos, token.end, token.line);
 				}
 			}
 		}

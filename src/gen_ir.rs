@@ -4,6 +4,7 @@ use super::parse::*;
 // use super::lib::*;
 use super::mir::*;
 
+use linked_hash_map::LinkedHashMap;
 use std::sync::Mutex;
 use std::rc::Rc;
 use std::cell:: RefCell;
@@ -69,7 +70,7 @@ pub struct Ir {
 	pub bb2: Option<Rc<RefCell<BB>>>,
 	pub imm: i32,
 	pub imm2: i32,
-	pub kills: Vec<Reg>		// For liveness tracking
+	pub kills: Vec<Reg>,	// For liveness tracking
 }
 
 impl Ir {
@@ -163,14 +164,16 @@ impl Ir {
 pub struct Function {
 	pub name: String,
 	pub bbs: Vec<Rc<RefCell<BB>>>,
+	pub args: LinkedHashMap<String, Var>,
 	pub stacksize: i32,
 }
 
 impl Function {
-	pub fn new(name: String, bbs: Vec<Rc<RefCell<BB>>>, stacksize: i32) -> Self {
+	pub fn new(name: String, bbs: Vec<Rc<RefCell<BB>>>, args: LinkedHashMap<String, Var>, stacksize: i32) -> Self {
 		Self {
 			name,
 			bbs,
+			args,
 			stacksize,
 		}
 	}
@@ -203,8 +206,8 @@ fn store(ctype: &Type, dst: Reg, src: Reg, fun: &mut Function) {
 	Ir::emit(IrOp::IrStore(ctype.size), Reg::dummy(), dst, src, fun);
 }
 
-fn store_arg(ctype: &Type, offset: i32, id: i32, fun: &mut Function) {
-	Ir::imm_emit(IrOp::IrStoreArg(ctype.size), Reg::dummy(), offset, id, fun);
+fn store_arg(size: i32, offset: i32, id: i32, fun: &mut Function) {
+	Ir::imm_emit(IrOp::IrStoreArg(size), Reg::dummy(), offset, id, fun);
 }
 
 fn gen_binop(irop: IrOp, lhs: &Node, rhs: &Node, fun: &mut Function) -> Reg {
@@ -220,9 +223,9 @@ fn gen_inc_scale(ctype: &Type) -> i32 {
 	}
 }
 
-fn imm(op: IrOp, imm: i32, imm2: i32, fun: &mut Function) -> Reg {
+fn imm(op: IrOp, imm: i32, fun: &mut Function) -> Reg {
 	let r = Reg::new();
-	Ir::imm_emit(op, r.clone(), imm, imm2, fun);
+	Ir::imm_emit(op, r.clone(), imm, -1, fun);
 	return r;
 }
 
@@ -230,7 +233,7 @@ fn gen_pre_inc(ctype: &Type, lhs: &Node, fun: &mut Function, num: i32) -> Reg {
 	let r1 = gen_lval(lhs, fun);
 	let r2 = Reg::new();
 	load(ctype, r2.clone(), r1.clone(), fun);
-	let r3 = imm(IrImm, num * gen_inc_scale(ctype), -1, fun);
+	let r3 = imm(IrImm, num * gen_inc_scale(ctype), fun);
 	let r4 = Reg::new();
 	Ir::emit(IrAdd, r4.clone(), r2, r3, fun);
 	store(ctype, r1, r4.clone(), fun);
@@ -239,7 +242,7 @@ fn gen_pre_inc(ctype: &Type, lhs: &Node, fun: &mut Function, num: i32) -> Reg {
 
 fn gen_post_inc(ctype: &Type, lhs: &Node, fun: &mut Function, num: i32) -> Reg {
 	let r1 = gen_pre_inc(ctype, lhs, fun, num);
-	let r2 = imm(IrImm, num * gen_inc_scale(ctype), -1, fun);
+	let r2 = imm(IrImm, num * gen_inc_scale(ctype), fun);
 	let r3 = Reg::new();
 	Ir::emit(IrSub, r3.clone(), r1, r2, fun);
 	return r3;
@@ -312,7 +315,7 @@ fn gen_lval(node: &Node, fun: &mut Function) -> Reg {
 		}
 		NodeType::VarRef(var) => {
 			if var.is_local {
-				let r = imm(IrBpRel, var.offset, -1, fun);
+				let r = imm(IrBpRel, var.offset, fun);
 				return r;
 			} else {
 				let r = Reg::new();
@@ -322,7 +325,7 @@ fn gen_lval(node: &Node, fun: &mut Function) -> Reg {
 		}
 		NodeType::Dot(ctype, expr, _) => {
 			let r1 = gen_lval(expr, fun);
-			let r2 = imm(IrImm, ctype.offset, -1, fun);
+			let r2 = imm(IrImm, ctype.offset, fun);
 			let r3 = Reg::new();
 			Ir::emit(IrAdd, r3.clone(), r1, r2, fun);
 			return r3;
@@ -336,7 +339,7 @@ fn gen_expr(node: &Node, fun: &mut Function) -> Reg {
 
 	match &node.op {
 		NodeType::Num(val) => {
-			let r = imm(IrImm, *val, -1, fun);
+			let r = imm(IrImm, *val, fun);
 			return r;
 		},
 		NodeType::BinaryTree(_, ty, lhs, rhs) => {
@@ -355,10 +358,10 @@ fn gen_expr(node: &Node, fun: &mut Function) -> Reg {
 					Ir::br(gen_expr(rhs, fun), Some(Rc::clone(&set1)), Some(Rc::clone(&set0)), fun);
 
 					fun.bb_push(set0);
-					jmp(Some(Rc::clone(&last)), imm(IrImm, 0, -1, fun), fun);
+					jmp(Some(Rc::clone(&last)), imm(IrImm, 0, fun), fun);
 
 					fun.bb_push(set1);
-					jmp(Some(Rc::clone(&last)), imm(IrImm, 1, -1, fun), fun);
+					jmp(Some(Rc::clone(&last)), imm(IrImm, 1, fun), fun);
 
 					fun.bb_push(last);
 
@@ -378,10 +381,10 @@ fn gen_expr(node: &Node, fun: &mut Function) -> Reg {
 					Ir::br(gen_expr(rhs, fun), Some(Rc::clone(&set1)), Some(Rc::clone(&last)), fun);
 
 					fun.bb_push(set0);
-					jmp(Some(Rc::clone(&last)), imm(IrImm, 0, -1, fun), fun);
+					jmp(Some(Rc::clone(&last)), imm(IrImm, 0, fun), fun);
 
 					fun.bb_push(set1);
-					jmp(Some(Rc::clone(&last)), imm(IrImm, 1, -1, fun), fun);
+					jmp(Some(Rc::clone(&last)), imm(IrImm, 1, fun), fun);
 
 					fun.bb_push(last);
 
@@ -451,7 +454,7 @@ fn gen_expr(node: &Node, fun: &mut Function) -> Reg {
 		// !a
 		NodeType::Not(expr) => {
 			let r0 = Reg::new();
-			Ir::emit(IrEqual, r0.clone(), gen_expr(expr, fun), imm(IrImm, 0, -1, fun), fun);
+			Ir::emit(IrEqual, r0.clone(), gen_expr(expr, fun), imm(IrImm, 0, fun), fun);
 			return r0;
 		}
 		// a ? b : c
@@ -490,7 +493,7 @@ fn gen_expr(node: &Node, fun: &mut Function) -> Reg {
 				return r1;
 			}
 			let r0 = Reg::new();
-			Ir::emit(IrNe, r0.clone(), r1, imm(IrImm, 0, -1, fun), fun);
+			Ir::emit(IrNe, r0.clone(), r1, imm(IrImm, 0, fun), fun);
 			return r0;
 		}
 		NodeType::StmtExpr(_, body) => {
@@ -505,7 +508,7 @@ fn gen_expr(node: &Node, fun: &mut Function) -> Reg {
 					}
 				}
 			}
-			let r0 = imm(IrImm, 0, -1, fun);
+			let r0 = imm(IrImm, 0, fun);
 			return r0;
 		}
 		_ => { panic!("gen_expr NodeType error at {:?}", node.op); }
@@ -668,12 +671,11 @@ pub fn gen_ir(program: &mut Program) {
 	*REGNO.lock().unwrap() = 1;
 
 	for funode in &mut program.nodes {
-		
-		match &funode.op {
+		match &mut funode.op {
 			NodeType::Func(_, name, args, body, stacksize) => {
-				let mut fun = Function::new(name.clone(), vec![BB::new_rc()], *stacksize);
+				let mut fun = Function::new(name.clone(), vec![BB::new_rc()], LinkedHashMap::new(), *stacksize);
 				for i in 0..args.len() {
-					store_arg(&args[i].ctype, args[i].offset, i as i32, &mut fun);
+					store_arg(args[i].ctype.size as i32, args[i].offset, i as i32, &mut fun);
 				}
 				gen_stmt(body, &mut fun);
 				program.funs.push(fun);

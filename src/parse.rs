@@ -4,7 +4,7 @@ use super::token::TokenType::*;
 use super::mir::*;
 use super::sema::*;
 
-use std::collections::HashMap;
+use linked_hash_map::LinkedHashMap;
 use std::sync::Mutex;
 
 // This is a recursive-descendent parser which constructs abstract
@@ -40,18 +40,6 @@ macro_rules! env_find {
 				}
 			}
 			target
-		}
-	};
-}
-
-macro_rules! hash {
-	( $( $t:expr),* ) => {
-		{
-			let mut temp_hash = HashMap::new();
-			$(
-				temp_hash.insert($t.0, $t.1);
-			)*
-			temp_hash
 		}
 	};
 }
@@ -94,7 +82,7 @@ lazy_static! {
 		len: 0,
 	};
 	pub static ref STRUCT_TY: Type = Type {
-		ty: Ty::STRUCT(String::new(), HashMap::new()),
+		ty: Ty::STRUCT(String::new(), LinkedHashMap::new()),
 		ptr_to: None,
 		ary_to: None,
 		size: 0,
@@ -120,9 +108,10 @@ lazy_static! {
 	};
 	pub static ref ENV: Mutex<Env> = Mutex::new(Env::new_env(None));
 	pub static ref GVARS: Mutex<Vec<Var>> = Mutex::new(vec![]);
-	pub static ref LVARS: Mutex<HashMap<String, Var>> = Mutex::new(hash![]);
+	pub static ref LVARS: Mutex<LinkedHashMap<String, Var>> = Mutex::new(LinkedHashMap::new());
 	pub static ref LABEL: Mutex<i32> = Mutex::new(0);
 	pub static ref SWITCHES: Mutex<Vec<Vec<Node>>> = Mutex::new(vec![]);
+	pub static ref STACKSIZE: Mutex<i32> = Mutex::new(0);
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -180,7 +169,7 @@ pub enum Ty {
 	PTR,
 	ARY,
 	CHAR,
-	STRUCT(String, HashMap<String, Type>),
+	STRUCT(String, LinkedHashMap<String, Type>),
 	VOID,
 	BOOL,
 	NULL,
@@ -221,7 +210,7 @@ pub enum NodeType {
 	Assign(Type, Box<Node>, Box<Node>),											// Assign(ctype, lhs, rhs)
 	IfThen(Box<Node>, Box<Node>, Option<Box<Node>>),							// IfThen(cond, then, elthen)
 	Call(Type, String, Vec<Node>),												// Call(ctype, ident, args)
-	Func(Type, String, Vec<Var>, Box<Node>, HashMap<String, Var>),				// Func(ctype, ident, args, body, lvars)
+	Func(Type, String, Vec<Var>, Box<Node>, i32),								// Func(ctype, ident, args, body, stacksize)
 	For(Box<Node>, Box<Node>, Box<Node>, Box<Node>),							// For(init, cond, inc, body)
 	VarDef(String, Var, Option<Box<Node>>),										// VarDef(name, var, init)
 	Deref(Type, Box<Node>),														// Deref(ctype, lhs)
@@ -339,9 +328,9 @@ impl Node {
 			op: NodeType::Call(ctype, ident, args)
 		}
 	}
-	pub fn new_func(ctype: Type, ident: String, args: Vec<Var>, body: Node, lvars: HashMap<String, Var>) -> Self {
+	pub fn new_func(ctype: Type, ident: String, args: Vec<Var>, body: Node, stacksize: i32) -> Self {
 		Self {
-			op: NodeType::Func(ctype, ident, args, Box::new(body), lvars)
+			op: NodeType::Func(ctype, ident, args, Box::new(body), stacksize)
 		}
 	}
 	pub fn new_for(init: Node, cond: Node, inc: Node, body: Node) -> Self {
@@ -477,18 +466,18 @@ impl Var {
 
 #[derive(Debug, Clone)]
 pub struct Env {
-	tags: HashMap<String, Type>,
-	typedefs: HashMap<String, Type>,
-	vars: HashMap<String, Var>,
+	tags: LinkedHashMap<String, Type>,
+	typedefs: LinkedHashMap<String, Type>,
+	vars: LinkedHashMap<String, Var>,
 	next: Option<Box<Env>>,
 }
 
 impl Env {
 	fn new_env(env: Option<Env>) -> Self {
 		Self {
-			tags: HashMap::new(),
-			typedefs: HashMap::new(),
-			vars: HashMap::new(),
+			tags: LinkedHashMap::new(),
+			typedefs: LinkedHashMap::new(),
+			vars: LinkedHashMap::new(),
 			next: match env {
 				Some(_env) => Some(Box::new(_env)),
 				None => None,
@@ -503,16 +492,17 @@ impl Env {
 		let env = std::mem::replace(&mut *ENV.lock().unwrap(), Env::new_env(None));
 		*ENV.lock().unwrap() = *env.next.unwrap();
 	}
-	fn add_var(ident: String, mut var: Var) {
-		// if var.is_local {
-		// 	let stacksize = *STACKSIZE.lock().unwrap();
-		// 	*STACKSIZE.lock().unwrap() = roundup(stacksize, var.ctype.align);
-		// 	*STACKSIZE.lock().unwrap() += var.ctype.size;
-		// 	offset = *STACKSIZE.lock().unwrap();
-		// 	var.offset = offset;
-		// }
-		LVARS.lock().unwrap().insert(ident.clone(), var.clone());
+	fn add_var(ident: String, mut var: Var) -> i32 {
+		let mut offset = 1000000;
+		if var.is_local {
+			let stacksize = *STACKSIZE.lock().unwrap();
+			*STACKSIZE.lock().unwrap() = roundup(stacksize, var.ctype.align);
+			*STACKSIZE.lock().unwrap() += var.ctype.size;
+			offset = *STACKSIZE.lock().unwrap();
+			var.offset = offset;
+		}
 		ENV.lock().unwrap().vars.insert(ident, var);
+		return offset;
 	}
 	fn add_typedef(ident: String, ctype: Type) {
 		ENV.lock().unwrap().typedefs.insert(ident, ctype);
@@ -593,7 +583,7 @@ pub fn new_struct(tag: String, mut mb_vec: Vec<(String, Type)>) -> Type {
 	
 	let mut ty_align = 0;
 	let mut off = 0;
-	let mut mb_map = HashMap::new();
+	let mut mb_map = LinkedHashMap::new();
 	mb_vec.reverse();
 	
 	while let Some((name, mut ctype)) = mb_vec.pop() {
@@ -1016,7 +1006,7 @@ fn decl_init(tokenset: &mut TokenSet, node: &mut Node) {
 	if let NodeType::VarDef(.., ref mut init) = node.op {
 		if tokenset.consume_ty(TokenAssign) {
 			let rhs = assign(tokenset);
-			std::mem::replace(init, Some(Box::new(rhs)));
+			*init = Some(Box::new(rhs));
 		}
 	}
 	return;
@@ -1095,7 +1085,7 @@ fn declaration(tokenset: &mut TokenSet, newvar: bool) -> Node {
 			return Node::new_null();
 		}
 		NodeType::VarDef(name, mut var, Some(init)) => {
-			Env::add_var(name, var.clone());
+			var.offset = Env::add_var(name, var.clone());
 			let varnode = Node::new_varref(var);
 			return Node::new_expr(Node::new_assign(NULL_TY.clone(), varnode, *init));
 		}
@@ -1258,7 +1248,8 @@ pub fn param_declaration(tokenset: &mut TokenSet) -> Var {
 		if let Ty::ARY = &var.ctype.ty {
 			var.ctype = var.ctype.ary_to.unwrap().clone().ptr_to();
 		}
-		Env::add_var(name.clone(), var.clone());
+		var.labelname = Some(name.clone());
+		var.offset = Env::add_var(name, var.clone());
 		return var;
 	} else {
 		panic!("{:?} should be NodeType::VarDef", node);
@@ -1267,11 +1258,9 @@ pub fn param_declaration(tokenset: &mut TokenSet) -> Var {
 
 pub fn toplevel(tokenset: &mut TokenSet) -> Node {
 	
-	let mut args = vec![];
-
 	let is_extern = tokenset.consume_ty(TokenExtern);
 	let is_typedef = tokenset.consume_ty(TokenTypedef);
-
+	
 	// Ctype
 	let mut ctype = decl_specifiers(tokenset);
 	
@@ -1289,12 +1278,14 @@ pub fn toplevel(tokenset: &mut TokenSet) -> Node {
 			// for debug.
 			panic!("typedef {} has function definition.", ident);
 		}
+		*STACKSIZE.lock().unwrap() = 0;
 		// add new function to Env
 		let var = Var::new(ctype.clone(), 0, false, Some(ident.clone()), None);
 		Env::add_var(ident.clone(), var);
-
+		
 		Env::env_inc();
 		// argument
+		let mut args = vec![];
 		while !tokenset.consume_ty(TokenLeftBrac) {
 			if !args.is_empty() {
 				tokenset.assert_ty(TokenComma);
@@ -1307,9 +1298,7 @@ pub fn toplevel(tokenset: &mut TokenSet) -> Node {
 		}
 		// function def
 		let body = compound_stmt(tokenset, false);
-		let mut lvars = std::mem::replace(&mut LVARS.lock().unwrap(), hash![]);
-		lvars.remove(&ident);
-		return Node::new_func(ctype, ident, args, body, lvars);
+		return Node::new_func(ctype, ident, args, body, *STACKSIZE.lock().unwrap());
 	}
 
 	ctype = read_array(tokenset, ctype);

@@ -1,3 +1,3 @@
 int main() {
-	char x = 5; return x;
+	int a = 2; return a;
 }
