@@ -526,8 +526,7 @@ fn gen_stmt(node: &Node, fun: &mut Function) {
 			
 			Ir::emit(IrRet, gen_expr(lhs.as_ref(), fun), Reg::dummy(), Reg::dummy(), fun);
 
-			let bb = BB::new_rc();
-			fun.bb_push(bb);
+			fun.bb_push(BB::new_rc());
 
 			return;
 		}
@@ -657,9 +656,11 @@ fn gen_stmt(node: &Node, fun: &mut Function) {
 		}
 		NodeType::Break => {
 			jmp(Some(Rc::clone(&get_bb_break())), Reg::dummy(), fun);
+			fun.bb_push(BB::new_rc());
 		}
 		NodeType::Continue => {
 			jmp(Some(Rc::clone(&get_bb_continue())), Reg::dummy(), fun);
+			fun.bb_push(BB::new_rc());
 		}
 		enode => { panic!("unexpeceted node {:?}", enode); }
 	}
