@@ -58,7 +58,8 @@ impl BB {
 pub struct Reg {
 	pub vn: i32,
 	pub rn: i32,
-	pub marked: bool,
+	pub spill: bool,
+	pub spill_offset: i32, 
 }
 
 impl Reg {
@@ -66,14 +67,16 @@ impl Reg {
 		Self {
 			vn: new_regno(),
 			rn: -1,
-			marked: false,
+			spill: false,
+			spill_offset: -1,
 		}
 	}
 	pub fn dummy() -> Self {
 		Self {
 			vn: -1,
 			rn: -1,
-			marked: false,
+			spill: false,
+			spill_offset: -1, 
 		}
 	}
 }

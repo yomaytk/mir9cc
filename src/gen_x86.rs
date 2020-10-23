@@ -115,7 +115,7 @@ fn emit_ir(ir: &Ir, ret: &str) {
 			emit!("mov {}, rax", REG64[r0]);
 		}
 		IrRet => {
-			emit!("mov rax, {}", REG64[r0]);
+			emit!("mov rax, {}", REG64[r2]);
 			emit!("jmp {}", ret);
 		}
 		IrStore(size) => {
@@ -196,6 +196,12 @@ fn emit_ir(ir: &Ir, ret: &str) {
 		}
 		IrNeg => {
 			emit!("neg {}", REG64[r0]);
+		}
+		IrLoadSpill => {
+			emit!("mov {}, [rbp-{}]", REG64[r0], ir.r0.spill_offset);
+		}
+		IrStoreSpill => {
+			emit!("mov [rbp-{}], {}", ir.r1.spill_offset, REG64[r1]);
 		}
 	}
 }

@@ -1,64 +1,30 @@
+// Linear scan register allocator.
+//
+// Before this pass, it is assumed that we have infinite number of
+// registers. This pass maps them to finite number of registers.
+// Here is the algorithm:
+//
+// First, we find the definition and the last use for each register.
+// A register is considered "live" in the range. At the definition of
+// some register R, if all physical registers are already allocated,
+// one of them (including R itself) needs to be spilled to the stack.
+// As long as one register is spilled, the algorithm is logically
+// correct. As a heuristic, we spill a register whose last use is
+// furthest.
+//
+// We then insert load and store instructions for spilled registesr.
+// The last register (num_regs-1'th register) is reserved for that
+// purpose.
+
 use super::gen_ir::{*, IrOp::*};
+use super::parse::{roundup};
 use super::mir::*;
 use std::rc::Rc;
 use std::cell:: RefCell;
-
-// Register allocator.
-//
-// Before this pass, it is assumed that we have infinite number of
-// registers. This pass maps them to a finite number of registers.
-// We actually have only 7 registers.
-//
-// We allocate registers only within a single expression. In other
-// words, there are no registers that live beyond semicolons.
-// This design choice simplifies the implementation a lot, since
-// practically we don't have to think about the case in which
-// registers are exhausted and need to be spilled to memory.
+use std::collections::HashMap;
+use linked_hash_map::LinkedHashMap;
 
 static REG_SIZE: usize = 7;
-static REGMAP_SZ: i32 = 8192;
-
-fn reg_selector<'a>(ir: &'a Ir, regstr: &str) -> &'a Reg {
-	if regstr == "r0" { return &ir.r0; }
-	else if regstr == "r1" { return &ir.r1; }
-	else if regstr == "r2" { return &ir.r2; }
-	else if regstr == "bbarg" { return &ir.bbarg;}
-	else {
-		let i: usize = regstr.parse().unwrap();
-		if let IrCall(_, args) = &ir.op {
-			return &args[i];
-		} else {
-			panic!("reg_selector error.");
-		}
-	}
-}
-
-fn mark(ir: &mut Ir, regstr: &str, marked_map: &mut Vec<bool>) {
-	let vn;
-	let rr;
-	{
-		let r = reg_selector(&ir, regstr);
-		rr = r.clone();
-		vn = r.vn as usize;
-		if r.vn < 0 || marked_map[vn] == true {
-			return;
-		}
-	}
-	marked_map[vn] = true;
-	ir.kills.push(rr.clone());
-}
-
-fn mark_last_use(ir: &mut Ir, marked_map: &mut Vec<bool>) {
-	mark(ir, "r0", marked_map);
-	mark(ir, "r1", marked_map);
-	mark(ir, "r2", marked_map);
-	mark(ir, "bbarg", marked_map);
-	if let IrCall(_, args) = &ir.op {
-		for i in 0..args.len() {
-			mark(ir, &i.to_string(), marked_map);
-		}
-	}
-}
 
 // in IR, A = B op C  ---> A = B; A = A op C;
 fn three_two(bb: &Rc<RefCell<BB>>) {
@@ -82,92 +48,175 @@ fn three_two(bb: &Rc<RefCell<BB>>) {
 	bb.borrow_mut().irs = n_irs;
 }
 
-// allocate the register can be used
-fn alloc(reg_map: &mut [i32], used: &mut [bool], r: &mut Reg) {
-	
-	let vn = r.vn as usize;
+// decide lifespan for all Reg
+fn regs_life(fun: &mut Function) -> Vec<(i32, i32, i32)> {
 
-	if REGMAP_SZ < r.vn {
-		eprintln!("program too big.");
-		std::process::exit(0);
-	}
+	let mut ic = 1;
+	let mut borned_map = LinkedHashMap::new();
+	let mut died_map = HashMap::new();
 
-	if r.vn < 0 { return; }
-	
-	if reg_map[vn] != -1 {
-		if !used[reg_map[vn] as usize] { panic!("the register allocated is not used."); }
-		r.rn = reg_map[vn];
-		return;
-	}
-
-	let mut i: usize = 0;
-	while i < REG_SIZE {
-		if used[i] {
-			i += 1;
-			continue;
+	for bb in &fun.bbs {
+		let param_vn = bb.borrow().param.vn;
+		if param_vn > 0 {
+			borned_map.insert(param_vn, ic);
+			died_map.insert(param_vn, ic);
 		}
-		reg_map[vn] = i as i32;
-		used[i] = true;
-		r.rn = i as i32;
-		return;
+		for ir in &bb.borrow_mut().irs {
+			if !borned_map.contains_key(&ir.r0.vn) { 
+				borned_map.insert(ir.r0.vn, ic); 
+				died_map.insert(ir.r0.vn, ic);
+			}
+			if ir.r1.vn > 0 { died_map.insert(ir.r1.vn, ic); }
+			if ir.r2.vn > 0 { died_map.insert(ir.r2.vn, ic); }
+			if ir.bbarg.vn > 0 { died_map.insert(ir.bbarg.vn, ic); }
+			if let IrCall(_, args) = &ir.op {
+				for i in 0..args.len() {
+					died_map.insert(args[i].vn, ic);
+				}
+			}
+			ic += 1;
+		}
 	}
-	
-	panic!("register exhausted.");
+	let mut life_vec = vec![];
+	for (vn, start) in borned_map {
+		life_vec.push((vn, start, died_map[&vn]));
+	}
+	return life_vec;
 }
 
-// do allocating register to reg_map 
-fn regalloc(reg_map: &mut Vec<i32>, used: &mut Vec<bool>, ir: &mut Ir) {
+// settings of register
+fn regs_setting(fun: &mut Function, life_vec: Vec<(i32, i32, i32)>) {
 	
-	alloc(reg_map, used, &mut ir.r0);
-	alloc(reg_map, used, &mut ir.r1);
-	alloc(reg_map, used, &mut ir.r2);
-	alloc(reg_map, used, &mut ir.bbarg);
-	if let IrCall(_, args) = &mut ir.op {
-		for i in 0..args.len() {
-			alloc(reg_map, used, &mut args[i]);
+	// save register as vn
+	let mut regs = vec![-1;REG_SIZE];
+
+	let mut stacksize = roundup(fun.stacksize, 8);
+
+	let mut end_hash = HashMap::new();	// key -> vn; value -> end
+	let mut reg_map = HashMap::new();
+	let mut spill_offset_map = HashMap::new();
+
+	// decide various datas of registers
+	for life in life_vec {
+		let (vn, start, end) = life;
+		let mut rn = -1;
+		end_hash.insert(vn, end);
+		let mut found = false;
+		// find an unused real register
+		for i in 0..REG_SIZE-1 {
+			if regs[i] < 0 || start > end_hash[&regs[i]] {
+				rn = i as i32;
+				regs[i] = vn;
+				found = true;
+				break;
+			}
+		}
+		if !found {
+			// choose to spill out
+			let mut spill_id = 0;
+			regs[REG_SIZE-1] = vn;
+			for i in 0..regs.len() {
+				if end_hash[&regs[spill_id]] < end_hash[&regs[i]] {
+					spill_id = i;
+				}
+			}
+			// allocate register spilled out to stack
+			stacksize += 8;
+			spill_offset_map.insert(regs[spill_id], stacksize);
+			reg_map.insert(regs[spill_id], REG_SIZE as i32 - 1);
+			rn = spill_id as i32;
+			regs[spill_id] = vn;
+		}
+		reg_map.insert(vn, rn);
+	}
+	fun.stacksize = stacksize;
+	// settings
+	for bb in &mut fun.bbs {
+		let param = bb.borrow().param.vn > 0;
+		if param {
+			let vn = bb.borrow().param.vn;
+			bb.borrow_mut().param.rn = reg_map[&vn];
+			bb.borrow_mut().param.spill = reg_map[&vn] == REG_SIZE as i32 - 1;
+			let param_spill = bb.borrow().param.spill;
+			if param_spill { bb.borrow_mut().param.spill_offset = spill_offset_map[&vn]; }
+		}
+		for ir in &mut bb.borrow_mut().irs {
+			if ir.r0.vn > 0 {
+				ir.r0.rn = reg_map[&ir.r0.vn];
+				ir.r0.spill = ir.r0.rn == REG_SIZE as i32 - 1;
+				if ir.r0.spill { ir.r0.spill_offset = spill_offset_map[&ir.r0.vn]; }
+			}
+			if ir.r1.vn > 0 {
+				ir.r1.rn = reg_map[&ir.r1.vn];
+				ir.r1.spill = ir.r1.rn == REG_SIZE as i32 - 1;
+				if ir.r1.spill { ir.r1.spill_offset = spill_offset_map[&ir.r1.vn]; }
+			}
+			if ir.r2.vn > 0 {
+				ir.r2.rn = reg_map[&ir.r2.vn];
+				ir.r2.spill = ir.r2.rn == REG_SIZE as i32 - 1;
+				if ir.r2.spill { ir.r2.spill_offset = spill_offset_map[&ir.r2.vn]; }
+			}
+			if ir.bbarg.vn > 0 {
+				ir.bbarg.rn = reg_map[&ir.bbarg.vn];
+				ir.bbarg.spill = ir.bbarg.rn == REG_SIZE as i32 - 1;
+				if ir.bbarg.spill { ir.bbarg.spill_offset = spill_offset_map[&ir.bbarg.vn]; }
+			}
+			if let IrCall(_, args) = &mut ir.op {
+				for i in 0..args.len() {
+					args[i].rn = reg_map[&args[i].vn];
+					args[i].spill = args[i].rn == REG_SIZE as i32 - 1;
+					if args[i].spill { args[i].spill_offset = spill_offset_map[&args[i].vn]; }
+				}
+			}
 		}
 	}
 
-	for r in &ir.kills {
-		let rn = reg_map[r.vn as usize] as usize;
-		assert!(rn < 8);
-		used[rn] = false;
+}
+
+fn spillout_load(n_irs: &mut Vec<Ir>, r: &Reg) {
+	if r.vn < 0 || !r.spill {
+		return;
 	}
+	n_irs.push(
+		Ir::new(IrLoadSpill, r.clone(), Reg::dummy(), Reg::dummy(), Reg::dummy(), None, None, r.spill_offset, -1)
+	);
+}
+
+fn spillout_store(n_irs: &mut Vec<Ir>, r: Reg) {
+	if r.vn < 0 || !r.spill {
+		return;
+	}
+	let spill_offset = r.spill_offset;
+	n_irs.push(
+		Ir::new(IrStoreSpill, Reg::dummy(), r, Reg::dummy(), Reg::dummy(), None, None, spill_offset, -1)
+	);
 }
 
 pub fn alloc_regs(program: &mut Program) {
 
-	// make three address form
+	// make three address form and register settings
 	for fun in &mut program.funs {
 		for bb in &mut fun.bbs {
 			three_two(bb);
 		}
+		let life_vec = regs_life(fun);
+		regs_setting(fun, life_vec);
 	}
 
-	let mut marked_map: Vec<bool> = vec![false; 8192];
-
-	// mark kill
-	for i in (0..program.funs.len()).rev() {
-		let fun = &mut program.funs[i];
-		for j in (0..fun.bbs.len()).rev() {
-			let bb = &mut fun.bbs[j];
-			let irs_len = bb.borrow().irs.len();
-			for k in (0..irs_len).rev() {
-				let ir = &mut bb.borrow_mut().irs[k];
-				mark_last_use(ir, &mut marked_map);
-			}
-		}
-	}
-
-	// register allocate
+	// add spill instruction of load or store
 	for fun in &mut program.funs {
-		let mut reg_map: Vec<i32> = vec![-1; 8192];
-		let mut used: Vec<bool> = vec![false; 8];
 		for bb in &mut fun.bbs {
-			alloc(&mut reg_map, &mut used, &mut bb.borrow_mut().param);
-			for ir in &mut bb.borrow_mut().irs {
-				regalloc(&mut reg_map, &mut used, ir);
+			let irs = std::mem::replace(&mut bb.borrow_mut().irs, vec![]);
+			let mut n_irs = vec![];
+			for ir in irs {
+				spillout_load(&mut n_irs, &ir.r1);
+				spillout_load(&mut n_irs, &ir.r2);
+				spillout_load(&mut n_irs, &ir.bbarg);
+				let r0 = ir.r0.clone();
+				n_irs.push(ir);
+				spillout_store(&mut n_irs, r0);
 			}
+			bb.borrow_mut().irs = n_irs;
 		}
 	}
 }

@@ -57,6 +57,8 @@ pub enum IrOp {
 	IrMod,
 	IrNeg,
 	IrBr,
+	IrLoadSpill,
+	IrStoreSpill,
 }
 
 #[derive(Debug)]
@@ -145,6 +147,8 @@ impl Ir {
 			IrMod => { return format!("Mod r{}, r{}", self.r0, self.r2); }
 			IrNeg => { return format!("Neg r{}", self.r0); }
 			IrBr => { return format!("Br r{}, .L{}, .L{}", self.r0, self.bb1.clone().unwrap().borrow().label, self.bb2.clone().unwrap().borrow().label); }
+			IrLoadSpill => { return format!("LoadSpill"); }
+			IrStoreSpill => { return format!("StoreSpill"); }
 		}
 	}
 	fn emit(op: IrOp, r0: Reg, r1: Reg, r2: Reg, fun: &mut Function) {
@@ -524,7 +528,7 @@ fn gen_stmt(node: &Node, fun: &mut Function) {
 		}
 		NodeType::Ret(lhs) => {
 			
-			Ir::emit(IrRet, gen_expr(lhs.as_ref(), fun), Reg::dummy(), Reg::dummy(), fun);
+			Ir::emit(IrRet, Reg::dummy(), Reg::dummy(), gen_expr(lhs.as_ref(), fun), fun);
 
 			fun.bb_push(BB::new_rc());
 
