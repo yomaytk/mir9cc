@@ -133,8 +133,8 @@ fn emit_ir(ir: &Ir, ret: &str) {
 			emit!("jmp .L{}", ir.bb2.clone().unwrap().borrow().label);
 		}
 		IrJmp => {
-			if ir.bbarg.rn > 0 {
-				emit!("mov {}, {}", ir.bb1.clone().unwrap().borrow().param.rn, ir.bbarg.rn);
+			if ir.bbarg.active() {
+				emit!("mov {}, {}", REG64[ir.bb1.clone().unwrap().borrow().param.rn as usize], REG64[ir.bbarg.rn as usize]);
 			}
 			emit!("jmp .L{}", ir.bb1.clone().unwrap().borrow().label);
 		}
@@ -207,19 +207,6 @@ fn emit_ir(ir: &Ir, ret: &str) {
 }
 
 fn gen(fun: &mut Function, label: usize) {
-
-	// calculate stack location of lvars
-	// let mut stacksize = 0;
-	// for (_, arg) in fun.args.iter_mut() {
-	// 	stacksize = roundup(stacksize, arg.ctype.align);
-	// 	stacksize += arg.ctype.size;
-	// 	arg.offset = stacksize;
-	// }
-	// for (_, lvar) in fun.lvars.iter_mut() {
-	// 	stacksize = roundup(stacksize, lvar.ctype.align);
-	// 	stacksize += lvar.ctype.size;
-	// 	lvar.offset = stacksize;
-	// }
 
 	// program
 	println!(".text");

@@ -49,43 +49,49 @@ fn three_two(bb: &Rc<RefCell<BB>>) {
 }
 
 // decide lifespan for all Reg
-fn regs_life(fun: &mut Function) -> Vec<(i32, i32, i32)> {
+fn regs_life(bb: &Rc<RefCell<BB>>, ic: &mut i32, borned_map: &mut LinkedHashMap<i32, i32>, died_map: &mut HashMap<i32, i32>) {
 
-	let mut ic = 1;
-	let mut borned_map = LinkedHashMap::new();
-	let mut died_map = HashMap::new();
+	if bb.borrow().passed {
+		return;
+	}
+	bb.borrow_mut().passed = true;
 
-	for bb in &fun.bbs {
-		let param_vn = bb.borrow().param.vn;
-		if param_vn > 0 {
-			borned_map.insert(param_vn, ic);
-			died_map.insert(param_vn, ic);
+	// decide lifespan
+	let param_vn = bb.borrow().param.vn;
+	if param_vn > 0 {
+		borned_map.insert(param_vn, *ic);
+		died_map.insert(param_vn, *ic);
+	}
+	for ir in &bb.borrow().irs {
+		if !borned_map.contains_key(&ir.r0.vn) { 
+			borned_map.insert(ir.r0.vn, *ic); 
+			died_map.insert(ir.r0.vn, *ic);
 		}
-		for ir in &bb.borrow_mut().irs {
-			if !borned_map.contains_key(&ir.r0.vn) { 
-				borned_map.insert(ir.r0.vn, ic); 
-				died_map.insert(ir.r0.vn, ic);
+		if ir.r1.active() { died_map.insert(ir.r1.vn, *ic); }
+		if ir.r2.active() { died_map.insert(ir.r2.vn, *ic); }
+		if ir.bbarg.active() { died_map.insert(ir.bbarg.vn, *ic); }
+		if let IrCall(_, args) = &ir.op {
+			for i in 0..args.len() {
+				died_map.insert(args[i].vn, *ic);
 			}
-			if ir.r1.vn > 0 { died_map.insert(ir.r1.vn, ic); }
-			if ir.r2.vn > 0 { died_map.insert(ir.r2.vn, ic); }
-			if ir.bbarg.vn > 0 { died_map.insert(ir.bbarg.vn, ic); }
-			if let IrCall(_, args) = &ir.op {
-				for i in 0..args.len() {
-					died_map.insert(args[i].vn, ic);
-				}
-			}
-			ic += 1;
+		}
+		*ic += 1;
+	}
+	// when jmp block, the starting ic of it is the ic of this block
+	let irs = &bb.borrow().irs;
+	let irie = irs.iter();
+	if let Some(ir) = irie.last() {
+		if let Some(bb1) = &ir.bb1 {
+			regs_life(bb1, ic, borned_map, died_map);
+		}
+		if let Some(bb2) = &ir.bb1 {
+			regs_life(bb2, ic, borned_map, died_map);
 		}
 	}
-	let mut life_vec = vec![];
-	for (vn, start) in borned_map {
-		life_vec.push((vn, start, died_map[&vn]));
-	}
-	return life_vec;
 }
 
 // settings of register
-fn regs_setting(fun: &mut Function, life_vec: Vec<(i32, i32, i32)>) {
+fn regs_setting(fun: &mut Function, reglifes: Vec<RegLife>) {
 	
 	// save register as vn
 	let mut regs = vec![-1;REG_SIZE];
@@ -97,16 +103,15 @@ fn regs_setting(fun: &mut Function, life_vec: Vec<(i32, i32, i32)>) {
 	let mut spill_offset_map = HashMap::new();
 
 	// decide various datas of registers
-	for life in life_vec {
-		let (vn, start, end) = life;
+	for reglife in reglifes {
 		let mut rn = -1;
-		end_hash.insert(vn, end);
+		end_hash.insert(reglife.vn, reglife.end);
 		let mut found = false;
 		// find an unused real register
 		for i in 0..REG_SIZE-1 {
-			if regs[i] < 0 || start > end_hash[&regs[i]] {
+			if regs[i] < 0 || reglife.start > end_hash[&regs[i]] {
 				rn = i as i32;
-				regs[i] = vn;
+				regs[i] = reglife.vn;
 				found = true;
 				break;
 			}
@@ -114,7 +119,7 @@ fn regs_setting(fun: &mut Function, life_vec: Vec<(i32, i32, i32)>) {
 		if !found {
 			// choose to spill out
 			let mut spill_id = 0;
-			regs[REG_SIZE-1] = vn;
+			regs[REG_SIZE-1] = reglife.vn;
 			for i in 0..regs.len() {
 				if end_hash[&regs[spill_id]] < end_hash[&regs[i]] {
 					spill_id = i;
@@ -125,9 +130,9 @@ fn regs_setting(fun: &mut Function, life_vec: Vec<(i32, i32, i32)>) {
 			spill_offset_map.insert(regs[spill_id], stacksize);
 			reg_map.insert(regs[spill_id], REG_SIZE as i32 - 1);
 			rn = spill_id as i32;
-			regs[spill_id] = vn;
+			regs[spill_id] = reglife.vn;
 		}
-		reg_map.insert(vn, rn);
+		reg_map.insert(reglife.vn, rn);
 	}
 	fun.stacksize = stacksize;
 	// settings
@@ -141,22 +146,22 @@ fn regs_setting(fun: &mut Function, life_vec: Vec<(i32, i32, i32)>) {
 			if param_spill { bb.borrow_mut().param.spill_offset = spill_offset_map[&vn]; }
 		}
 		for ir in &mut bb.borrow_mut().irs {
-			if ir.r0.vn > 0 {
+			if ir.r0.active() {
 				ir.r0.rn = reg_map[&ir.r0.vn];
 				ir.r0.spill = ir.r0.rn == REG_SIZE as i32 - 1;
 				if ir.r0.spill { ir.r0.spill_offset = spill_offset_map[&ir.r0.vn]; }
 			}
-			if ir.r1.vn > 0 {
+			if ir.r1.active() {
 				ir.r1.rn = reg_map[&ir.r1.vn];
 				ir.r1.spill = ir.r1.rn == REG_SIZE as i32 - 1;
 				if ir.r1.spill { ir.r1.spill_offset = spill_offset_map[&ir.r1.vn]; }
 			}
-			if ir.r2.vn > 0 {
+			if ir.r2.active() {
 				ir.r2.rn = reg_map[&ir.r2.vn];
 				ir.r2.spill = ir.r2.rn == REG_SIZE as i32 - 1;
 				if ir.r2.spill { ir.r2.spill_offset = spill_offset_map[&ir.r2.vn]; }
 			}
-			if ir.bbarg.vn > 0 {
+			if ir.bbarg.active() {
 				ir.bbarg.rn = reg_map[&ir.bbarg.vn];
 				ir.bbarg.spill = ir.bbarg.rn == REG_SIZE as i32 - 1;
 				if ir.bbarg.spill { ir.bbarg.spill_offset = spill_offset_map[&ir.bbarg.vn]; }
@@ -174,7 +179,7 @@ fn regs_setting(fun: &mut Function, life_vec: Vec<(i32, i32, i32)>) {
 }
 
 fn spillout_load(n_irs: &mut Vec<Ir>, r: &Reg) {
-	if r.vn < 0 || !r.spill {
+	if !r.active() || !r.spill {
 		return;
 	}
 	n_irs.push(
@@ -183,7 +188,7 @@ fn spillout_load(n_irs: &mut Vec<Ir>, r: &Reg) {
 }
 
 fn spillout_store(n_irs: &mut Vec<Ir>, r: Reg) {
-	if r.vn < 0 || !r.spill {
+	if !r.active() || !r.spill {
 		return;
 	}
 	let spill_offset = r.spill_offset;
@@ -199,8 +204,21 @@ pub fn alloc_regs(program: &mut Program) {
 		for bb in &mut fun.bbs {
 			three_two(bb);
 		}
-		let life_vec = regs_life(fun);
-		regs_setting(fun, life_vec);
+		let mut borned_map = LinkedHashMap::new();
+		let mut died_map = HashMap::new();
+		let mut ic = 1;
+		for bb in &fun.bbs {
+			regs_life(bb, &mut ic, &mut borned_map, &mut died_map);
+		}
+		let mut reglifes = vec![];
+		for (vn, start) in borned_map {
+			reglifes.push(RegLife::new(
+				vn, 
+				start,
+				died_map[&vn]
+			));
+		}
+		regs_setting(fun, reglifes);
 	}
 
 	// add spill instruction of load or store
