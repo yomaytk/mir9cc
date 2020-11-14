@@ -25,6 +25,7 @@ int add(int a, int b, int c, int d, int e, int f) { return a+b+c+d+e+f; }
 int add2(int (*a)[2]) { return a[0][0] + a[0][1]; }
 int add3(int a[][2]) { return a[0][0] + a[1][0]; }
 int add4(int a[2][2]) { return a[0][0] + a[1][0]; }
+int *pointer(){ int a = 10; int *p = &a; return p; }
 void nop() {}
 
 int var1;
@@ -127,6 +128,7 @@ int main() {
 	EXPECT(3, ({ int ary[2]; *ary=1; *(ary+1)=2; *ary + *(ary+1);}));
 	EXPECT(3, ({ int *ary; int ary2[5]; ary = ary2; *(ary+1)=1; *(ary+4)=2; *(ary+1) + *(ary+4);}));
 	EXPECT(5, ({ int x; int *p = &x; x = 5; *p;}));
+	EXPECT(12, ({ int x; int *p = pointer(); x = *p; *p = 2; x + *p;}));
 
 	EXPECT(40, ({ int ary[2][5]; sizeof(ary);}));
 	EXPECT(8, ({ int ary[2][2]; ary[0][0]=3; ary[0][1]=5; add2(ary);}));
