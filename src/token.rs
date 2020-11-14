@@ -157,6 +157,7 @@ pub enum TokenType {
 	TokenBool,
 	TokenSwitch,
 	TokenCase,
+	TokenEnum,
 	TokenNoSignal,
 	TokenEof,
 }
@@ -186,6 +187,7 @@ impl From<String> for TokenType {
 			"_Bool" => { TokenBool }
 			"switch" => { TokenSwitch }
 			"case" => { TokenCase }
+			"enum" => { TokenEnum }
 			_ => { TokenIdent }
 		}
 	}
@@ -269,12 +271,25 @@ impl TokenSet {
 			}
 		}
 	}
+	pub fn ident(&mut self) -> String {
+		let token = self.tokens[self.pos].clone();
+		let name = String::from(&PROGRAMS.lock().unwrap()[token.program_id][token.pos..token.end]);
+		if !self.consume_ty(TokenIdent) {
+			// error(&format!("should be identifier at {}", &tokenset[*pos].input[*pos..]));
+			// for debug.
+			panic!("should be identifier at {}", &PROGRAMS.lock().unwrap()[token.program_id][token.pos..]);
+		}
+		return name;
+	}
 	pub fn getstring(&self) -> String {
 		let token = &self.tokens[self.pos];
 		match &token.ty {
 			TokenString(sb) => { return sb.clone(); }
 			_ => { panic!("{:?}", token); }
 		}
+	}
+	pub fn getval(&self) -> i32 {
+		return self.tokens[self.pos].val;
 	}
 }
 

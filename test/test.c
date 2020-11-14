@@ -33,6 +33,11 @@ extern int global_arr[1];
 int *aaa;
 typedef int myint;
 
+enum {
+	BBB = 10,
+	EEE,
+};
+
 // Single-line comment test
 
 /***************************
@@ -216,6 +221,21 @@ int main() {
 		x.a[0].b = 3;
 		x.a[0].c[1] = 5;
 		x.a[0].b + x.a[0].c[1];
+	}));
+	EXPECT(12, ({
+		enum {
+			AAA = 1,
+			BBB,
+			CCC = 5,
+			DDD,
+		};
+		int a;
+		if (AAA == 1 && BBB == 2 && CCC == 5 && DDD == 6 && EEE == 11) {
+			a = 12; 
+		} else {
+			a = 5;
+		}
+		a;
 	}));
 
 	EXPECT(0, !1);

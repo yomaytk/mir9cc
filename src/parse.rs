@@ -5,6 +5,7 @@ use super::mir::*;
 use super::sema::*;
 
 use linked_hash_map::LinkedHashMap;
+use std::collections::HashMap;
 use std::sync::Mutex;
 
 // This is a recursive-descendent parser which constructs abstract
@@ -255,6 +256,9 @@ impl Node {
 			| NodeType::Num(_) => {
 				return INT_TY.clone();
 			}
+			| NodeType::Equal(lhs, ..) => {
+				return lhs.nodesctype(None);
+			}
 			_ => { 
 				if let Some(ty) = basetype {
 					return ty;
@@ -468,6 +472,7 @@ impl Var {
 pub struct Env {
 	tags: LinkedHashMap<String, Type>,
 	typedefs: LinkedHashMap<String, Type>,
+	enums: HashMap<String, i32>,
 	vars: LinkedHashMap<String, Var>,
 	next: Option<Box<Env>>,
 }
@@ -477,6 +482,7 @@ impl Env {
 		Self {
 			tags: LinkedHashMap::new(),
 			typedefs: LinkedHashMap::new(),
+			enums: HashMap::new(),
 			vars: LinkedHashMap::new(),
 			next: match env {
 				Some(_env) => Some(Box::new(_env)),
@@ -510,6 +516,40 @@ impl Env {
 	fn add_tags(tag: String, ctype: Type) {
 		ENV.lock().unwrap().tags.insert(tag, ctype);
 	}
+	fn add_enum(tokenset: &mut TokenSet) {
+		tokenset.assert_ty(TokenRightCurlyBrace);
+		let mut assign_num = 1;
+		loop {
+			let enum_mem = tokenset.ident();
+			if tokenset.consume_ty(TokenAssign) {
+				assign_num = tokenset.getval();
+				tokenset.assert_ty(TokenNum);
+			}
+			tokenset.assert_ty(TokenComma);
+			ENV.lock().unwrap().enums.insert(enum_mem, assign_num);
+			if tokenset.consume_ty(TokenLeftCurlyBrace) {
+				break;
+			}
+			assign_num += 1;
+		}
+		tokenset.assert_ty(TokenSemi);
+	}
+	fn find_enum(ident: &str) -> i32 {
+		let res;
+		let env = std::mem::replace(&mut *ENV.lock().unwrap(), Env::new_env(None));
+		let mut env_ref = &env;
+		loop {
+			if let Some(num) = env_ref.enums.get(ident) {
+				res = *num;
+				break;
+			}
+			if let Some(next_env) = &env_ref.next {
+				env_ref = &next_env;
+			}
+		}
+		*ENV.lock().unwrap() = env;
+		return res;
+	}
 }
 
 pub fn roundup(x: i32, align: i32) -> i32 {
@@ -519,7 +559,7 @@ pub fn roundup(x: i32, align: i32) -> i32 {
 pub fn decl_specifiers(tokenset: &mut TokenSet) -> Type {
 	if tokenset.consume_ty(TokenIdent) {
 		tokenset.pos -= 1;
-		let name = ident(tokenset);
+		let name = tokenset.ident();
 		return env_find!(name, typedefs, NULL_TY.clone());
 	}
 	if tokenset.consume_ty(TokenInt){
@@ -535,7 +575,7 @@ pub fn decl_specifiers(tokenset: &mut TokenSet) -> Type {
 		// tag
 		if tokenset.consume_ty(TokenIdent) {
 			tokenset.pos -= 1;
-			tag = ident(tokenset);
+			tag = tokenset.ident();
 		}
 		
 		// struct member
@@ -627,10 +667,15 @@ fn string_literal(tokenset: &mut TokenSet) -> Node {
 }
 
 fn local_variable(tokenset: &mut TokenSet) -> Node {
-	let token = &tokenset.tokens[tokenset.pos-1];
-	let name = String::from(&PROGRAMS.lock().unwrap()[token.program_id][token.pos..token.end]);
+	let name = tokenset.ident();
+	// let token = &tokenset.tokens[tokenset.pos-1];
+	// let name = String::from(&PROGRAMS.lock().unwrap()[token.program_id][token.pos..token.end]);
 	let var = env_find!(name.clone(), vars, NULL_VAR.clone());
 	if let Ty::NULL = var.ctype.ty {
+		let enum_num = Env::find_enum(&name);
+		if enum_num > 0 {
+			return Node::new_num(enum_num);
+		}
 		panic!("{} is not defined.", name);
 	}
 	return Node::new_varref(var);
@@ -709,6 +754,7 @@ fn primary(tokenset: &mut TokenSet) -> Node {
 	if tokenset.consume_ty(TokenIdent) {
 		// variable
 		if !tokenset.consume_ty(TokenRightBrac){
+			tokenset.pos -= 1;
 			return local_variable(tokenset);
 		}
 		return function_call(tokenset);
@@ -735,11 +781,11 @@ fn postfix(tokenset: &mut TokenSet) -> Node {
 		}
 		// struct member
 		if tokenset.consume_ty(TokenDot) {
-			let name = ident(tokenset);
+			let name = tokenset.ident();
 			lhs = Node::new_dot(NULL_TY.clone(), lhs, name);
 		// struct member arrow
 		} else if tokenset.consume_ty(TokenArrow) {
-			let name = ident(tokenset);
+			let name = tokenset.ident();
 			let expr = Node::new_deref(INT_TY.clone(), lhs);
 			lhs = Node::new_dot(NULL_TY.clone(), expr, name);
 		// array
@@ -990,18 +1036,6 @@ fn read_array(tokenset: &mut TokenSet, ty: Type) -> Type {
 	return ty;
 }
 
-fn ident(tokenset: &mut TokenSet) -> String {
-	// panic!("{}, {}, {}", tokenset[*pos].program_id, tokenset[*pos].pos, tokenset[*pos].val);
-	let token = tokenset.tokens[tokenset.pos].clone();
-	let name = String::from(&PROGRAMS.lock().unwrap()[token.program_id][token.pos..token.end]);
-	if !tokenset.consume_ty(TokenIdent) {
-		// error(&format!("should be identifier at {}", &tokenset[*pos].input[*pos..]));
-		// for debug.
-		panic!("should be identifier at {}", &PROGRAMS.lock().unwrap()[token.program_id][token.pos..]);
-	}
-	return name;
-}
-
 fn decl_init(tokenset: &mut TokenSet, node: &mut Node) {
 	if let NodeType::VarDef(.., ref mut init) = node.op {
 		if tokenset.consume_ty(TokenAssign) {
@@ -1037,7 +1071,7 @@ fn direct_decl(tokenset: &mut TokenSet, ty: Type) -> Node {
 	
 	if tokenset.consume_ty(TokenIdent) {
 		tokenset.pos -= 1;
-		let name = ident(tokenset);
+		let name = tokenset.ident();
 		let mut var = NULL_VAR.clone();
 		var.ctype = read_array(tokenset, ty);
 		ident_node = Node::new_vardef(name, var, None);
@@ -1208,6 +1242,11 @@ pub fn stmt(tokenset: &mut TokenSet) -> Node {
 			}
 			panic!("typedef error.");
 		}
+		TokenEnum => {
+			tokenset.pos += 1;
+			Env::add_enum(tokenset);
+			return Node::new_null();
+		}
 		TokenBreak => {
 			tokenset.pos += 1;
 			return Node::new_break();
@@ -1265,7 +1304,11 @@ pub fn toplevel(tokenset: &mut TokenSet) -> Node {
 	
 	let is_extern = tokenset.consume_ty(TokenExtern);
 	let is_typedef = tokenset.consume_ty(TokenTypedef);
-	
+	// enum
+	if tokenset.consume_ty(TokenEnum) {
+		Env::add_enum(tokenset);
+		return Node::new_null();
+	}
 	// Ctype
 	let mut ctype = decl_specifiers(tokenset);
 	
@@ -1274,7 +1317,7 @@ pub fn toplevel(tokenset: &mut TokenSet) -> Node {
 	}
 	
 	// identifier
-	let ident = ident(tokenset);
+	let ident = tokenset.ident();
 	
 	// function
 	if tokenset.consume_ty(TokenRightBrac){
