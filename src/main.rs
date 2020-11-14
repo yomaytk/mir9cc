@@ -10,6 +10,7 @@ pub mod ir_dump;
 pub mod lib;
 pub mod preprocess;
 pub mod mir;
+pub mod liveness;
 
 use token::*;
 use parse::*;
