@@ -1117,6 +1117,11 @@ pub fn stmt(tokenset: &mut TokenSet) -> Node {
 			tokenset.assert_ty(TokenLeftBrac);
 			let then = stmt(tokenset);
 			if tokenset.consume_ty(TokenElse) {
+				if tokenset.consume_ty(TokenIf) {
+					tokenset.pos -= 1;
+					let elifthen = stmt(tokenset);
+					return Node::new_if(cond, then, Some(elifthen));
+				}
 				let elthen = stmt(tokenset);
 				return Node::new_if(cond, then, Some(elthen));
 			} else {

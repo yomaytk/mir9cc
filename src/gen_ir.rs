@@ -72,7 +72,6 @@ pub struct Ir {
 	pub bb2: Option<Rc<RefCell<BB>>>,
 	pub imm: i32,
 	pub imm2: i32,
-	pub kills: Vec<Reg>,	// For liveness tracking
 }
 
 impl Ir {
@@ -87,7 +86,6 @@ impl Ir {
 			bb2,
 			imm, 
 			imm2,
-			kills: vec![],
 		}
 	}
 	fn bittype(ty: &TokenType) -> IrOp {

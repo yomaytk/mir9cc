@@ -98,6 +98,7 @@ int main() {
 	EXPECT(89, ({ int i=1; int j=1; for (int k=0; k<10; k=k+1) { int m=i+j; i=j; j=m; } i;}));
 	EXPECT(1, ({ int i=1; for (int i = 5; i < 10; i++); i; }));
 	EXPECT(5, ({ int i=0; for (; i < 10; i++) if (i==5) break; i; }));
+	EXPECT(3, ({ int i=0; int a = 3; int b; if (a == 1) b = 1; else if (a == 2) b = 2; else if(a == 3) b = 3; else b = 4; b; }));
 	EXPECT(50, ({
 		int a = 0;
 		for (int i = 0;i < 10;i++) {

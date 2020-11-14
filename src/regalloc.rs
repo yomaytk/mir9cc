@@ -38,8 +38,7 @@ fn three_two(bb: &Rc<RefCell<BB>>) {
 		}
 		assert!(ir.r0.vn != ir.r1.vn);
 		// A = B;
-		let mut ir1 = Ir::new(IrOp::IrMov, ir.r0.clone(), Reg::dummy(), ir.r1.clone(), Reg::dummy(), None, None, -1, -1);
-		ir1.kills.push(ir.r1.clone());
+		let ir1 = Ir::new(IrOp::IrMov, ir.r0.clone(), Reg::dummy(), ir.r1.clone(), Reg::dummy(), None, None, -1, -1);
 		n_irs.push(ir1);
 		// A = A op C;
 		ir.r1 = ir.r0.clone();
