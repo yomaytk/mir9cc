@@ -226,13 +226,13 @@ int main() {
 	}));
 	EXPECT(12, ({
 		enum {
-			AAA = 1,
+			AAA,
 			BBB,
 			CCC = 5,
 			DDD,
 		};
 		int a;
-		if (AAA == 1 && BBB == 2 && CCC == 5 && DDD == 6 && EEE == 11) {
+		if (AAA == 0 && BBB == 1 && CCC == 5 && DDD == 6 && EEE == 11) {
 			a = 12; 
 		} else {
 			a = 5;

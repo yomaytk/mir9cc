@@ -518,7 +518,7 @@ impl Env {
 	}
 	fn add_enum(tokenset: &mut TokenSet) {
 		tokenset.assert_ty(TokenRightCurlyBrace);
-		let mut assign_num = 1;
+		let mut assign_num = 0;
 		loop {
 			let enum_mem = tokenset.ident();
 			if tokenset.consume_ty(TokenAssign) {
@@ -535,7 +535,7 @@ impl Env {
 		tokenset.assert_ty(TokenSemi);
 	}
 	fn find_enum(ident: &str) -> i32 {
-		let res;
+		let mut res = -1;
 		let env = std::mem::replace(&mut *ENV.lock().unwrap(), Env::new_env(None));
 		let mut env_ref = &env;
 		loop {
@@ -545,6 +545,8 @@ impl Env {
 			}
 			if let Some(next_env) = &env_ref.next {
 				env_ref = &next_env;
+			} else {
+				break;
 			}
 		}
 		*ENV.lock().unwrap() = env;
@@ -668,12 +670,10 @@ fn string_literal(tokenset: &mut TokenSet) -> Node {
 
 fn local_variable(tokenset: &mut TokenSet) -> Node {
 	let name = tokenset.ident();
-	// let token = &tokenset.tokens[tokenset.pos-1];
-	// let name = String::from(&PROGRAMS.lock().unwrap()[token.program_id][token.pos..token.end]);
 	let var = env_find!(name.clone(), vars, NULL_VAR.clone());
 	if let Ty::NULL = var.ctype.ty {
 		let enum_num = Env::find_enum(&name);
-		if enum_num > 0 {
+		if enum_num != -1 {
 			return Node::new_num(enum_num);
 		}
 		panic!("{} is not defined.", name);
