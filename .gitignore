@@ -1,0 +1,8 @@
+/target
+*.s
+*.o
+*.tmp
+*.code-workspace
+test1
+test2
+tmp-nqueen

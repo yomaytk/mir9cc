@@ -7,30 +7,26 @@ run:
 test: mir9cc test/test.c test/token.c
 	make mir9cc
 	@# ./test.sh
-	@./target/debug/mir9cc test/test.c > compile1.s
-	@gcc -c -o tmp-test2.o test/gcc.c
-	@gcc -static -o compile compile1.s tmp-test2.o
+	@./target/debug/mir9cc test/test.c > test1.s
+	@gcc -c -o tmp-test.o test/gcc.c
+	@gcc -static -o test1 test1.s tmp-test.o
 	@echo -e "\n\e[33mtest.c TEST start...\e[m\n"
-	@./compile
+	@./test1
 	@echo -e "\n\e[32m*** SUCCESS! ***\e[m\n"
 
-	@./target/debug/mir9cc test/token.c > compile2.s
-	@gcc -static -o compile2 compile2.s
+	@./target/debug/mir9cc test/token.c > test2.s
+	@gcc -static -o test2 test2.s
 	@echo -e "\n\e[33mtoken.c TEST start...\e[m\n"
-	@./compile2
+	@./test2
 	@echo -e "\n\e[32m*** SUCCESS! ***\e[m\n"
 
-
-debug: mir9cc test/singletest.c test/sub-test.c
-	@gcc -c -o sub-test.o test/sub-test.c
-	@./target/debug/mir9cc test/singletest.c > debugcompile1.s
-	@cat debugcompile1.s
-
-debug_out: mir9cc test/singletest.c test/sub-test.c
-	@gcc -c -o sub-test.o test/sub-test.c
-	@./target/debug/mir9cc test/singletest.c
+debug: mir9cc test/singletest.c
+	@./target/debug/mir9cc test/singletest.c > debug.s
+	@cat debug.s
 
 clean:
-	cargo clean
+	@-rm *.s
+	@-rm test1 test2 tmp-test.o
+	@-cargo clean
 
 .PHONY: test clean

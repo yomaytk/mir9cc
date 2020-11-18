@@ -30,7 +30,7 @@ void nop() {}
 
 int var1;
 int var2[5];
-// extern int global_arr[1];
+extern int global_arr[1];
 int *aaa;
 typedef int myint;
 
