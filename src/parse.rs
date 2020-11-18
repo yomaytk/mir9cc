@@ -106,6 +106,7 @@ lazy_static! {
 		is_local: true,
 		labelname: None,
 		strname: None,
+		init: None,
 	};
 	pub static ref ENV: Mutex<Env> = Mutex::new(Env::new_env(None));
 	pub static ref GVARS: Mutex<Vec<Var>> = Mutex::new(vec![]);
@@ -200,7 +201,7 @@ impl PartialEq for Ty {
 }
 
 #[allow(dead_code)]
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum NodeType {
 	Num(i32),																	// Num(val)
 	BinaryTree(Type, TokenType, Box<Node>, Box<Node>),							// BinaryTree(ctype, tk_ty, lhs, rhs)
@@ -236,7 +237,7 @@ pub enum NodeType {
 	NULL,																		// NULL,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Node {
 	pub op: NodeType,
 }
@@ -461,16 +462,18 @@ pub struct Var {
 	pub is_local: bool,
 	pub labelname: Option<String>,
 	pub strname: Option<String>,
+	pub init: Option<Vec<String>>,
 }
 
 impl Var {
-	pub fn new(ctype: Type, offset: i32, is_local: bool, labelname: Option<String>, strname: Option<String>) -> Self {
+	pub fn new(ctype: Type, offset: i32, is_local: bool, labelname: Option<String>, strname: Option<String>, init: Option<Vec<String>>) -> Self {
 		Self {
 			ctype,
 			offset,
 			is_local,
 			labelname,
 			strname,
+			init,
 		}
 	}
 	fn calc_offset(&mut self) -> i32 {
@@ -671,7 +674,7 @@ fn string_literal(tokenset: &mut TokenSet) -> Node {
 	let ctype = CHAR_TY.clone().ary_of(strname.len() as i32 + 1);
 	tokenset.pos += 1;
 	let labelname = format!(".L.str{}", new_label());
-	let var = Var::new(ctype, 0, false, Some(labelname), Some(strname));
+	let var = Var::new(ctype, 0, false, Some(labelname), Some(strname), None);
 	GVARS.lock().unwrap().push(var.clone());
 	return Node::new_varref(var);
 }
@@ -783,6 +786,7 @@ fn primary(tokenset: &mut TokenSet) -> Node {
 				}
 			}
 			tokenset.assert_ty(TokenLeftCurlyBrace);
+			// for array def ex int a[] = ...
 			var.ctype.size = var.ctype.ary_to.as_ref().unwrap().size * arrrhs.len() as i32;
 			var.calc_offset();
 			let mut arrini = vec![];
@@ -1345,9 +1349,30 @@ pub fn param_declaration(tokenset: &mut TokenSet) -> Var {
 	}
 }
 
-// fn calc_rhs(node: &Node) -> {
-
-// }
+fn calc_gvarinit(node: &Node, initvec: &mut Vec<String>) {
+	let ctype = node.nodesctype(None);
+	match &node.op {
+		NodeType::Num(num) => {
+			if ctype.size == 8 {
+				initvec.push(format!(".quad {}", num));
+			} else if ctype.size == 4 {
+				initvec.push(format!(".long {}", num));
+			} else {
+				initvec.push(format!(".byte {}", num));
+			}
+		}
+		NodeType::ArrIni(arrini) => {
+			for (_, rhs) in arrini {
+				if let NodeType::VarRef(var) = &rhs.op {
+					initvec.push(format!(".quad {}", var.labelname.as_ref().unwrap()));
+				} else {
+					calc_gvarinit(&rhs, initvec);
+				}
+			}
+		}
+		_ => {}
+	}
+}
 
 pub fn toplevel(tokenset: &mut TokenSet) -> Node {
 	
@@ -1379,7 +1404,7 @@ pub fn toplevel(tokenset: &mut TokenSet) -> Node {
 		}
 		*STACKSIZE.lock().unwrap() = 0;
 		// add new function to Env
-		let mut var = Var::new(ctype.clone(), 0, false, Some(ident.clone()), None);
+		let mut var = Var::new(ctype.clone(), 0, false, Some(ident.clone()), None, None);
 		Env::add_var(ident.clone(), &mut var);
 		
 		Env::env_inc();
@@ -1405,18 +1430,26 @@ pub fn toplevel(tokenset: &mut TokenSet) -> Node {
 			Env::add_typedef(ident, ctype); 
 		} else if is_extern {
 			tokenset.assert_ty(TokenSemi);
-			let mut var = Var::new(ctype.clone(), 0, false, Some(ident.clone()), None);
+			let mut var = Var::new(ctype.clone(), 0, false, Some(ident.clone()), None, None);
 			Env::add_var(ident, &mut var);
 		} else {
+			let mut var = Var::new(ctype.clone(), 0, false, Some(ident.clone()), None, None);
 			// global init
-			// let gvar_rhs;
-			// if tokenset.consume_ty(TokenAssign) {
-			// 	let rhs = conditional(tokenset);
-			// 	gvar_rhs = calc_rhs(rhs);
-			// }
+			let gvar_rhs;
+			if tokenset.consume_ty(TokenAssign) {
+				if let Ty::ARY = var.ctype.ty {
+					*ARRINI.lock().unwrap() = var.clone();
+					gvar_rhs = conditional(tokenset);
+					*ARRINI.lock().unwrap() = NULL_VAR.clone();
+				} else {
+					gvar_rhs = conditional(tokenset);
+				}
+				let mut initvec = vec![];
+				calc_gvarinit(&gvar_rhs, &mut initvec);
+				var.init = Some(initvec);
+			}
 			// global variable
 			tokenset.assert_ty(TokenSemi);
-			let mut var = Var::new(ctype.clone(), 0, false, Some(ident.clone()), None);
 			Env::add_var(ident, &mut var);
 			GVARS.lock().unwrap().push(var);
 		}

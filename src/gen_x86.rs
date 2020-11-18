@@ -250,9 +250,17 @@ pub fn gen_x86(mut program: Program) {
 			println!("{}:", gvar.labelname.unwrap());
 			emit!(".ascii \"{}\"", escape(s, gvar.ctype.size));
 		} else {
-			println!(".bss");
-			println!("{}:", gvar.labelname.unwrap());
-			emit!(".zero {}", gvar.ctype.size);
+			if let Some(initvec) = gvar.init {
+				println!(".data");
+				println!("{}:", gvar.labelname.unwrap());
+				for gvar_init in initvec {
+					println!("\t{}", gvar_init);
+				}
+			} else {
+				println!(".bss");
+				println!("{}:", gvar.labelname.unwrap());
+				emit!(".zero {}", gvar.ctype.size);
+			}
 		}
 	}
 	for i in 0..program.funs.len() {
