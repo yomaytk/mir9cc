@@ -527,14 +527,15 @@ fn gen_stmt(node: &Node, fun: &mut Function) {
 		NodeType::Ret(lhs) => {
 			
 			Ir::emit(IrRet, Reg::dummy(), Reg::dummy(), gen_expr(lhs.as_ref(), fun), fun);
-
 			fun.bb_push(BB::new_rc());
 
-			return;
 		}
 		NodeType::Expr(lhs) => {
+			if let NodeType::ArrIni(_) = lhs.op {
+				gen_stmt(lhs, fun);
+				return;
+			}
 			gen_expr(lhs.as_ref(), fun);
-			return;
 		}
 		NodeType::IfThen(cond, then, els) => {
 			let bbt = BB::new_rc();
@@ -555,13 +556,11 @@ fn gen_stmt(node: &Node, fun: &mut Function) {
 
 			fun.bb_push(last);
 
-			return;
 		}
 		NodeType::CompStmt(lhs) => {
 			for stmt in lhs {
 				gen_stmt(stmt, fun);
 			}
-			return;
 		}
 		NodeType::For(init, cond, inc, body) => {
 			let bb_cond = BB::new_rc();
@@ -594,7 +593,6 @@ fn gen_stmt(node: &Node, fun: &mut Function) {
 
 			loop_dec();
 
-			return;
 		}
 		NodeType::DoWhile(body, cond) => {
 			let bb_body = BB::new_rc();
@@ -614,8 +612,6 @@ fn gen_stmt(node: &Node, fun: &mut Function) {
 			fun.bb_push(bb_break);
 
 			loop_dec();
-
-			return;
 
 		}
 		NodeType::Switch(cond, body, case_conds) => {
@@ -646,7 +642,6 @@ fn gen_stmt(node: &Node, fun: &mut Function) {
 
 			loop_dec();
 
-			return;
 		}
 		NodeType::Case(_, body) => {
 			if let Some(bb_case) = get_switches_rc_mut().borrow_mut().last_mut().unwrap().pop() {
@@ -654,6 +649,12 @@ fn gen_stmt(node: &Node, fun: &mut Function) {
 				gen_stmt(body, fun);
 			} else {
 				panic!("gen_ir Case error.");
+			}
+		}
+		NodeType::ArrIni(arrini) => {
+			for (lhs, rhs) in arrini {
+				let r2 = gen_expr(rhs, fun);
+				store(&rhs.nodesctype(None), gen_lval(lhs, fun), r2.clone(), fun);
 			}
 		}
 		NodeType::Break => {

@@ -141,6 +141,12 @@ int main() {
 	EXPECT(4, ({ int *p; (p+5)-(p+1); }));
 	EXPECT(1, ({ int ary[2]; ary[0]=1; ary[1]=2; int *p=ary; *p++;}));
 	EXPECT(2, ({ int ary[2]; ary[0]=1; ary[1]=2; int *p=ary; *++p;}));
+	EXPECT(12, ({ int ary[5] = {1, 2, 3, 4, 5}; ary[0] + ary[1] + ary[3] + ary[4];}));
+	EXPECT('a', ({ char *ary[3] = {"abc", "def", "ghi"}; ary[0][0]; }));
+	EXPECT('e', ({ char *ary[3] = {"abc", "def", "ghi"}; ary[1][1]; }));
+	EXPECT('i', ({ char *ary[3] = {"abc", "def", "ghi"}; ary[2][2]; }));
+	EXPECT('d'+'i', ({ char *ary[] = {"abc", "def", "ghi"}; ary[1][0] + ary[2][2]; }));
+	EXPECT(2, ({ int ary[] = {1, 2, 3}; ary[1];}));
 
 	EXPECT(1, ({ char x; sizeof x; }));
 	EXPECT(4, ({ int x; sizeof(x); }));

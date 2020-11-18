@@ -153,6 +153,9 @@ pub fn do_walk(node: &Node, decay: bool) -> Node {
 			return maybe_decay(node.clone(), decay);
 		}
 		Assign(_, lhs, rhs) => {
+			if let NodeType::ArrIni(_) = rhs.op {
+				return walk(rhs);
+			}
 			let lhs_ = walk_nodecay(lhs);
 			lhs_.checklval();
 			let mut rhs_ = walk(rhs);
@@ -255,6 +258,20 @@ pub fn do_walk(node: &Node, decay: bool) -> Node {
 			let lhs = walk(expr);
 			lhs.checklval();
 			return Node::new_incdec(lhs.nodesctype(None), *selector, lhs);
+		}
+		ArrIni(arrini) => {
+			let mut new_arrini = vec![];
+			for (lhs, rhs) in arrini {
+				let lhs2 = walk_nodecay(lhs);
+				lhs2.checklval();
+				let mut rhs2 = walk(rhs);
+				let lty = lhs2.nodesctype(None);
+				if lty.ty == Ty::BOOL {
+					rhs2 = Node::new_cast(BOOL_TY.clone(), rhs2);
+				}
+				new_arrini.push((lhs2, rhs2));
+			}
+			return Node::new_arrini(new_arrini);
 		}
 		Break | Continue => {
 			return node.clone();

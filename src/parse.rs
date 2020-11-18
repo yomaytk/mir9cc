@@ -113,6 +113,7 @@ lazy_static! {
 	pub static ref LABEL: Mutex<i32> = Mutex::new(0);
 	pub static ref SWITCHES: Mutex<Vec<Vec<Node>>> = Mutex::new(vec![]);
 	pub static ref STACKSIZE: Mutex<i32> = Mutex::new(0);
+	pub static ref ARRINI: Mutex<Var> = Mutex::new(NULL_VAR.clone());
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -231,6 +232,7 @@ pub enum NodeType {
 	Cast(Type, Box<Node>),														// Cast(ctype, expr),
 	Switch(Box<Node>, Box<Node>, Vec<Node>),									// Switch(cond, body, case_conds),
 	Case(Box<Node>, Box<Node>),													// Case(val, body),
+	ArrIni(Vec<(Node, Node)>),													// ArrIni(arrini),
 	NULL,																		// NULL,
 }
 
@@ -440,6 +442,11 @@ impl Node {
 			op: NodeType::Case(Box::new(val), Box::new(body))
 		}
 	}
+	pub fn new_arrini(arrini: Vec<(Node, Node)>) -> Self {
+		Self {
+			op: NodeType::ArrIni(arrini)
+		}
+	}
 	pub fn new_null() -> Self {
 		Self {
 			op: NodeType::NULL
@@ -465,6 +472,13 @@ impl Var {
 			labelname,
 			strname,
 		}
+	}
+	fn calc_offset(&mut self) -> i32 {
+		let mut offset = *STACKSIZE.lock().unwrap();
+		offset = roundup(offset, self.ctype.align);
+		offset += self.ctype.size;
+		self.offset = offset;
+		return offset;
 	}
 }
 
@@ -498,17 +512,11 @@ impl Env {
 		let env = std::mem::replace(&mut *ENV.lock().unwrap(), Env::new_env(None));
 		*ENV.lock().unwrap() = *env.next.unwrap();
 	}
-	fn add_var(ident: String, mut var: Var) -> i32 {
-		let mut offset = 1000000;
+	fn add_var(ident: String, var: &mut Var) {
 		if var.is_local {
-			let stacksize = *STACKSIZE.lock().unwrap();
-			*STACKSIZE.lock().unwrap() = roundup(stacksize, var.ctype.align);
-			*STACKSIZE.lock().unwrap() += var.ctype.size;
-			offset = *STACKSIZE.lock().unwrap();
-			var.offset = offset;
+			*STACKSIZE.lock().unwrap() = var.calc_offset();
 		}
-		ENV.lock().unwrap().vars.insert(ident, var);
-		return offset;
+		ENV.lock().unwrap().vars.insert(ident, var.clone());
 	}
 	fn add_typedef(ident: String, ctype: Type) {
 		ENV.lock().unwrap().typedefs.insert(ident, ctype);
@@ -737,6 +745,7 @@ fn const_expr(tokenset: &mut TokenSet) -> Node {
 
 fn primary(tokenset: &mut TokenSet) -> Node {
 	
+	// ( expr )
 	if tokenset.consume_ty(TokenRightBrac) {
 		if tokenset.consume_ty(TokenRightCurlyBrace) {
 			tokenset.pos -= 1;
@@ -761,6 +770,34 @@ fn primary(tokenset: &mut TokenSet) -> Node {
 	}
 	if tokenset.consume_ty(TokenString(String::new())) {
 		return string_literal(tokenset);
+	}
+	// {a_1, a_2, ...}
+	if tokenset.consume_ty(TokenRightCurlyBrace) {
+		let mut var = std::mem::replace(&mut *ARRINI.lock().unwrap(), NULL_VAR.clone());
+		if let Ty::ARY = var.ctype.ty {
+			let mut arrrhs = vec![];
+			loop {
+				arrrhs.push(logor(tokenset));
+				if !tokenset.consume_ty(TokenComma) {
+					break;
+				}
+			}
+			tokenset.assert_ty(TokenLeftCurlyBrace);
+			var.ctype.size = var.ctype.ary_to.as_ref().unwrap().size * arrrhs.len() as i32;
+			var.calc_offset();
+			let mut arrini = vec![];
+			let mut i = 0;
+			for rhs in arrrhs {
+				let bit = Node::new_bit(INT_TY.clone(), TokenAdd, Node::new_varref(var.clone()), Node::new_num(i));
+				let lhs = Node::new_deref(INT_TY.clone(), bit);
+				arrini.push((lhs, rhs));
+				i += 1;
+			}
+			*ARRINI.lock().unwrap() = var;
+			return Node::new_arrini(arrini);
+		} else {
+			panic!("array init error.");
+		}
 	}
 	// error(&format!("parse.rs: primary parse fail. and got {}", tokenset[*pos].input));
 	// for debug.
@@ -1006,9 +1043,8 @@ fn declarator(tokenset: &mut TokenSet, mut ty: Type) -> Node {
 
 }
 
-fn read_array(tokenset: &mut TokenSet, ty: Type) -> Type {
+fn read_array(tokenset: &mut TokenSet, mut ty: Type) -> Type {
 	let mut ary_size = vec![];
-	let mut ty = ty.clone();
 
 	while tokenset.consume_ty(TokenRightmiddleBrace) {
 		if tokenset.consume_ty(TokenLeftmiddleBrace) {
@@ -1037,8 +1073,11 @@ fn read_array(tokenset: &mut TokenSet, ty: Type) -> Type {
 }
 
 fn decl_init(tokenset: &mut TokenSet, node: &mut Node) {
-	if let NodeType::VarDef(.., ref mut init) = node.op {
+	if let NodeType::VarDef(_, ref var, ref mut init) = node.op {
 		if tokenset.consume_ty(TokenAssign) {
+			if let Ty::ARY = var.ctype.ty {
+				*ARRINI.lock().unwrap() = var.clone();
+			}
 			let rhs = assign(tokenset);
 			*init = Some(Box::new(rhs));
 		}
@@ -1114,12 +1153,18 @@ fn declaration(tokenset: &mut TokenSet, newvar: bool) -> Node {
 		return ident_node;
 	}
 	match ident_node.op {
-		NodeType::VarDef(name, var, None) => {
-			Env::add_var(name, var);
+		NodeType::VarDef(name, mut var, None) => {
+			Env::add_var(name, &mut var);
 			return Node::new_null();
 		}
 		NodeType::VarDef(name, mut var, Some(init)) => {
-			var.offset = Env::add_var(name, var.clone());
+			
+			// for array {..} init 
+			let var2 = std::mem::replace(&mut *ARRINI.lock().unwrap(), NULL_VAR.clone());
+			if let Ty::ARY = var2.ctype.ty {
+				var = var2;
+			}
+			Env::add_var(name, &mut var);
 			let varnode = Node::new_varref(var);
 			return Node::new_expr(Node::new_assign(NULL_TY.clone(), varnode, *init));
 		}
@@ -1293,22 +1338,28 @@ pub fn param_declaration(tokenset: &mut TokenSet) -> Var {
 			var.ctype = var.ctype.ary_to.unwrap().clone().ptr_to();
 		}
 		var.labelname = Some(name.clone());
-		var.offset = Env::add_var(name, var.clone());
+		Env::add_var(name, &mut var);
 		return var;
 	} else {
 		panic!("{:?} should be NodeType::VarDef", node);
 	}
 }
 
+// fn calc_rhs(node: &Node) -> {
+
+// }
+
 pub fn toplevel(tokenset: &mut TokenSet) -> Node {
 	
-	let is_extern = tokenset.consume_ty(TokenExtern);
-	let is_typedef = tokenset.consume_ty(TokenTypedef);
 	// enum
 	if tokenset.consume_ty(TokenEnum) {
 		Env::add_enum(tokenset);
 		return Node::new_null();
 	}
+
+	let is_extern = tokenset.consume_ty(TokenExtern);
+	let is_typedef = tokenset.consume_ty(TokenTypedef);
+	
 	// Ctype
 	let mut ctype = decl_specifiers(tokenset);
 	
@@ -1328,8 +1379,8 @@ pub fn toplevel(tokenset: &mut TokenSet) -> Node {
 		}
 		*STACKSIZE.lock().unwrap() = 0;
 		// add new function to Env
-		let var = Var::new(ctype.clone(), 0, false, Some(ident.clone()), None);
-		Env::add_var(ident.clone(), var);
+		let mut var = Var::new(ctype.clone(), 0, false, Some(ident.clone()), None);
+		Env::add_var(ident.clone(), &mut var);
 		
 		Env::env_inc();
 		// argument
@@ -1347,22 +1398,30 @@ pub fn toplevel(tokenset: &mut TokenSet) -> Node {
 		// function def
 		let body = compound_stmt(tokenset, false);
 		return Node::new_func(ctype, ident, args, body, *STACKSIZE.lock().unwrap());
-	}
-
-	ctype = read_array(tokenset, ctype);
-	tokenset.assert_ty(TokenSemi);
-	// typedef
-	if is_typedef {
-		Env::add_typedef(ident, ctype);
+	} else {
+		ctype = read_array(tokenset, ctype);
+		if is_typedef {
+			tokenset.assert_ty(TokenSemi);
+			Env::add_typedef(ident, ctype); 
+		} else if is_extern {
+			tokenset.assert_ty(TokenSemi);
+			let mut var = Var::new(ctype.clone(), 0, false, Some(ident.clone()), None);
+			Env::add_var(ident, &mut var);
+		} else {
+			// global init
+			// let gvar_rhs;
+			// if tokenset.consume_ty(TokenAssign) {
+			// 	let rhs = conditional(tokenset);
+			// 	gvar_rhs = calc_rhs(rhs);
+			// }
+			// global variable
+			tokenset.assert_ty(TokenSemi);
+			let mut var = Var::new(ctype.clone(), 0, false, Some(ident.clone()), None);
+			Env::add_var(ident, &mut var);
+			GVARS.lock().unwrap().push(var);
+		}
 		return Node::new_null();
-	}
-	// global variable
-	let var = Var::new(ctype.clone(), 0, false, Some(ident.clone()), None);
-	Env::add_var(ident, var.clone());
-	if !is_extern {
-		GVARS.lock().unwrap().push(var);
-	}
-	return Node::new_null();
+	} 
 }
 
 pub fn parse(tokenset: &mut TokenSet, program: &mut Program) {
