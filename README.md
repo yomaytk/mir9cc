@@ -30,5 +30,8 @@ Run example program(nqueen).
     $ gcc -static -o tmp-nqueen tmp-nqueen.s
     $ ./tmp-nqueen
 
+## demo
+![demo](https://user-images.githubusercontent.com/45335576/115151256-0e031e00-a0a7-11eb-87bc-611ec102beb8.gif)
+
 ## References
 Great thanks to [9cc](https://github.com/rui314/9cc).
