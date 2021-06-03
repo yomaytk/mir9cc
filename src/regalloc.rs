@@ -16,181 +16,212 @@
 // The last register (num_regs-1'th register) is reserved for that
 // purpose.
 
-use super::gen_ir::{*, IrOp::*};
-use super::parse::{roundup};
-use super::mir::*;
+use super::gen_ir::{IrOp::*, *};
 use super::liveness;
-use std::rc::Rc;
-use std::cell:: RefCell;
-use std::collections::HashMap;
+use super::mir::*;
+use super::parse::roundup;
 use linked_hash_map::LinkedHashMap;
+use std::cell::RefCell;
+use std::collections::HashMap;
+use std::rc::Rc;
 
 static REG_SIZE: usize = 7;
 
 // in IR, A = B op C  ---> A = B; A = A op C;
 fn three_two(bb: &Rc<RefCell<BB>>) {
-	let irs = std::mem::replace(&mut bb.borrow_mut().irs, vec![]);
-	let mut n_irs = vec![];
-	for mut ir in irs {
-		if ir.r0.vn < 0 || ir.r1.vn < 0 {
-			n_irs.push(ir);
-			continue;
-		}
-		assert!(ir.r0.vn != ir.r1.vn);
-		// A = B;
-		let ir1 = Ir::new(IrOp::IrMov, ir.r0.clone(), Reg::dummy(), ir.r1.clone(), Reg::dummy(), None, None, -1, -1);
-		n_irs.push(ir1);
-		// A = A op C;
-		ir.r1 = ir.r0.clone();
-		n_irs.push(ir);
-	}
-	// println!("{:#?}", &n_irs);
-	bb.borrow_mut().irs = n_irs;
+    let irs = std::mem::replace(&mut bb.borrow_mut().irs, vec![]);
+    let mut n_irs = vec![];
+    for mut ir in irs {
+        if ir.r0.vn < 0 || ir.r1.vn < 0 {
+            n_irs.push(ir);
+            continue;
+        }
+        assert!(ir.r0.vn != ir.r1.vn);
+        // A = B;
+        let ir1 = Ir::new(
+            IrOp::IrMov,
+            ir.r0.clone(),
+            Reg::dummy(),
+            ir.r1.clone(),
+            Reg::dummy(),
+            None,
+            None,
+            -1,
+            -1,
+        );
+        n_irs.push(ir1);
+        // A = A op C;
+        ir.r1 = ir.r0.clone();
+        n_irs.push(ir);
+    }
+    // println!("{:#?}", &n_irs);
+    bb.borrow_mut().irs = n_irs;
 }
 
 // settings of register
 fn regs_setting(fun: &mut Function, reglifes: Vec<RegLife>) {
-	
-	// save register as vn
-	let mut regs = vec![-1;REG_SIZE];
-	let mut stacksize = roundup(fun.stacksize, 8);
-	let mut end_hash = HashMap::new();	// key -> vn; value -> end
-	let mut reg_map = HashMap::new();
-	let mut spill_offset_map = HashMap::new();
+    // save register as vn
+    let mut regs = vec![-1; REG_SIZE];
+    let mut stacksize = roundup(fun.stacksize, 8);
+    let mut end_hash = HashMap::new(); // key -> vn; value -> end
+    let mut reg_map = HashMap::new();
+    let mut spill_offset_map = HashMap::new();
 
-	// decide various datas of registers
-	for reglife in reglifes {
-		let mut rn = -1;
-		end_hash.insert(reglife.vn, reglife.end);
-		let mut found = false;
-		// find an unused real register
-		for i in 0..REG_SIZE-1 {
-			if regs[i] < 0 || reglife.start > end_hash[&regs[i]] {
-				rn = i as i32;
-				regs[i] = reglife.vn;
-				found = true;
-				break;
-			}
-		}
-		if !found {
-			// choose to spill out
-			let mut spill_id = 0;
-			regs[REG_SIZE-1] = reglife.vn;
-			for i in 0..regs.len() {
-				if end_hash[&regs[spill_id]] < end_hash[&regs[i]] {
-					spill_id = i;
-				}
-			}
-			// allocate register spilled out to stack
-			stacksize += 8;
-			spill_offset_map.insert(regs[spill_id], stacksize);
-			reg_map.insert(regs[spill_id], REG_SIZE as i32 - 1);
-			rn = spill_id as i32;
-			regs[spill_id] = reglife.vn;
-		}
-		reg_map.insert(reglife.vn, rn);
-	}
-	fun.stacksize = stacksize;
-	// settings
-	for bb in &mut fun.bbs {
-		let param = bb.borrow().param.vn > 0;
-		if param {
-			let vn = bb.borrow().param.vn;
-			bb.borrow_mut().param.rn = reg_map[&vn];
-			bb.borrow_mut().param.spill = reg_map[&vn] == REG_SIZE as i32 - 1;
-			let param_spill = bb.borrow().param.spill;
-			if param_spill { bb.borrow_mut().param.spill_offset = spill_offset_map[&vn]; }
-		}
-		for ir in &mut bb.borrow_mut().irs {
-			if ir.r0.active() {
-				ir.r0.rn = reg_map[&ir.r0.vn];
-				ir.r0.spill = ir.r0.rn == REG_SIZE as i32 - 1;
-				if ir.r0.spill { ir.r0.spill_offset = spill_offset_map[&ir.r0.vn]; }
-			}
-			if ir.r1.active() {
-				ir.r1.rn = reg_map[&ir.r1.vn];
-				ir.r1.spill = ir.r1.rn == REG_SIZE as i32 - 1;
-				if ir.r1.spill { ir.r1.spill_offset = spill_offset_map[&ir.r1.vn]; }
-			}
-			if ir.r2.active() {
-				ir.r2.rn = reg_map[&ir.r2.vn];
-				ir.r2.spill = ir.r2.rn == REG_SIZE as i32 - 1;
-				if ir.r2.spill { ir.r2.spill_offset = spill_offset_map[&ir.r2.vn]; }
-			}
-			if ir.bbarg.active() {
-				ir.bbarg.rn = reg_map[&ir.bbarg.vn];
-				ir.bbarg.spill = ir.bbarg.rn == REG_SIZE as i32 - 1;
-				if ir.bbarg.spill { ir.bbarg.spill_offset = spill_offset_map[&ir.bbarg.vn]; }
-			}
-			if let IrCall(_, args) = &mut ir.op {
-				for i in 0..args.len() {
-					args[i].rn = reg_map[&args[i].vn];
-					args[i].spill = args[i].rn == REG_SIZE as i32 - 1;
-					if args[i].spill { args[i].spill_offset = spill_offset_map[&args[i].vn]; }
-				}
-			}
-		}
-	}
-
+    // decide various datas of registers
+    for reglife in reglifes {
+        let mut rn = -1;
+        end_hash.insert(reglife.vn, reglife.end);
+        let mut found = false;
+        // find an unused real register
+        for i in 0..REG_SIZE - 1 {
+            if regs[i] < 0 || reglife.start > end_hash[&regs[i]] {
+                rn = i as i32;
+                regs[i] = reglife.vn;
+                found = true;
+                break;
+            }
+        }
+        if !found {
+            // choose to spill out
+            let mut spill_id = 0;
+            regs[REG_SIZE - 1] = reglife.vn;
+            for i in 0..regs.len() {
+                if end_hash[&regs[spill_id]] < end_hash[&regs[i]] {
+                    spill_id = i;
+                }
+            }
+            // allocate register spilled out to stack
+            stacksize += 8;
+            spill_offset_map.insert(regs[spill_id], stacksize);
+            reg_map.insert(regs[spill_id], REG_SIZE as i32 - 1);
+            rn = spill_id as i32;
+            regs[spill_id] = reglife.vn;
+        }
+        reg_map.insert(reglife.vn, rn);
+    }
+    fun.stacksize = stacksize;
+    // settings
+    for bb in &mut fun.bbs {
+        let param = bb.borrow().param.vn > 0;
+        if param {
+            let vn = bb.borrow().param.vn;
+            bb.borrow_mut().param.rn = reg_map[&vn];
+            bb.borrow_mut().param.spill = reg_map[&vn] == REG_SIZE as i32 - 1;
+            let param_spill = bb.borrow().param.spill;
+            if param_spill {
+                bb.borrow_mut().param.spill_offset = spill_offset_map[&vn];
+            }
+        }
+        for ir in &mut bb.borrow_mut().irs {
+            if ir.r0.active() {
+                ir.r0.rn = reg_map[&ir.r0.vn];
+                ir.r0.spill = ir.r0.rn == REG_SIZE as i32 - 1;
+                if ir.r0.spill {
+                    ir.r0.spill_offset = spill_offset_map[&ir.r0.vn];
+                }
+            }
+            if ir.r1.active() {
+                ir.r1.rn = reg_map[&ir.r1.vn];
+                ir.r1.spill = ir.r1.rn == REG_SIZE as i32 - 1;
+                if ir.r1.spill {
+                    ir.r1.spill_offset = spill_offset_map[&ir.r1.vn];
+                }
+            }
+            if ir.r2.active() {
+                ir.r2.rn = reg_map[&ir.r2.vn];
+                ir.r2.spill = ir.r2.rn == REG_SIZE as i32 - 1;
+                if ir.r2.spill {
+                    ir.r2.spill_offset = spill_offset_map[&ir.r2.vn];
+                }
+            }
+            if ir.bbarg.active() {
+                ir.bbarg.rn = reg_map[&ir.bbarg.vn];
+                ir.bbarg.spill = ir.bbarg.rn == REG_SIZE as i32 - 1;
+                if ir.bbarg.spill {
+                    ir.bbarg.spill_offset = spill_offset_map[&ir.bbarg.vn];
+                }
+            }
+            if let IrCall(_, args) = &mut ir.op {
+                for i in 0..args.len() {
+                    args[i].rn = reg_map[&args[i].vn];
+                    args[i].spill = args[i].rn == REG_SIZE as i32 - 1;
+                    if args[i].spill {
+                        args[i].spill_offset = spill_offset_map[&args[i].vn];
+                    }
+                }
+            }
+        }
+    }
 }
 
 fn spillout_load(n_irs: &mut Vec<Ir>, r: &Reg) {
-	if !r.active() || !r.spill {
-		return;
-	}
-	n_irs.push(
-		Ir::new(IrLoadSpill, r.clone(), Reg::dummy(), Reg::dummy(), Reg::dummy(), None, None, r.spill_offset, -1)
-	);
+    if !r.active() || !r.spill {
+        return;
+    }
+    n_irs.push(Ir::new(
+        IrLoadSpill,
+        r.clone(),
+        Reg::dummy(),
+        Reg::dummy(),
+        Reg::dummy(),
+        None,
+        None,
+        r.spill_offset,
+        -1,
+    ));
 }
 
 fn spillout_store(n_irs: &mut Vec<Ir>, r: Reg) {
-	if !r.active() || !r.spill {
-		return;
-	}
-	let spill_offset = r.spill_offset;
-	n_irs.push(
-		Ir::new(IrStoreSpill, Reg::dummy(), r, Reg::dummy(), Reg::dummy(), None, None, spill_offset, -1)
-	);
+    if !r.active() || !r.spill {
+        return;
+    }
+    let spill_offset = r.spill_offset;
+    n_irs.push(Ir::new(
+        IrStoreSpill,
+        Reg::dummy(),
+        r,
+        Reg::dummy(),
+        Reg::dummy(),
+        None,
+        None,
+        spill_offset,
+        -1,
+    ));
 }
 
 pub fn alloc_regs(program: &mut Program) {
+    // make three address form and register settings
+    for fun in &mut program.funs {
+        for bb in &mut fun.bbs {
+            three_two(bb);
+        }
+        let mut borned_map = LinkedHashMap::new();
+        let mut died_map = HashMap::new();
+        let mut ic = 1;
+        for bb in &fun.bbs {
+            liveness::regs_life(bb, &mut ic, &mut borned_map, &mut died_map);
+        }
+        let mut reglifes = vec![];
+        for (vn, start) in borned_map {
+            reglifes.push(RegLife::new(vn, start, died_map[&vn]));
+        }
+        regs_setting(fun, reglifes);
+    }
 
-	// make three address form and register settings
-	for fun in &mut program.funs {
-		for bb in &mut fun.bbs {
-			three_two(bb);
-		}
-		let mut borned_map = LinkedHashMap::new();
-		let mut died_map = HashMap::new();
-		let mut ic = 1;
-		for bb in &fun.bbs {
-			liveness::regs_life(bb, &mut ic, &mut borned_map, &mut died_map);
-		}
-		let mut reglifes = vec![];
-		for (vn, start) in borned_map {
-			reglifes.push(RegLife::new(
-				vn, 
-				start,
-				died_map[&vn]
-			));
-		}
-		regs_setting(fun, reglifes);
-	}
-
-	// add spill instruction of load or store
-	for fun in &mut program.funs {
-		for bb in &mut fun.bbs {
-			let irs = std::mem::replace(&mut bb.borrow_mut().irs, vec![]);
-			let mut n_irs = vec![];
-			for ir in irs {
-				spillout_load(&mut n_irs, &ir.r1);
-				spillout_load(&mut n_irs, &ir.r2);
-				spillout_load(&mut n_irs, &ir.bbarg);
-				let r0 = ir.r0.clone();
-				n_irs.push(ir);
-				spillout_store(&mut n_irs, r0);
-			}
-			bb.borrow_mut().irs = n_irs;
-		}
-	}
+    // add spill instruction of load or store
+    for fun in &mut program.funs {
+        for bb in &mut fun.bbs {
+            let irs = std::mem::replace(&mut bb.borrow_mut().irs, vec![]);
+            let mut n_irs = vec![];
+            for ir in irs {
+                spillout_load(&mut n_irs, &ir.r1);
+                spillout_load(&mut n_irs, &ir.r2);
+                spillout_load(&mut n_irs, &ir.bbarg);
+                let r0 = ir.r0.clone();
+                n_irs.push(ir);
+                spillout_store(&mut n_irs, r0);
+            }
+            bb.borrow_mut().irs = n_irs;
+        }
+    }
 }
